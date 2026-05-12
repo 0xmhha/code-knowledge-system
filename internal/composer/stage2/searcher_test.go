@@ -359,7 +359,7 @@ func TestIntentToKinds(t *testing.T) {
 	cases := map[contract.Intent][]string{
 		contract.IntentBugFix:            {"function", "method"},
 		contract.IntentFeatureAdd:        {"function", "method", "type", "interface"},
-		contract.IntentArchExplain:       {"type", "interface", "const"},
+		contract.IntentArchExplain:       {"type", "interface", "const", "function", "method"},
 		contract.IntentTestAdd:           {"function", "method"},
 		contract.IntentConcurrencySafety: {"function", "method"},
 		contract.IntentSecurity:          {"function", "method", "interface"},
@@ -416,6 +416,43 @@ func TestSearch_EmitsFootprintEvent(t *testing.T) {
 	}
 	if rec["coverage"].(float64) != 1.0 {
 		t.Errorf("coverage = %v", rec["coverage"])
+	}
+	// Error counters present even when all calls succeed (value 0).
+	if _, ok := rec["bm25_errors"]; !ok {
+		t.Error("footprint missing bm25_errors field")
+	}
+	if _, ok := rec["symbol_errors"]; !ok {
+		t.Error("footprint missing symbol_errors field")
+	}
+}
+
+func TestSearch_FootprintRecordsErrorCounts(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	fp, err := footprint.New(footprint.Config{Writer: &buf, Mode: footprint.ModeProd, Level: footprint.LevelInfo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = fp.Close() })
+
+	// Both backends error -> bm25_errors == 1, symbol_errors == 1.
+	ckg := &ckgclient.Fake{
+		BM25Err:   errors.New("bm25 down"),
+		SymbolErr: errors.New("symbol down"),
+	}
+	s, _ := New(ckg, WithFootprint(fp))
+	_, _ = s.Search(context.Background(), []string{"X"}, contract.IntentBugFix)
+	_ = fp.Sync()
+
+	var rec map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &rec); err != nil {
+		t.Fatalf("decode footprint: %v", err)
+	}
+	if got, _ := rec["bm25_errors"].(float64); got != 1 {
+		t.Errorf("bm25_errors = %v, want 1", rec["bm25_errors"])
+	}
+	if got, _ := rec["symbol_errors"].(float64); got != 1 {
+		t.Errorf("symbol_errors = %v, want 1", rec["symbol_errors"])
 	}
 }
 

@@ -65,13 +65,23 @@ func DefaultConfig() Config {
 }
 
 // Stage2Output captures the result of one Search call.
+//
+// Citations vs Hits: Citations is the canonical, deduped, score-ranked
+// output that downstream stages (B.5 graph expander, evaluation) consume.
+// Hits is a raw audit trail — it preserves every BM25 result returned by
+// ckg, including duplicates when the same citation hits via multiple
+// keywords. Precision/recall computation should use Citations; Hits
+// exists for "why did Stage 2 land on this citation set" debugging.
 type Stage2Output struct {
 	// Citations is the deduped, score-sorted list of citation candidates
 	// the graph expander should explore. Cap-bounded by Config.MaxCitations.
+	// Use this for evaluation metrics (precision/recall vs human baselines).
 	Citations []ScoredCitation
 
-	// Hits is the raw union of BM25 results across all keywords. Preserved
-	// for Phase E evaluation (precision/recall against human PR diffs).
+	// Hits is the raw BM25-hit audit trail. Not deduped: the same citation
+	// can appear multiple times if multiple keywords matched it. Useful for
+	// footprint analysis and per-keyword evidence reconstruction; do not
+	// use directly for precision/recall (use Citations instead).
 	Hits []contract.Hit
 
 	// Symbols records the FindSymbol results per keyword. Useful for
@@ -136,19 +146,23 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 		Symbols: make(map[string][]contract.Citation),
 	}
 	if len(keywords) == 0 {
-		s.emitFootprint(ctx, intent, keywords, out)
+		s.emitFootprint(ctx, intent, keywords, out, 0, 0)
 		return out, nil
 	}
 
 	kinds := intentToKinds(intent)
 	agg := newAggregator(s.config.SymbolBonus)
 	hitCount := 0
+	bm25Errors := 0
+	symbolErrors := 0
 
 	for _, kw := range keywords {
 		anyHit := false
 
 		bm25Hits, bm25Err := s.ckg.BM25Search(ctx, kw, ckgclient.SearchOpts{K: s.config.BM25K})
-		if bm25Err == nil && len(bm25Hits) > 0 {
+		if bm25Err != nil {
+			bm25Errors++
+		} else if len(bm25Hits) > 0 {
 			anyHit = true
 			out.Hits = append(out.Hits, bm25Hits...)
 			for _, h := range bm25Hits {
@@ -157,7 +171,9 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 		}
 
 		symbolCits, symErr := s.ckg.FindSymbol(ctx, kw, ckgclient.SymbolOpts{Kinds: kinds})
-		if symErr == nil && len(symbolCits) > 0 {
+		if symErr != nil {
+			symbolErrors++
+		} else if len(symbolCits) > 0 {
 			anyHit = true
 			out.Symbols[kw] = symbolCits
 			for _, c := range symbolCits {
@@ -175,11 +191,11 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 	out.Citations = agg.results(s.config.MaxCitations)
 	out.Coverage = float64(hitCount) / float64(len(keywords))
 
-	s.emitFootprint(ctx, intent, keywords, out)
+	s.emitFootprint(ctx, intent, keywords, out, bm25Errors, symbolErrors)
 	return out, nil
 }
 
-func (s *Searcher) emitFootprint(ctx context.Context, intent contract.Intent, keywords []string, out Stage2Output) {
+func (s *Searcher) emitFootprint(ctx context.Context, intent contract.Intent, keywords []string, out Stage2Output, bm25Errors, symbolErrors int) {
 	if s.fp == nil {
 		return
 	}
@@ -192,6 +208,11 @@ func (s *Searcher) emitFootprint(ctx context.Context, intent contract.Intent, ke
 		zap.Int("bm25_total_hits", len(out.Hits)),
 		zap.Int("symbol_total_hits", countSymbolHits(out.Symbols)),
 		zap.Int("citation_count", len(out.Citations)),
+		// Backend error visibility — when these jump in production, ckg
+		// is degraded and Stage 2 quality silently drops. Surface for
+		// alerting and trend analysis.
+		zap.Int("bm25_errors", bm25Errors),
+		zap.Int("symbol_errors", symbolErrors),
 	}
 	if len(out.Citations) > 0 {
 		fields = append(fields, zap.String("top_citation", out.Citations[0].Citation.String()))

@@ -21,9 +21,14 @@ func intentToKinds(intent contract.Intent) []string {
 		// boundaries.
 		return []string{"function", "method", "type", "interface"}
 	case contract.IntentArchExplain:
-		// "How does X work" is best answered by static surface: types,
-		// interfaces, constants — and rarely needs implementation bodies.
-		return []string{"type", "interface", "const"}
+		// "How does X work" applies to whatever the user named — function,
+		// method, type, interface, or const. FindSymbol returns LOCATIONS,
+		// not bodies, so including callable kinds does not pollute results
+		// with hot-path implementations; it just ensures the definition
+		// receives the SymbolBonus when the user asks about a function or
+		// method (a common case: "how does HandleRequest work").
+		// Excluded: var (locals are weak architecture signals).
+		return []string{"type", "interface", "const", "function", "method"}
 	case contract.IntentTestAdd:
 		// Tests target callable units.
 		return []string{"function", "method"}
