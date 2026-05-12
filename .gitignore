@@ -1,0 +1,37 @@
+# Binaries
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Coverage
+*.coverprofile
+coverage.html
+
+# Build cache
+.go-cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Local state
+.agent-forge-state/
+
+# Eval reports (kept locally, not committed)
+eval/reports/
+
+# Generated docs (kept locally)
+docs/_generated/
