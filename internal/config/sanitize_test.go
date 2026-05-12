@@ -176,6 +176,44 @@ func TestSanitize_Load_MissingFile(t *testing.T) {
 	}
 }
 
+func TestRepoBaseline_RulesMatchKnownSecrets(t *testing.T) {
+	t.Parallel()
+	rs, err := LoadSanitizeRuleset("../../policies/sanitization_rules.yaml")
+	if err != nil {
+		t.Fatalf("load baseline: %v", err)
+	}
+	// Each rule must compile (already checked by Validate) AND match a
+	// representative example of the secret it claims to catch. If a future
+	// PR breaks a baseline pattern (e.g., typo in regex), this test catches
+	// it.
+	cases := map[string]string{
+		"PRIVATE_KEY_PEM":       "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA...",
+		"API_KEY_OPENAI":        `apiKey := "sk-abcdefghijklmnopqrstuv"`,
+		"API_KEY_ANTHROPIC":     `key := "sk-ant-abcdefghijklmnopqrstuvwxyz0123456789ABCD"`,
+		"API_KEY_AWS_ACCESS":    `awsKey := "AKIAIOSFODNN7EXAMPLE"`,
+		"AWS_SECRET_KEY_ASSIGN": `aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"`,
+		"JWT_TOKEN":             "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJqb2huIn0.abc123XYZ_-",
+		"DB_URL_WITH_CREDS":     "postgres://admin:hunter2@db.example.com:5432/app",
+		"EMAIL_ADDRESS":         "contact: john.doe@example.com",
+		"API_KEY_GITHUB":        `token := "ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"`,
+		"API_KEY_GOOGLE":        `key: "AIzaSyABC1234567890DEFGHIJKLMNOPQRSTUVW"`,
+		"SSN_KOREAN":            "주민번호: 970101-1234567",
+	}
+	if len(cases) != len(rs.Rules) {
+		t.Fatalf("test cases (%d) != baseline rules (%d); update this test when baseline changes", len(cases), len(rs.Rules))
+	}
+	for _, r := range rs.Rules {
+		example, ok := cases[r.ID]
+		if !ok {
+			t.Errorf("rule %q has no example in this test", r.ID)
+			continue
+		}
+		if !r.Regexp().MatchString(example) {
+			t.Errorf("rule %q regex did not match its example: %q", r.ID, example)
+		}
+	}
+}
+
 func TestRepoBaselineLoads(t *testing.T) {
 	t.Parallel()
 	// Smoke test: the shipped policies/sanitization_rules.yaml must load

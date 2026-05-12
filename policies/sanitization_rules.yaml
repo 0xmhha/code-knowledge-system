@@ -35,6 +35,24 @@ rules:
     action: drop
     severity: critical
 
+  - id: API_KEY_GITHUB
+    description: "GitHub personal/server/OAuth/user/refresh tokens (ghp_, ghs_, gho_, ghu_, ghr_)."
+    pattern: '\bgh[psour]_[A-Za-z0-9]{36}\b'
+    action: drop
+    severity: critical
+
+  - id: API_KEY_GOOGLE
+    description: "Google API key (AIza... 39-char form; covers GCP/Maps/Firebase)."
+    pattern: '\bAIza[A-Za-z0-9_\-]{35}\b'
+    action: drop
+    severity: critical
+
+  - id: SSN_KOREAN
+    description: "Korean resident registration number (YYMMDD-GXXXXXX, G in 1..8)."
+    pattern: '\b\d{6}-[1-8]\d{6}\b'
+    action: drop
+    severity: critical
+
   - id: AWS_SECRET_KEY_ASSIGN
     description: "AWS secret access key assignment (key=value form)."
     pattern: '\baws_secret_access_key\s*[:=]\s*["''][A-Za-z0-9/+=]{40}["'']'
