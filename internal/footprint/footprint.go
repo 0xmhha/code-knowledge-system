@@ -3,9 +3,18 @@
 // composer fusion, agent decisions) can be analyzed end-to-end via
 // trace_id/run_id correlation.
 //
-// Footprint is for debugging and performance analysis. It may be sampled.
+// Volume control: footprint preserves ALL events at the configured Level.
+// To reduce volume, raise Level (e.g. LevelInfo -> LevelWarn) rather than
+// dropping events probabilistically. Sampling is intentionally NOT supported
+// because cks is a single-process debug/perf tool: any dropped event
+// destroys an end-to-end trace and defeats the package's purpose. For high-
+// volume distributed services where sampling makes sense, use a different
+// logger.
+//
 // For tamper-evident security records (capability denials, policy hits),
-// use package auditlog instead.
+// use package auditlog instead. The two are designed to complement each
+// other; see internal/observe.Audited for a helper that records to both in
+// lock-step.
 package footprint
 
 import (
@@ -15,8 +24,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
-	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -55,12 +62,9 @@ type Config struct {
 	// Mode selects encoder/format. Defaults to ModeProd when "".
 	Mode Mode
 	// Level is the minimum emitted severity. Defaults to LevelInfo.
+	// Use this to tune log volume; debug/info events not at-or-above this
+	// level are dropped wholesale (cheaper than emitting then filtering).
 	Level Level
-	// SamplingInitial / SamplingThereafter, when both > 0, enable per-second
-	// rate-limited sampling on the underlying zap core. Recommended for
-	// hot-path events like ckg.query and ckv.embed.
-	SamplingInitial    int
-	SamplingThereafter int
 }
 
 // Logger wraps a zap.Logger and auto-attaches envelope identifiers from
@@ -114,15 +118,6 @@ func New(cfg Config) (*Logger, error) {
 	}
 
 	core := zapcore.NewCore(enc, zapcore.AddSync(w), level)
-	if cfg.SamplingInitial > 0 && cfg.SamplingThereafter > 0 {
-		core = zapcore.NewSamplerWithOptions(
-			core,
-			time.Second,
-			cfg.SamplingInitial,
-			cfg.SamplingThereafter,
-		)
-	}
-
 	zl := zap.New(core)
 	return &Logger{zl: zl}, nil
 }
@@ -223,14 +218,6 @@ func (l *Logger) Close() error {
 	}
 	closeErr := l.closer.Close()
 	return errors.Join(syncErr, closeErr)
-}
-
-// fileLogger is a writer that owns the underlying file and closes it on
-// Logger.Close.
-type fileLogger struct {
-	w  io.Writer
-	mu sync.Mutex
-	f  *os.File
 }
 
 // NewFile constructs a Logger that writes to path (appended). The file is

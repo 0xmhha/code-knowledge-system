@@ -30,6 +30,9 @@ Thumbs.db
 # Local state
 .agent-forge-state/
 
+# Runtime logs (footprint + audit). See `make log-clear` / `make log-tail`.
+/logs/
+
 # Eval reports (kept locally, not committed)
 eval/reports/
 
