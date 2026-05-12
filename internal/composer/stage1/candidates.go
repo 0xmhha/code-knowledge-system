@@ -12,8 +12,8 @@ import (
 //
 // Sources, in priority order:
 //  1. Identifiers parsed from the prompt itself (CamelCase, PascalCase,
-//     snake_case). These are likely the user's explicit references —
-//     "fix Login function", "racecondition in goroutinePool".
+//     snake_case). These are the user's explicit references —
+//     "fix Login function", "race condition in goroutinePool".
 //  2. File basenames from ckv hits. These represent what the semantic
 //     search judged relevant; their names are often the package or
 //     module the answer lives in.
@@ -23,10 +23,21 @@ import (
 // dropped — they're either noise ("a", "of") or single-letter Go vars
 // that BM25 will rerank near zero anyway.
 //
-// Intent is currently not used to filter or weight candidates; the
-// downstream BM25 rerank does most of the precision work. Phase B follow-
-// ups may add Intent-specific augmentation (e.g., always include "test"
-// when intent is TestAdd) once we have miscluster data to motivate it.
+// Intent is deliberately ignored here. Stage 1 stays intent-agnostic
+// because the differentiation belongs downstream, where it actually
+// changes behavior:
+//
+//   - B.4 ckg searcher uses Intent to pick SymbolKind filters.
+//   - B.5 graph expander uses Intent to pick Relation sets (BugFix ->
+//     callers, ArchExplain -> imports, Security -> input boundaries).
+//   - B.7 sanitize uses Intent to pick rule severity (Security stricter).
+//
+// The intent parameter is kept on the signature so Phase E can measure
+// whether intent-aware extraction (e.g., forcing a "test" candidate for
+// IntentTestAdd) improves recall enough to justify the added complexity.
+// Until that data exists, splitting candidate extraction by Intent would
+// be premature: the BM25 rerank already filters Intent-irrelevant
+// keywords by giving them zero scores.
 func extractKeywords(prompt string, hits []contract.Hit, intent contract.Intent) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0)
@@ -55,7 +66,7 @@ func extractKeywords(prompt string, hits []contract.Hit, intent contract.Intent)
 		add(name)
 	}
 
-	_ = intent // reserved for future intent-aware weighting
+	_ = intent // see doc: Stage 1 is intent-agnostic by design
 	return out
 }
 
