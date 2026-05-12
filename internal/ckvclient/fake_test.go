@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/0xmhha/code-knowledge-system/pkg/contract"
 )
@@ -17,6 +16,8 @@ func goodHit(file string, rank int, score float64) contract.Hit {
 		Source:   contract.HitSourceCKV,
 	}
 }
+
+// --- SemanticSearch ---
 
 func TestFake_SemanticSearch_ReturnsCannedHits(t *testing.T) {
 	t.Parallel()
@@ -78,8 +79,8 @@ func TestFake_SemanticSearch_ErrTakesPrecedence(t *testing.T) {
 	t.Parallel()
 	want := errors.New("backend down")
 	f := &Fake{
-		SearchHits: []contract.Hit{goodHit("a.go", 1, 0.9)}, // populated
-		SearchErr:  want,                                    // overrides
+		SearchHits: []contract.Hit{goodHit("a.go", 1, 0.9)},
+		SearchErr:  want,
 	}
 	_, err := f.SemanticSearch(context.Background(), "q", SearchOpts{})
 	if !errors.Is(err, want) {
@@ -87,10 +88,12 @@ func TestFake_SemanticSearch_ErrTakesPrecedence(t *testing.T) {
 	}
 }
 
+// --- Health / Close ---
+
 func TestFake_Health(t *testing.T) {
 	t.Parallel()
 	f := &Fake{
-		HealthVal: Health{Reachable: true, Latency: 10 * time.Millisecond, StatsHash: "xyz"},
+		HealthVal: Health{Reachable: true, StatsHash: "xyz"},
 	}
 	h, err := f.Health(context.Background())
 	if err != nil {
@@ -134,5 +137,67 @@ func TestFake_Close_Err(t *testing.T) {
 	}
 	if !f.Closed() {
 		t.Fatal("Closed() should be true even when Close returns error")
+	}
+}
+
+// --- Call recording ---
+
+func TestFake_RecordsSemanticSearchCalls(t *testing.T) {
+	t.Parallel()
+	f := &Fake{SearchHits: []contract.Hit{goodHit("a.go", 1, 0.5)}}
+
+	_, _ = f.SemanticSearch(context.Background(), "first", SearchOpts{K: 3})
+	_, _ = f.SemanticSearch(context.Background(), "second", SearchOpts{K: 5, Filter: SearchFilter{Language: "go"}})
+
+	if got := len(f.Calls.SemanticSearch); got != 2 {
+		t.Fatalf("SemanticSearch call count = %d, want 2", got)
+	}
+	if f.Calls.SemanticSearch[0].Query != "first" || f.Calls.SemanticSearch[0].Opts.K != 3 {
+		t.Errorf("call[0] = %+v", f.Calls.SemanticSearch[0])
+	}
+	if f.Calls.SemanticSearch[1].Opts.Filter.Language != "go" {
+		t.Errorf("call[1] filter = %+v", f.Calls.SemanticSearch[1].Opts.Filter)
+	}
+}
+
+func TestFake_RecordsCalls_EvenOnError(t *testing.T) {
+	t.Parallel()
+	// Recording must happen before the error-return branch so tests can
+	// still assert "the composer attempted to search even though it
+	// failed".
+	f := &Fake{SearchErr: errors.New("backend down")}
+	_, _ = f.SemanticSearch(context.Background(), "x", SearchOpts{})
+	if len(f.Calls.SemanticSearch) != 1 {
+		t.Fatalf("call not recorded on error: %d", len(f.Calls.SemanticSearch))
+	}
+}
+
+func TestFake_RecordsHealthAndCloseCounts(t *testing.T) {
+	t.Parallel()
+	f := &Fake{}
+	_, _ = f.Health(context.Background())
+	_, _ = f.Health(context.Background())
+	_ = f.Close()
+	_ = f.Close()
+	_ = f.Close()
+	if f.Calls.Health != 2 {
+		t.Errorf("Health count = %d, want 2", f.Calls.Health)
+	}
+	if f.Calls.Close != 3 {
+		t.Errorf("Close count = %d, want 3", f.Calls.Close)
+	}
+}
+
+func TestFake_CallsReset(t *testing.T) {
+	t.Parallel()
+	f := &Fake{SearchHits: []contract.Hit{goodHit("a.go", 1, 0.5)}}
+	_, _ = f.SemanticSearch(context.Background(), "x", SearchOpts{})
+	_, _ = f.Health(context.Background())
+	_ = f.Close()
+
+	f.Calls.Reset()
+
+	if len(f.Calls.SemanticSearch) != 0 || f.Calls.Health != 0 || f.Calls.Close != 0 {
+		t.Fatalf("Reset did not clear all counters: %+v", f.Calls)
 	}
 }

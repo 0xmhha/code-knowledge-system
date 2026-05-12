@@ -14,6 +14,9 @@ import (
 // Configure Fake by populating its exported fields directly. The Err*
 // fields, when non-nil, are returned in preference to the canned value;
 // this lets tests assert error-path behavior cheaply.
+//
+// All calls are recorded on Fake.Calls; tests can assert what was invoked
+// (counts, arguments) without injecting a mocking framework.
 type Fake struct {
 	// SearchHits is returned by SemanticSearch on success.
 	SearchHits []contract.Hit
@@ -28,16 +31,39 @@ type Fake struct {
 	// CloseErr, when non-nil, is returned by Close.
 	CloseErr error
 
-	// closed flips true after Close is called; visible to tests for
+	// Calls records every method invocation for test assertions.
+	Calls FakeCalls
+
+	// closed flips true after Close is called; visible via Closed() for
 	// post-condition assertions.
 	closed bool
 }
 
+// FakeCalls records the methods invoked on a Fake and their arguments.
+type FakeCalls struct {
+	SemanticSearch []SemanticSearchCall
+	Health         int // number of Health calls
+	Close          int // number of Close calls
+}
+
+// SemanticSearchCall captures the arguments of one SemanticSearch invocation.
+type SemanticSearchCall struct {
+	Query string
+	Opts  SearchOpts
+}
+
+// Reset clears all recorded calls. Useful between test sub-cases.
+func (c *FakeCalls) Reset() { *c = FakeCalls{} }
+
 // Compile-time assertion that Fake satisfies Client.
 var _ Client = (*Fake)(nil)
 
-// SemanticSearch returns f.SearchHits or f.SearchErr. Validates query.
+// SemanticSearch records the call, then returns f.SearchHits or f.SearchErr.
 func (f *Fake) SemanticSearch(ctx context.Context, query string, opts SearchOpts) ([]contract.Hit, error) {
+	f.Calls.SemanticSearch = append(f.Calls.SemanticSearch, SemanticSearchCall{
+		Query: query,
+		Opts:  opts,
+	})
 	if f.SearchErr != nil {
 		return nil, f.SearchErr
 	}
@@ -54,16 +80,18 @@ func (f *Fake) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 	return out, nil
 }
 
-// Health returns f.HealthVal or f.HealthErr.
+// Health records the call, then returns f.HealthVal or f.HealthErr.
 func (f *Fake) Health(ctx context.Context) (Health, error) {
+	f.Calls.Health++
 	if f.HealthErr != nil {
 		return Health{}, f.HealthErr
 	}
 	return f.HealthVal, nil
 }
 
-// Close marks the fake closed and returns f.CloseErr.
+// Close records the call, marks the fake closed, and returns f.CloseErr.
 func (f *Fake) Close() error {
+	f.Calls.Close++
 	f.closed = true
 	return f.CloseErr
 }

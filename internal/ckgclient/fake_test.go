@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/0xmhha/code-knowledge-system/pkg/contract"
 )
@@ -98,6 +97,23 @@ func TestFake_FindSymbol(t *testing.T) {
 	}
 }
 
+func TestFake_FindSymbol_AcceptsMultipleKinds(t *testing.T) {
+	t.Parallel()
+	f := &Fake{SymbolCitations: []contract.Citation{goodCitation("a.go")}}
+	_, err := f.FindSymbol(context.Background(), "Process", SymbolOpts{Kinds: []string{"function", "method"}})
+	if err != nil {
+		t.Fatalf("FindSymbol with plural Kinds: %v", err)
+	}
+	// Recorded with both kinds preserved.
+	if len(f.Calls.FindSymbol) != 1 {
+		t.Fatalf("FindSymbol calls = %d, want 1", len(f.Calls.FindSymbol))
+	}
+	got := f.Calls.FindSymbol[0].Opts.Kinds
+	if len(got) != 2 || got[0] != "function" || got[1] != "method" {
+		t.Errorf("recorded Kinds = %v, want [function method]", got)
+	}
+}
+
 func TestFake_FindSymbol_EmptyNameErrors(t *testing.T) {
 	t.Parallel()
 	f := &Fake{}
@@ -126,7 +142,7 @@ func TestFake_Neighbors(t *testing.T) {
 			{Source: src, Target: tgt, Relation: contract.RelationCalls, Distance: 1},
 		},
 	}
-	ns, err := f.Neighbors(context.Background(), src, nil, 1)
+	ns, err := f.Neighbors(context.Background(), src, NeighborsOpts{Hops: 1})
 	if err != nil {
 		t.Fatalf("Neighbors: %v", err)
 	}
@@ -135,19 +151,49 @@ func TestFake_Neighbors(t *testing.T) {
 	}
 }
 
+func TestFake_Neighbors_ZeroHopsAllowed(t *testing.T) {
+	t.Parallel()
+	src := goodCitation("a.go")
+	f := &Fake{NeighborEdges: []contract.Neighbor{
+		{Source: src, Target: goodCitation("b.go"), Relation: contract.RelationCalls, Distance: 1},
+	}}
+	// Hops == 0 is treated as 1 per doc; should not error.
+	if _, err := f.Neighbors(context.Background(), src, NeighborsOpts{}); err != nil {
+		t.Fatalf("Neighbors with Hops=0: %v", err)
+	}
+}
+
+func TestFake_Neighbors_NegativeHopsErrors(t *testing.T) {
+	t.Parallel()
+	f := &Fake{}
+	_, err := f.Neighbors(context.Background(), goodCitation("a.go"), NeighborsOpts{Hops: -1})
+	if err == nil {
+		t.Fatal("expected error for negative hops")
+	}
+}
+
 func TestFake_Neighbors_InvalidSrcErrors(t *testing.T) {
 	t.Parallel()
 	f := &Fake{}
-	if _, err := f.Neighbors(context.Background(), contract.Citation{}, nil, 1); err == nil {
+	if _, err := f.Neighbors(context.Background(), contract.Citation{}, NeighborsOpts{Hops: 1}); err == nil {
 		t.Fatal("expected error for invalid src citation")
 	}
 }
 
-func TestFake_Neighbors_ZeroHopsErrors(t *testing.T) {
+func TestFake_Neighbors_RespectsMaxTotal(t *testing.T) {
 	t.Parallel()
-	f := &Fake{}
-	if _, err := f.Neighbors(context.Background(), goodCitation("a.go"), nil, 0); err == nil {
-		t.Fatal("expected error for hops == 0")
+	src := goodCitation("a.go")
+	f := &Fake{NeighborEdges: []contract.Neighbor{
+		{Source: src, Target: goodCitation("b.go"), Relation: contract.RelationCalls, Distance: 1},
+		{Source: src, Target: goodCitation("c.go"), Relation: contract.RelationCalls, Distance: 1},
+		{Source: src, Target: goodCitation("d.go"), Relation: contract.RelationCalls, Distance: 1},
+	}}
+	ns, err := f.Neighbors(context.Background(), src, NeighborsOpts{Hops: 1, MaxTotal: 2})
+	if err != nil {
+		t.Fatalf("Neighbors: %v", err)
+	}
+	if len(ns) != 2 {
+		t.Fatalf("with MaxTotal=2 got %d neighbors, want 2", len(ns))
 	}
 }
 
@@ -155,12 +201,12 @@ func TestFake_Neighbors_ZeroHopsErrors(t *testing.T) {
 
 func TestFake_Health(t *testing.T) {
 	t.Parallel()
-	f := &Fake{HealthVal: Health{Reachable: true, Latency: 5 * time.Millisecond, SchemaVersion: "v1"}}
+	f := &Fake{HealthVal: Health{Reachable: true, SchemaVersion: "v1", IndexedHead: "abc"}}
 	h, err := f.Health(context.Background())
 	if err != nil {
 		t.Fatalf("Health: %v", err)
 	}
-	if !h.Reachable || h.SchemaVersion != "v1" {
+	if !h.Reachable || h.SchemaVersion != "v1" || h.IndexedHead != "abc" {
 		t.Errorf("Health = %+v", h)
 	}
 }
@@ -182,5 +228,59 @@ func TestFake_Close(t *testing.T) {
 	}
 	if !f.Closed() {
 		t.Fatal("Closed() should be true after Close()")
+	}
+}
+
+// --- Call recording ---
+
+func TestFake_RecordsAllMethods(t *testing.T) {
+	t.Parallel()
+	src := goodCitation("a.go")
+	f := &Fake{
+		BM25Hits:        []contract.Hit{goodHit("a.go", 1, 1.0)},
+		SymbolCitations: []contract.Citation{goodCitation("b.go")},
+		NeighborEdges:   []contract.Neighbor{{Source: src, Target: src, Relation: contract.RelationCalls, Distance: 1}},
+	}
+
+	_, _ = f.BM25Search(context.Background(), "q1", SearchOpts{K: 5})
+	_, _ = f.BM25Search(context.Background(), "q2", SearchOpts{})
+	_, _ = f.FindSymbol(context.Background(), "Foo", SymbolOpts{Kinds: []string{"function"}})
+	_, _ = f.Neighbors(context.Background(), src, NeighborsOpts{Hops: 2, Relations: []contract.Relation{contract.RelationCalls}})
+	_, _ = f.Health(context.Background())
+	_ = f.Close()
+
+	if len(f.Calls.BM25Search) != 2 {
+		t.Errorf("BM25Search count = %d, want 2", len(f.Calls.BM25Search))
+	}
+	if len(f.Calls.FindSymbol) != 1 || f.Calls.FindSymbol[0].Name != "Foo" {
+		t.Errorf("FindSymbol record = %+v", f.Calls.FindSymbol)
+	}
+	if len(f.Calls.Neighbors) != 1 || f.Calls.Neighbors[0].Opts.Hops != 2 {
+		t.Errorf("Neighbors record = %+v", f.Calls.Neighbors)
+	}
+	if f.Calls.Health != 1 || f.Calls.Close != 1 {
+		t.Errorf("Health/Close counts: %d/%d", f.Calls.Health, f.Calls.Close)
+	}
+}
+
+func TestFake_RecordsCalls_EvenOnError(t *testing.T) {
+	t.Parallel()
+	f := &Fake{BM25Err: errors.New("backend down")}
+	_, _ = f.BM25Search(context.Background(), "x", SearchOpts{})
+	if len(f.Calls.BM25Search) != 1 {
+		t.Fatalf("call not recorded on error: %d", len(f.Calls.BM25Search))
+	}
+}
+
+func TestFake_CallsReset(t *testing.T) {
+	t.Parallel()
+	f := &Fake{BM25Hits: []contract.Hit{goodHit("a.go", 1, 1.0)}}
+	_, _ = f.BM25Search(context.Background(), "x", SearchOpts{})
+	_ = f.Close()
+
+	f.Calls.Reset()
+
+	if len(f.Calls.BM25Search) != 0 || f.Calls.Close != 0 {
+		t.Fatalf("Reset did not clear all counters: %+v", f.Calls)
 	}
 }

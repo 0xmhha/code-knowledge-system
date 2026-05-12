@@ -39,6 +39,10 @@ type Client interface {
 	// Health reports backend reachability and version pins. Used by the
 	// cks.ops.health MCP tool and by the evaluation harness to assert
 	// the same index snapshot was used across runs.
+	//
+	// Callers that need round-trip latency should measure time.Since
+	// around the call themselves; Health does not include it because a
+	// single in-band measurement carries no statistical meaning.
 	Health(ctx context.Context) (Health, error)
 
 	// Close releases any resources (connections, mmap'd files).
@@ -70,13 +74,12 @@ type SearchFilter struct {
 	CommitHash string
 }
 
-// Health is the result of a Client.Health() call.
+// Health is the result of a Client.Health() call. Reports backend state
+// (reachability + version pins), not call-specific metrics.
 type Health struct {
 	// Reachable is true when the backend responded within the health
 	// check timeout.
 	Reachable bool
-	// Latency is the round-trip duration of the health check.
-	Latency time.Duration
 	// StatsHash is the ckv stats hash for cross-run reproducibility;
 	// the evaluation harness compares this across runs.
 	StatsHash string

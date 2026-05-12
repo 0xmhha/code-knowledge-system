@@ -20,7 +20,6 @@ package ckgclient
 
 import (
 	"context"
-	"time"
 
 	"github.com/0xmhha/code-knowledge-system/pkg/contract"
 )
@@ -36,16 +35,15 @@ type Client interface {
 	// or package-private symbols sharing a name.
 	FindSymbol(ctx context.Context, name string, opts SymbolOpts) ([]contract.Citation, error)
 
-	// Neighbors traverses graph edges from src for the given relation
-	// set, returning up to `hops` levels of neighbors. Used by the Phase
-	// B.5 expander.
-	//
-	// When relations is empty, all known relations are traversed
-	// (RelationCalls, CalledBy, Implements, Imports, References,
-	// TestedBy, Embeds, Defines).
-	Neighbors(ctx context.Context, src contract.Citation, relations []contract.Relation, hops int) ([]contract.Neighbor, error)
+	// Neighbors traverses graph edges from src per opts. Used by the
+	// Phase B.5 expander.
+	Neighbors(ctx context.Context, src contract.Citation, opts NeighborsOpts) ([]contract.Neighbor, error)
 
 	// Health reports backend reachability and version pins.
+	//
+	// Callers that need round-trip latency should measure time.Since
+	// around the call themselves; Health does not include it because a
+	// single in-band measurement carries no statistical meaning.
 	Health(ctx context.Context) (Health, error)
 
 	// Close releases any resources. Idempotent.
@@ -69,18 +67,35 @@ type SearchFilter struct {
 
 // SymbolOpts shapes a single FindSymbol call.
 type SymbolOpts struct {
-	// Kind, when non-empty, restricts results to symbols of this kind
-	// ("function", "type", "method", "var", "const", "interface").
-	Kind string
-	// PathGlob and CommitHash behave as in SearchFilter.
+	// Kinds, when non-empty, restricts results to symbols of any of the
+	// listed kinds ("function", "type", "method", "var", "const",
+	// "interface"). Empty means any kind. Plural shape matches
+	// ckvclient.SearchFilter.SymbolKinds — a single Go identifier like
+	// "ProcessRequest" is commonly both a function and a method, so
+	// callers want to retrieve them in one call.
+	Kinds      []string
 	PathGlob   string
 	CommitHash string
 }
 
-// Health is the result of a Client.Health() call.
+// NeighborsOpts shapes a single Neighbors call.
+type NeighborsOpts struct {
+	// Relations restricts which edge types to traverse. Empty means all
+	// known relations (RelationCalls, CalledBy, Implements, Imports,
+	// References, TestedBy, Embeds, Defines).
+	Relations []contract.Relation
+	// Hops is the maximum traversal depth. Zero is treated as 1
+	// (direct neighbors only). Negative values are rejected.
+	Hops int
+	// MaxTotal caps the total number of neighbors returned across all
+	// relations. Zero means no cap (the backend may still apply its own).
+	MaxTotal int
+}
+
+// Health is the result of a Client.Health() call. Reports backend state
+// (reachability + version pins), not call-specific metrics.
 type Health struct {
 	Reachable bool
-	Latency   time.Duration
 	// SchemaVersion is the ckg store schema version; the evaluation
 	// harness compares this across runs.
 	SchemaVersion string
