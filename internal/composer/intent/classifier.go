@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -13,9 +14,12 @@ import (
 )
 
 // DefaultUnknownThreshold is the cosine-similarity cutoff below which
-// Classify returns IntentUnknown. The value 0.5 is a heuristic for
-// Phase-0; Phase E tuning will revisit it once we have real-prompt data.
-const DefaultUnknownThreshold = 0.5
+// Classify returns IntentUnknown. 0.6 fits cks's "when in doubt, prefer
+// IntentUnknown (composer falls back to broad fan-out)" policy — modern
+// multilingual embedders typically map paraphrased same-meaning texts at
+// 0.7+ cosine, so 0.6 rejects loosely-related prompts while accepting
+// natural variation. Phase E tuning will revisit with real-prompt data.
+const DefaultUnknownThreshold = 0.6
 
 // Classification is the result of one Classify call.
 type Classification struct {
@@ -85,6 +89,10 @@ func New(ctx context.Context, embedder Embedder, opts ...Option) (*Classifier, e
 		opt(c)
 	}
 
+	if err := validateAnchors(c.anchors); err != nil {
+		return nil, err
+	}
+
 	c.embedded = make(map[contract.Intent][]anchor, len(c.anchors))
 	for intentVal, texts := range c.anchors {
 		for _, text := range texts {
@@ -96,6 +104,31 @@ func New(ctx context.Context, embedder Embedder, opts ...Option) (*Classifier, e
 		}
 	}
 	return c, nil
+}
+
+// validateAnchors rejects anchor maps with structural problems before any
+// embedder call is made:
+//   - unknown contract.Intent values (typos, deleted enum members),
+//   - empty anchor list for a declared Intent (would never match),
+//   - empty / whitespace-only anchor text (would embed to noise).
+//
+// Runs before pre-embedding so failures surface without burning embedder
+// quota on bad input.
+func validateAnchors(m map[contract.Intent][]string) error {
+	for intentVal, texts := range m {
+		if !intentVal.IsValid() {
+			return fmt.Errorf("intent: anchor map contains unknown Intent %q", intentVal)
+		}
+		if len(texts) == 0 {
+			return fmt.Errorf("intent: anchor list for %s is empty", intentVal)
+		}
+		for i, t := range texts {
+			if strings.TrimSpace(t) == "" {
+				return fmt.Errorf("intent: anchor text for %s[%d] is empty or whitespace", intentVal, i)
+			}
+		}
+	}
+	return nil
 }
 
 // Classify embeds prompt and returns the Intent whose closest anchor has

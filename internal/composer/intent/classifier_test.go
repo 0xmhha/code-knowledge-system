@@ -96,6 +96,64 @@ func TestNew_PreEmbedErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestNew_RejectsInvalidIntent(t *testing.T) {
+	t.Parallel()
+	embedder := twoIntentEmbedder(t)
+	_, err := New(context.Background(), embedder, WithAnchors(map[contract.Intent][]string{
+		contract.Intent("made_up_intent"): {"foo"},
+	}))
+	if err == nil {
+		t.Fatal("expected error for unknown Intent in anchors")
+	}
+	if !strings.Contains(err.Error(), "unknown Intent") {
+		t.Errorf("error = %v, want 'unknown Intent' context", err)
+	}
+}
+
+func TestNew_RejectsEmptyAnchorList(t *testing.T) {
+	t.Parallel()
+	embedder := twoIntentEmbedder(t)
+	_, err := New(context.Background(), embedder, WithAnchors(map[contract.Intent][]string{
+		contract.IntentBugFix: {},
+	}))
+	if err == nil {
+		t.Fatal("expected error for empty anchor list")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("error = %v, want 'empty' context", err)
+	}
+}
+
+func TestNew_RejectsEmptyAnchorText(t *testing.T) {
+	t.Parallel()
+	embedder := twoIntentEmbedder(t)
+	cases := map[string]string{
+		"empty":           "",
+		"whitespace only": "   \t\n",
+	}
+	for name, text := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, err := New(context.Background(), embedder, WithAnchors(map[contract.Intent][]string{
+				contract.IntentBugFix: {text},
+			}))
+			if err == nil {
+				t.Fatalf("expected error for anchor text = %q", text)
+			}
+		})
+	}
+}
+
+func TestDefaultUnknownThreshold_Value(t *testing.T) {
+	t.Parallel()
+	// Locked-in policy value (cks "when in doubt, IntentUnknown"). Any
+	// future change to this number should go through review because it
+	// affects classifier behavior across every Intent.
+	if DefaultUnknownThreshold != 0.6 {
+		t.Errorf("DefaultUnknownThreshold = %v, want 0.6", DefaultUnknownThreshold)
+	}
+}
+
 func TestNew_DefaultAnchorsLoad(t *testing.T) {
 	t.Parallel()
 	// Use FakeEmbedder with hash fallback (no Vectors map). The
