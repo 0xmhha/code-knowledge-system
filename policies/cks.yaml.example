@@ -1,0 +1,47 @@
+# Example cks runtime configuration.
+#
+# Copy to ./cks.yaml (gitignored) or to your deployment location, then
+# adjust paths. The Validate step at load time rejects unknown keys,
+# invalid logging levels, non-loopback HTTP bindings, and unrecognized
+# sanitize default actions — so typos surface immediately.
+
+version: 1
+
+backends:
+  ckg:
+    # Path to the ckg SQLite store (created by `ckg build`).
+    path: "./data/ckg.db"
+    timeout_ms: 5000
+  ckv:
+    # Path to the ckv vector store.
+    path: "./data/ckv.db"
+    timeout_ms: 3000
+    # Embedding model identifier; ckv resolves this to an ONNX file.
+    embed_model: "bge-base-onnx"
+
+listen:
+  # HTTP listener for the cks REST surface (loopback only in Phase 0/1).
+  http_addr: "127.0.0.1:8080"
+  # Whether to also serve the MCP stdio surface (consumed by claude mcp add).
+  mcp_stdio: true
+
+logging:
+  # debug | info | warn | error
+  level: "info"
+  # prod (JSON to stdout/file) | dev (console with colors)
+  mode: "prod"
+  # Footprint logs (high-volume perf/debug events). Cleared via `make log-clear`.
+  footprint_dir: "./logs/footprint"
+  # Audit logs (tamper-evident; hash-chained — see internal/auditlog).
+  audit_dir: "./logs/audit"
+
+sanitize:
+  # Path to the sanitization ruleset (regex + action + severity per rule).
+  rules_path: "./policies/sanitization_rules.yaml"
+  # Fallback redaction action when a rule omits its own action field.
+  # mask | drop | fail_closed
+  default_action: "drop"
+  # If true, the composer refuses to release the pack on any malformed or
+  # unrecognized rule action. Defense in depth against ruleset typos that
+  # would otherwise bypass redaction.
+  fail_closed_on_unknown_rule: true

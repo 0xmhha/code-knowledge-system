@@ -1,0 +1,206 @@
+// Package config loads and validates cks runtime configuration:
+//
+//   - Config:            top-level cks settings (backends, listen, logging,
+//     sanitize). Loaded from a YAML file at startup.
+//   - SanitizeRuleset:   the sanitize-rule catalog used by the composer's
+//     final-stage redaction (see sanitize.go).
+//
+// The loader is permissive on optional fields and strict on dangerous ones:
+// unknown logging levels, malformed regex patterns in sanitize rules, and
+// unrecognized RedactionActions are rejected at load time so that bugs
+// surface early rather than silently degrading the LLM-boundary defense.
+package config
+
+import (
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/0xmhha/code-knowledge-system/pkg/contract"
+)
+
+// configVersion is the only supported top-level version. Bumping requires a
+// migration path documented in the changelog.
+const configVersion = 1
+
+// Config is the top-level cks settings root.
+type Config struct {
+	Version  int            `yaml:"version"`
+	Backends BackendsConfig `yaml:"backends"`
+	Listen   ListenConfig   `yaml:"listen"`
+	Logging  LoggingConfig  `yaml:"logging"`
+	Sanitize SanitizeConfig `yaml:"sanitize"`
+}
+
+// BackendsConfig holds connection settings for ckg and ckv.
+type BackendsConfig struct {
+	CKG CKGConfig `yaml:"ckg"`
+	CKV CKVConfig `yaml:"ckv"`
+}
+
+// CKGConfig is the ckg client connection profile.
+type CKGConfig struct {
+	Path      string `yaml:"path"`
+	TimeoutMS int    `yaml:"timeout_ms"`
+}
+
+// CKVConfig is the ckv client connection profile.
+type CKVConfig struct {
+	Path       string `yaml:"path"`
+	TimeoutMS  int    `yaml:"timeout_ms"`
+	EmbedModel string `yaml:"embed_model"`
+}
+
+// ListenConfig controls how cks exposes its surface to callers.
+//
+// Per HLD §10 the HTTP listener is loopback-only in Phase 0/1; binding to a
+// non-loopback address is rejected by Validate.
+type ListenConfig struct {
+	HTTPAddr string `yaml:"http_addr"`
+	MCPStdio bool   `yaml:"mcp_stdio"`
+}
+
+// LoggingConfig matches the footprint package's Mode/Level vocabulary and
+// adds output directories for footprint and audit logs.
+type LoggingConfig struct {
+	Level        string `yaml:"level"`
+	Mode         string `yaml:"mode"`
+	FootprintDir string `yaml:"footprint_dir"`
+	AuditDir     string `yaml:"audit_dir"`
+}
+
+// SanitizeConfig points to the sanitize ruleset and sets composer-wide
+// fallback behavior.
+type SanitizeConfig struct {
+	// RulesPath is the YAML file with the SanitizeRuleset. May be empty
+	// during early development if the composer is wired with an in-memory
+	// ruleset instead.
+	RulesPath string `yaml:"rules_path"`
+	// DefaultAction is the RedactionAction to apply when a sanitize rule
+	// omits its own action. Empty means the rule must specify its action.
+	DefaultAction contract.RedactionAction `yaml:"default_action"`
+	// FailClosedOnUnknownRule, when true, causes the composer to fail
+	// closed (refuse the pack) on any unrecognized rule action or hit
+	// against a malformed rule — defense in depth against ruleset edits
+	// that bypass redaction by typo.
+	FailClosedOnUnknownRule bool `yaml:"fail_closed_on_unknown_rule"`
+}
+
+// Default returns the out-of-box cks configuration. Used by tests and as a
+// fallback when no config file is supplied.
+func Default() *Config {
+	return &Config{
+		Version: configVersion,
+		Backends: BackendsConfig{
+			CKG: CKGConfig{TimeoutMS: 5000},
+			CKV: CKVConfig{TimeoutMS: 3000},
+		},
+		Listen: ListenConfig{
+			HTTPAddr: "127.0.0.1:8080",
+			MCPStdio: true,
+		},
+		Logging: LoggingConfig{
+			Level:        "info",
+			Mode:         "prod",
+			FootprintDir: "./logs/footprint",
+			AuditDir:     "./logs/audit",
+		},
+		Sanitize: SanitizeConfig{
+			RulesPath:               "./policies/sanitization_rules.yaml",
+			DefaultAction:           contract.RedactionDrop,
+			FailClosedOnUnknownRule: true,
+		},
+	}
+}
+
+// Load reads path as YAML and returns a validated Config.
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("config: read %q: %w", path, err)
+	}
+	return LoadBytes(data)
+}
+
+// LoadBytes parses raw YAML bytes into a validated Config. Useful for tests
+// and for callers that source configuration from non-file media (embed,
+// remote KV, etc.).
+func LoadBytes(data []byte) (*Config, error) {
+	var c Config
+	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec.KnownFields(true) // reject typos / unknown keys to surface bugs early
+	if err := dec.Decode(&c); err != nil {
+		if errors.Is(err, ErrEmptyDocument) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("config: decode: %w", err)
+	}
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// Validate reports the first structural problem found in c. Acts as the
+// gate that lets a Config through to runtime use.
+func (c *Config) Validate() error {
+	if c == nil {
+		return fmt.Errorf("config: nil")
+	}
+	if c.Version != configVersion {
+		return fmt.Errorf("config: version=%d, want %d", c.Version, configVersion)
+	}
+
+	switch strings.ToLower(c.Logging.Level) {
+	case "", "debug", "info", "warn", "warning", "error":
+	default:
+		return fmt.Errorf("config: logging.level=%q invalid (debug|info|warn|error)", c.Logging.Level)
+	}
+	switch strings.ToLower(c.Logging.Mode) {
+	case "", "prod", "dev":
+	default:
+		return fmt.Errorf("config: logging.mode=%q invalid (prod|dev)", c.Logging.Mode)
+	}
+
+	if c.Listen.HTTPAddr != "" {
+		if err := validateLoopback(c.Listen.HTTPAddr); err != nil {
+			return fmt.Errorf("config: listen.http_addr: %w", err)
+		}
+	}
+
+	switch c.Sanitize.DefaultAction {
+	case "", contract.RedactionMask, contract.RedactionDrop, contract.RedactionFailClosed:
+	default:
+		return fmt.Errorf("config: sanitize.default_action=%q invalid", c.Sanitize.DefaultAction)
+	}
+	return nil
+}
+
+// validateLoopback returns nil only when addr is a host:port pointing at a
+// loopback address (127.0.0.0/8, ::1). Non-loopback bindings are rejected
+// because cks should not expose its surface to remote callers in Phase 0/1.
+func validateLoopback(addr string) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("invalid host:port %q: %w", addr, err)
+	}
+	if host == "localhost" {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("host %q is not an IP and not 'localhost'; non-loopback bindings are rejected", host)
+	}
+	if !ip.IsLoopback() {
+		return fmt.Errorf("host %q is not a loopback address", host)
+	}
+	return nil
+}
+
+// ErrEmptyDocument is returned by LoadBytes when the input contains no YAML
+// document at all (distinct from a syntactically valid empty mapping).
+var ErrEmptyDocument = errors.New("config: empty YAML document")
