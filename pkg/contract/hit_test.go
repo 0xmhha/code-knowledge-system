@@ -57,7 +57,7 @@ func TestHit_JSONOmitsEmptySource(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	got := string(buf)
-	want := `{"citation":{"file":"a.go","start_line":1,"end_line":1},"rank":1,"score":0}`
+	want := `{"citation":{"file":"a.go","start_line":1,"end_line":1,"commit_hash":""},"rank":1,"score":0}`
 	if got != want {
 		t.Fatalf("marshal:\n got: %s\nwant: %s", got, want)
 	}

@@ -9,13 +9,14 @@ import "fmt"
 // StartLine and EndLine are 1-based and inclusive (matches editor and
 // standard `git blame -L` convention). EndLine may equal StartLine for a
 // single-line citation. CommitHash is the full 40-char SHA of the commit
-// that produced the snapshot the indexer was run against; empty when the
-// backend did not record one (rare; usually indicates a stale index).
+// that produced the snapshot the indexer was run against; empty string is
+// allowed (rare; usually indicates a stale index) but always present in
+// JSON output for explicit consistency.
 type Citation struct {
 	File       string `json:"file"`
 	StartLine  int    `json:"start_line"`
 	EndLine    int    `json:"end_line"`
-	CommitHash string `json:"commit_hash,omitempty"`
+	CommitHash string `json:"commit_hash"`
 }
 
 // String renders the citation as `path:start-end[@commit]`, the same form

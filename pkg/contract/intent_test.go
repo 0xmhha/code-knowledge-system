@@ -17,6 +17,7 @@ func TestIntent_String(t *testing.T) {
 		IntentConcurrencySafety: "concurrency_safety",
 		IntentSecurity:          "security",
 		IntentDocsUpdate:        "docs_update",
+		IntentQAReview:          "qa_review",
 	}
 	for i, want := range cases {
 		if got := i.String(); got != want {

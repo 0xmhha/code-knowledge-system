@@ -73,14 +73,17 @@ func TestCitation_JSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestCitation_JSONOmitsEmptyCommitHash(t *testing.T) {
+func TestCitation_JSONIncludesEmptyCommitHash(t *testing.T) {
 	t.Parallel()
 	in := Citation{File: "a.go", StartLine: 1, EndLine: 1}
 	buf, err := json.Marshal(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	want := `{"file":"a.go","start_line":1,"end_line":1}`
+	// commit_hash is always present in JSON output (no omitempty) — explicit
+	// over implicit, so consumers never see schema variants based on
+	// optional fields.
+	want := `{"file":"a.go","start_line":1,"end_line":1,"commit_hash":""}`
 	if string(buf) != want {
 		t.Fatalf("marshal output mismatch:\n got: %s\nwant: %s", buf, want)
 	}
