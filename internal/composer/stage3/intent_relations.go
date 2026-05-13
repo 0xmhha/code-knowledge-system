@@ -5,7 +5,9 @@ import "github.com/0xmhha/code-knowledge-system/pkg/contract"
 // intentToRelations returns the graph relations Stage 3 should traverse
 // for the given Intent.
 //
-// Mapping rationale (Phase-0 baseline; Phase E may revise):
+// Mapping rationale (Phase-0 baseline). Specific suspicions to verify
+// against PR #70 data in Phase E are documented in
+// docs/composer/stage3-scoring.md §3.
 //
 //   - BugFix:            called_by + calls — trace bug origin and downstream
 //   - FeatureAdd:        imports + implements + references — integration

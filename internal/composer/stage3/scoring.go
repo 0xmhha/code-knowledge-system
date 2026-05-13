@@ -14,6 +14,10 @@ import (
 // hundreds of sites) would dominate a sum-based score regardless of
 // semantic relevance. Max preserves "the best evidence we have for this
 // target" without over-weighting popularity.
+//
+// Trade-off documented in docs/composer/stage3-scoring.md §2. The known
+// limitation — genuinely central nodes get the same score as one-path
+// nodes — will be re-evaluated against PR #70 data in Phase E.
 type neighborAggregator struct {
 	byTarget map[string]*ScoredNeighbor
 }

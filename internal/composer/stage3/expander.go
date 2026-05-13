@@ -77,10 +77,18 @@ type ScoredNeighbor struct {
 	// Score is derived from the originating seed's score, discounted by
 	// distance: seed.Score / (1 + distance). When multiple seeds reach
 	// the same target, the maximum is kept (closest-path evidence wins).
+	//
+	// The decay formula was chosen for simplicity; alternatives
+	// (exponential, logarithmic, threshold) and their trade-offs are
+	// analyzed in docs/composer/stage3-scoring.md §1, with a Phase E
+	// measurement plan to revise based on PR #70 data.
 	Score float64
 
 	// Sources records every (seed, relation, distance) that produced this
-	// target. Multi-path neighbors have multiple entries.
+	// target. Format: "seed:<file>:<relation>:dist=<n>". Multi-path
+	// neighbors have multiple entries. The colon-delimited format is
+	// chosen for grep-and-parse uniformity with Stage 2's Sources;
+	// see docs/composer/stage3-scoring.md §4.
 	Sources []string
 }
 
