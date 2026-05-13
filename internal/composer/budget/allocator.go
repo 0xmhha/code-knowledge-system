@@ -46,6 +46,15 @@ func DefaultConfig() Config {
 }
 
 // SelectedItem is one body that made it into the budget.
+//
+// Body intentionally holds a copy of the fetched text (not a reference
+// into the fetcher's storage). This costs memory for large allocations
+// but keeps every stage's state fully inspectable from a single
+// Stage4Output value — critical for debugging the Phase-B composer
+// while the pipeline is still being tuned. A streaming variant that
+// pipes bodies directly into EvidencePack assembly is a candidate
+// optimization once the pipeline has stabilized and Phase E has
+// finished measuring the quality of the current design.
 type SelectedItem struct {
 	Citation      contract.Citation
 	Body          string

@@ -9,8 +9,12 @@ import "unicode/utf8"
 // over-estimates would be worse (we'd stuff the budget too cautiously
 // and underuse capacity).
 //
-// Phase E can swap in a real tokenizer (tiktoken-style, model-specific)
-// behind the same EstimateTokens signature.
+// PHASE E REQUIREMENT (not optional): a real tokenizer must replace
+// this heuristic. Search quality is highly sensitive to token-count
+// accuracy — under-estimating leads to LLM-side truncation, over-
+// estimating leaves budget on the table. The EstimateTokens signature
+// is the integration point; the body of this function is the only
+// thing that should change.
 const charsPerToken = 4
 
 // EstimateTokens returns an approximate token count for text using
