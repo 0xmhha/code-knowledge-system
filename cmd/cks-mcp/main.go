@@ -4,11 +4,16 @@
 // Phase C.5 (slim) registers two tools: cks.context.get_for_task and
 // cks.ops.health. See internal/mcp for handler details.
 //
-// Phase 0 wiring: this binary uses the in-memory ckg/ckv fakes from
-// internal/{ckgclient,ckvclient}. Real backend adapters land in Phase
-// C.1 (ckg) and C.2 (ckv); the swap is a constructor change in this
-// file, not a composer change — the composer depends on the Client
-// interfaces, not the implementations.
+// Backend wiring (post C.1):
+//   - ckg: if config.Backends.CKG.Path is set, the binary opens a real
+//     ckg SQLite store via ckgclient.NewReal. When empty, it falls back
+//     to the in-memory Fake — useful for dev / smoke without a built
+//     graph.
+//   - ckv: still the in-memory Fake. Real adapter lands in C.2.
+//
+// The swap surface is intentionally a constructor choice in this file,
+// not a composer change: the composer depends on the ckg/ckv Client
+// interfaces, not on their implementations.
 //
 // Usage:
 //
@@ -76,9 +81,13 @@ func run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("load sanitize ruleset: %w", err)
 	}
 
-	// Phase 0 wiring: fakes for ckg/ckv. Replace with real adapters
-	// in Phase C.1/C.2.
-	ckg := &ckgclient.Fake{HealthVal: ckgclient.Health{Reachable: true, SchemaVersion: "fake-phase0"}}
+	ckg, ckgCloser, err := buildCKGClient(cfg.Backends.CKG.Path)
+	if err != nil {
+		return fmt.Errorf("build ckg client: %w", err)
+	}
+	defer func() { _ = ckgCloser() }()
+
+	// ckv: still the in-memory Fake. Real adapter lands in C.2.
 	ckv := &ckvclient.Fake{HealthVal: ckvclient.Health{Reachable: true, StatsHash: "fake-phase0"}}
 	embedder := &intent.FakeEmbedder{Dim: 32}
 	fetcher := &budget.FakeFetcher{Bodies: map[string]string{}}
@@ -95,6 +104,21 @@ func run(ctx context.Context, configPath string) error {
 		BuilderVersion: builderVersion,
 	}
 	return cksmcp.Run(ctx, deps)
+}
+
+// buildCKGClient picks the real adapter when a path is configured and
+// falls back to the in-memory Fake otherwise. The returned closer should
+// be deferred by the caller; the Fake's closer is a no-op.
+func buildCKGClient(path string) (ckgclient.Client, func() error, error) {
+	if path == "" {
+		f := &ckgclient.Fake{HealthVal: ckgclient.Health{Reachable: true, SchemaVersion: "fake-phase0"}}
+		return f, func() error { return nil }, nil
+	}
+	real, err := ckgclient.NewReal(path)
+	if err != nil {
+		return nil, func() error { return nil }, err
+	}
+	return real, real.Close, nil
 }
 
 func loadConfig(path string) (*config.Config, error) {
