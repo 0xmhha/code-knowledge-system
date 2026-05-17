@@ -4,12 +4,14 @@
 // Phase C.5 (slim) registers two tools: cks.context.get_for_task and
 // cks.ops.health. See internal/mcp for handler details.
 //
-// Backend wiring (post C.1):
+// Backend wiring (post C.1 + C.2):
 //   - ckg: if config.Backends.CKG.Path is set, the binary opens a real
 //     ckg SQLite store via ckgclient.NewReal. When empty, it falls back
-//     to the in-memory Fake — useful for dev / smoke without a built
-//     graph.
-//   - ckv: still the in-memory Fake. Real adapter lands in C.2.
+//     to the in-memory Fake.
+//   - ckv: if config.Backends.CKV.Path is set, the binary spawns a ckv
+//     subprocess (`ckv mcp --out=<path>`) via ckvclient.NewReal and
+//     proxies semantic search calls through MCP stdio. When empty, falls
+//     back to the in-memory Fake.
 //
 // The swap surface is intentionally a constructor choice in this file,
 // not a composer change: the composer depends on the ckg/ckv Client
@@ -87,8 +89,12 @@ func run(ctx context.Context, configPath string) error {
 	}
 	defer func() { _ = ckgCloser() }()
 
-	// ckv: still the in-memory Fake. Real adapter lands in C.2.
-	ckv := &ckvclient.Fake{HealthVal: ckvclient.Health{Reachable: true, StatsHash: "fake-phase0"}}
+	ckv, ckvCloser, err := buildCKVClient(ctx, cfg.Backends.CKV)
+	if err != nil {
+		return fmt.Errorf("build ckv client: %w", err)
+	}
+	defer func() { _ = ckvCloser() }()
+
 	embedder := &intent.FakeEmbedder{Dim: 32}
 	fetcher := &budget.FakeFetcher{Bodies: map[string]string{}}
 
@@ -115,6 +121,27 @@ func buildCKGClient(path string) (ckgclient.Client, func() error, error) {
 		return f, func() error { return nil }, nil
 	}
 	real, err := ckgclient.NewReal(path)
+	if err != nil {
+		return nil, func() error { return nil }, err
+	}
+	return real, real.Close, nil
+}
+
+// buildCKVClient picks the real ckv adapter (subprocess MCP proxy) when
+// a data path is configured and falls back to the in-memory Fake
+// otherwise. NewReal spawns the ckv binary and runs the MCP initialize
+// handshake; failures here surface before the cks-mcp server starts
+// accepting stdio frames.
+func buildCKVClient(ctx context.Context, cfg config.CKVConfig) (ckvclient.Client, func() error, error) {
+	if cfg.Path == "" {
+		f := &ckvclient.Fake{HealthVal: ckvclient.Health{Reachable: true, StatsHash: "fake-phase0"}}
+		return f, func() error { return nil }, nil
+	}
+	real, err := ckvclient.NewReal(ctx, ckvclient.RealOpts{
+		BinaryPath: cfg.BinaryPath,
+		DataPath:   cfg.Path,
+		Embedder:   cfg.EmbedModel,
+	})
 	if err != nil {
 		return nil, func() error { return nil }, err
 	}

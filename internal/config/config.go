@@ -49,8 +49,14 @@ type CKGConfig struct {
 }
 
 // CKVConfig is the ckv client connection profile.
+//
+// BinaryPath: ckv exposes its real Engine only through its own MCP binary
+// (the Go-level constructors live in internal/), so the cks ckv adapter
+// spawns `ckv mcp --out=<Path>` as a subprocess. BinaryPath gives the
+// absolute path to that binary; empty means "look up `ckv` on $PATH".
 type CKVConfig struct {
 	Path       string `yaml:"path"`
+	BinaryPath string `yaml:"binary_path"`
 	TimeoutMS  int    `yaml:"timeout_ms"`
 	EmbedModel string `yaml:"embed_model"`
 }
