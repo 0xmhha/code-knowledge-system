@@ -43,9 +43,16 @@ type BackendsConfig struct {
 }
 
 // CKGConfig is the ckg client connection profile.
+//
+// SourceRoot points at the working tree the ckg index was built
+// against. Used by composer.Stage4's FilesystemFetcher to resolve
+// Citation.File paths (which are stored as repo-relative strings).
+// Empty SourceRoot makes the fetcher resolve against cwd — the
+// common case when cks-mcp runs from the indexed repo's root.
 type CKGConfig struct {
-	Path      string `yaml:"path"`
-	TimeoutMS int    `yaml:"timeout_ms"`
+	Path       string `yaml:"path"`
+	SourceRoot string `yaml:"source_root"`
+	TimeoutMS  int    `yaml:"timeout_ms"`
 }
 
 // CKVConfig is the ckv client connection profile.

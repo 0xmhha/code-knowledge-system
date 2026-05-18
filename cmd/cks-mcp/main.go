@@ -105,7 +105,13 @@ func run(ctx context.Context, configPath string) error {
 	defer func() { _ = fpCloser() }()
 
 	embedder := &intent.FakeEmbedder{Dim: 32}
-	fetcher := &budget.FakeFetcher{Bodies: map[string]string{}}
+	// Real BodyFetcher: read the cited line range from disk. The
+	// indexed source tree at cfg.Backends.CKG.SourceRoot (cwd when
+	// empty) MUST match the snapshot ckg was built against — otherwise
+	// the body returned for a citation could differ from what was
+	// indexed. cks does not enforce this; Citation.CommitHash on the
+	// returned EvidencePack is the operator's drift signal.
+	fetcher := &budget.FilesystemFetcher{Root: cfg.Backends.CKG.SourceRoot}
 
 	c, err := buildComposer(ctx, ckg, ckv, embedder, fetcher, ruleset, fp)
 	if err != nil {
