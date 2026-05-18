@@ -1,0 +1,12 @@
+version: 1
+name: example-empty
+description: |
+  Smoke scenario covering the cks-eval happy path with the Phase-0 fake
+  backends. expected_citations is empty because the fake ckg/ckv return
+  no hits — recall is then trivially 1.0 (no ground truth to disprove),
+  which exercises the metric edge case rather than measuring retrieval
+  quality. Replace expected_citations once a real ckg/ckv data path is
+  wired (Phase C.1/C.2 real adapters with a built index).
+prompt: smoke check — verifies cks-eval pipeline runs end-to-end
+match_mode: overlap
+runs: 1
