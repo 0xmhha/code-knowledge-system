@@ -38,3 +38,8 @@ eval/reports/
 
 # Generated docs (kept locally)
 docs/_generated/
+
+# Dogfood eval artifacts (cks indexing cks itself)
+/.ckg-data/
+/cks-dogfood.yaml
+/logs/

@@ -32,9 +32,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/0xmhha/code-knowledge-system/internal/ckgclient"
@@ -47,6 +49,7 @@ import (
 	"github.com/0xmhha/code-knowledge-system/internal/composer/stage2"
 	"github.com/0xmhha/code-knowledge-system/internal/composer/stage3"
 	"github.com/0xmhha/code-knowledge-system/internal/config"
+	"github.com/0xmhha/code-knowledge-system/internal/footprint"
 	cksmcp "github.com/0xmhha/code-knowledge-system/internal/mcp"
 )
 
@@ -95,10 +98,16 @@ func run(ctx context.Context, configPath string) error {
 	}
 	defer func() { _ = ckvCloser() }()
 
+	fp, fpCloser, err := buildFootprint(cfg.Logging)
+	if err != nil {
+		return fmt.Errorf("build footprint: %w", err)
+	}
+	defer func() { _ = fpCloser() }()
+
 	embedder := &intent.FakeEmbedder{Dim: 32}
 	fetcher := &budget.FakeFetcher{Bodies: map[string]string{}}
 
-	c, err := buildComposer(ctx, ckg, ckv, embedder, fetcher, ruleset)
+	c, err := buildComposer(ctx, ckg, ckv, embedder, fetcher, ruleset, fp)
 	if err != nil {
 		return fmt.Errorf("build composer: %w", err)
 	}
@@ -184,30 +193,93 @@ func buildComposer(
 	embedder intent.Embedder,
 	fetcher budget.BodyFetcher,
 	ruleset *config.SanitizeRuleset,
+	fp *footprint.Logger,
 ) (*composer.Composer, error) {
-	ic, err := intent.New(ctx, embedder)
+	ic, err := intent.New(ctx, embedder, intent.WithFootprint(fp))
 	if err != nil {
 		return nil, fmt.Errorf("intent.New: %w", err)
 	}
-	s1, err := stage1.New(ckv, ckg)
+	s1, err := stage1.New(ckv, ckg, stage1.WithFootprint(fp))
 	if err != nil {
 		return nil, fmt.Errorf("stage1.New: %w", err)
 	}
-	s2, err := stage2.New(ckg)
+	s2, err := stage2.New(ckg, stage2.WithFootprint(fp))
 	if err != nil {
 		return nil, fmt.Errorf("stage2.New: %w", err)
 	}
-	s3, err := stage3.New(ckg)
+	s3, err := stage3.New(ckg, stage3.WithFootprint(fp))
 	if err != nil {
 		return nil, fmt.Errorf("stage3.New: %w", err)
 	}
-	b, err := budget.New(fetcher)
+	b, err := budget.New(fetcher, budget.WithFootprint(fp))
 	if err != nil {
 		return nil, fmt.Errorf("budget.New: %w", err)
 	}
-	san, err := sanitize.New(ruleset)
+	san, err := sanitize.New(ruleset, sanitize.WithFootprint(fp))
 	if err != nil {
 		return nil, fmt.Errorf("sanitize.New: %w", err)
 	}
-	return composer.New(ic, s1, s2, s3, b, san, composer.WithBuilderVersion(builderVersion))
+	return composer.New(ic, s1, s2, s3, b, san,
+		composer.WithBuilderVersion(builderVersion),
+		composer.WithFootprint(fp),
+	)
+}
+
+// buildFootprint constructs a footprint.Logger based on logging config.
+//
+// Output policy: when LoggingConfig.FootprintDir is set, events go to
+// <dir>/cks-mcp.jsonl (rotation deferred to ops). When empty, events go
+// to stderr — MCP stdio reserves stdout for JSON-RPC frames, so stderr
+// is the only safe in-band sink.
+//
+// Returns a Logger plus a closer the caller defers; the closer flushes
+// any buffered records and closes the file when applicable.
+func buildFootprint(cfg config.LoggingConfig) (*footprint.Logger, func() error, error) {
+	mode := footprint.ModeProd
+	if cfg.Mode == "dev" {
+		mode = footprint.ModeDev
+	}
+	level := footprint.Level(cfg.Level)
+	if level == "" {
+		level = footprint.LevelInfo
+	}
+
+	var (
+		writer io.Writer = os.Stderr
+		fileCloser io.Closer
+	)
+	if cfg.FootprintDir != "" {
+		if err := os.MkdirAll(cfg.FootprintDir, 0o755); err != nil {
+			return nil, func() error { return nil }, fmt.Errorf("mkdir %q: %w", cfg.FootprintDir, err)
+		}
+		f, err := os.OpenFile(filepath.Join(cfg.FootprintDir, "cks-mcp.jsonl"),
+			os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return nil, func() error { return nil }, err
+		}
+		writer = f
+		fileCloser = f
+	}
+
+	fp, err := footprint.New(footprint.Config{
+		Writer: writer,
+		Mode:   mode,
+		Level:  level,
+	})
+	if err != nil {
+		if fileCloser != nil {
+			_ = fileCloser.Close()
+		}
+		return nil, func() error { return nil }, err
+	}
+	closer := func() error {
+		err := fp.Sync()
+		if fileCloser != nil {
+			if cerr := fileCloser.Close(); err == nil {
+				err = cerr
+			}
+		}
+		return err
+	}
+	return fp, closer, nil
 }
