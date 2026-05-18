@@ -1,0 +1,21 @@
+version: 1
+name: composer-err-fail-closed
+description: |
+  Find composer's ErrFailClosed sentinel and the Compose-level
+  wrap site. Deliberately scoped tighter than a "sanitize policy
+  walk" — broader prompts make cks pull in sanitize_test.go which
+  contains a fake -----BEGIN PRIVATE KEY----- string that the
+  PRIVATE_KEY_PEM rule then fail-closes on (a genuine demonstration
+  that the policy is wired, but it prevents retrieval measurement
+  on the dogfood corpus). The narrow prompt avoids that meta-loop
+  while still exercising a meaningful symbol lookup.
+prompt: "composer ErrFailClosed sentinel and the Compose-level error wrap"
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: internal/composer/composer.go
+    start_line: 54
+    end_line: 57        # ErrFailClosed var
+  - file: internal/composer/composer.go
+    start_line: 182
+    end_line: 188       # Compose's fail_closed wrap

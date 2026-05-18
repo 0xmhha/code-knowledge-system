@@ -1,0 +1,19 @@
+version: 1
+name: composer-pipeline-flow
+description: |
+  Find the end-to-end composer pipeline — the Compose method that
+  drives intent → stage1 → stage2 → stage3 → budget → sanitize →
+  pack assembly, plus the assemblePack helper that does the final
+  citation/body/neighbor shaping. These two functions are the spine
+  of every cks evidence pack; missing either signals a serious
+  retrieval failure.
+prompt: "how does composer Compose chain the stages end to end"
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: internal/composer/composer.go
+    start_line: 135
+    end_line: 202       # (*Composer).Compose
+  - file: internal/composer/composer.go
+    start_line: 207
+    end_line: 275       # assemblePack

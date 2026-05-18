@@ -1,0 +1,21 @@
+version: 1
+name: mcp-tool-handlers
+description: |
+  Locate the MCP server's tool registration + per-tool handlers
+  (cks.context.get_for_task, cks.ops.health). A coding-agent
+  developer asking "how does cks expose its surface?" should land
+  on Register, handleGetForTask, and handleHealth. Spanning three
+  files makes this a graph-traversal heavy scenario.
+prompt: "cks MCP server tool registration and handlers for get_for_task and health"
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: internal/mcp/server.go
+    start_line: 60
+    end_line: 78        # Register
+  - file: internal/mcp/get_for_task.go
+    start_line: 21
+    end_line: 43        # handleGetForTask
+  - file: internal/mcp/health.go
+    start_line: 38
+    end_line: 82        # handleHealth

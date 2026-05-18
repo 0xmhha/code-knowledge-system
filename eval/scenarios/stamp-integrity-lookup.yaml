@@ -1,0 +1,21 @@
+version: 1
+name: stamp-integrity-lookup
+description: |
+  Locate the SHA-256 integrity-stamping logic on EvidencePack.
+  Ground truth picks the three pure functions that own the stamp +
+  verify lifecycle. Recall failure here means cks missed the public
+  Compute/Stamp/Verify trio that callers rely on; precision failure
+  means cks pulled in unrelated pack code.
+prompt: "EvidencePack integrity hash stamping and verification"
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: pkg/contract/pack.go
+    start_line: 252
+    end_line: 261       # ComputeIntegrityHash
+  - file: pkg/contract/pack.go
+    start_line: 266
+    end_line: 277       # StampIntegrity
+  - file: pkg/contract/pack.go
+    start_line: 283
+    end_line: 299       # VerifyIntegrity

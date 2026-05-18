@@ -1,0 +1,18 @@
+version: 1
+name: ckg-bm25-translation
+description: |
+  Pinpoint the ckg-side BM25 search wrapper plus the Node→Citation
+  translator. These are the two functions that determine "how cks
+  asks ckg for matches" and "how cks normalizes the answer." A
+  developer working on the ckg adapter's score/citation shape
+  should see both.
+prompt: "ckg client BM25Search wrapper and Node to Citation translation"
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: internal/ckgclient/real.go
+    start_line: 140
+    end_line: 179       # (*Real).BM25Search
+  - file: internal/ckgclient/real.go
+    start_line: 318
+    end_line: 325       # nodeToCitation helper
