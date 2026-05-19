@@ -11,13 +11,27 @@ CKG            ?= ckg
 CKG_DATA       ?= .ckg-data
 CKG_SRC        ?= .
 CKG_LANG       ?= go
+CKV            ?= ckv
+CKV_DATA       ?= .ckv-data
+CKV_SRC        ?= .
+CKV_EMBEDDER   ?= mock
+# USE_CKV controls whether dogfood-eval wires ckv as a real backend.
+# Default 0 because:
+#   - ckv with --embedder=mock gives no semantic uplift over the in-memory
+#     Fake (hash-based embeddings, not semantic), but doubles latency
+#     (~120ms -> ~250ms per scenario) and occasionally trips a
+#     "transport closed" error in the cks-mcp -> ckv subprocess link.
+#     Opt-in keeps the default fast and stable; flip to USE_CKV=1 once
+#     bgeonnx is configured and task #39 (subprocess restart) lands.
+USE_CKV        ?= 0
 DOGFOOD_CONFIG ?= cks-dogfood.yaml
 EVAL_SCENARIOS ?= eval/scenarios
 EVAL_REPORT    ?= eval/reports/baseline-dogfood.json
 
 .PHONY: all build build-bins test test-short race vet lint fmt fmt-check tidy clean help \
         log-clear log-tail \
-        ckg-index ckg-index-clean dogfood-config dogfood-eval dogfood-eval-summary
+        ckg-index ckg-index-clean ckv-index ckv-index-clean \
+        dogfood-config dogfood-eval dogfood-eval-summary
 
 all: build
 
@@ -44,10 +58,13 @@ help:
 	@echo "Dogfood eval (cks indexing cks itself):"
 	@echo "  ckg-index           build a fresh ckg index from \$$(CKG_SRC) into \$$(CKG_DATA)"
 	@echo "  ckg-index-clean     remove \$$(CKG_DATA)"
-	@echo "  dogfood-config      generate \$$(DOGFOOD_CONFIG) (cks.yaml pointing at the index)"
-	@echo "  dogfood-eval        full pipeline: build bins -> ckg-index -> cks-eval -> \$$(EVAL_REPORT)"
+	@echo "  ckv-index           build a fresh ckv index from \$$(CKV_SRC) into \$$(CKV_DATA)"
+	@echo "  ckv-index-clean     remove \$$(CKV_DATA)"
+	@echo "  dogfood-config      generate \$$(DOGFOOD_CONFIG) (cks.yaml; ckv block iff USE_CKV=1)"
+	@echo "  dogfood-eval        ckg-only pipeline (default — stable, ~10s)"
+	@echo "  dogfood-eval        USE_CKV=1 pipeline (real ckv subprocess — ~2 min, less stable)"
 	@echo "  dogfood-eval-summary  print one-line metric summary from \$$(EVAL_REPORT)"
-	@echo "                  overrides: CKG=/path/to/ckg, CKG_SRC, CKG_DATA, etc."
+	@echo "                  overrides: CKG=/path/to/ckg, CKV=/path/to/ckv, CKV_EMBEDDER, ..."
 	@echo ""
 	@echo "  clean         remove ./bin and go build cache"
 
@@ -86,9 +103,9 @@ fmt-check:
 tidy:
 	$(GO) mod tidy
 
-clean: ckg-index-clean
+clean: ckg-index-clean ckv-index-clean
 	rm -rf $(BIN_DIR) $(DOGFOOD_CONFIG)
-	@echo "cleaned $(BIN_DIR), $(CKG_DATA), $(DOGFOOD_CONFIG)"
+	@echo "cleaned $(BIN_DIR), $(CKG_DATA), $(CKV_DATA), $(DOGFOOD_CONFIG)"
 	@echo "(go build cache untouched — run 'go clean -cache' manually)"
 
 log-clear:
@@ -133,13 +150,32 @@ ckg-index:
 ckg-index-clean:
 	rm -rf $(CKG_DATA)
 
+ckv-index:
+	@command -v $(CKV) >/dev/null 2>&1 || { \
+		echo "ckv binary not found on PATH; set CKV=/path/to/ckv"; exit 1; }
+	@rm -rf $(CKV_DATA)
+	@mkdir -p $(CKV_DATA)
+	$(CKV) --embedder=$(CKV_EMBEDDER) build --src $(CKV_SRC) --out $(CKV_DATA)
+	@echo "ckv index built: $(CKV_DATA)/vector.db"
+
+ckv-index-clean:
+	rm -rf $(CKV_DATA)
+
 # dogfood-config writes a minimal cks.yaml that points at the local
-# index. Skips overwrite if the file already exists; delete it first
-# to regenerate.
+# indexes. Skips overwrite if the file already exists; delete it first
+# to regenerate. The ckv block fires only when USE_CKV=1 (default 0)
+# because the ckv subprocess link is currently unstable (see USE_CKV
+# doc above). With USE_CKV=0 the cks-mcp ckv adapter stays on the
+# in-memory Fake.
 dogfood-config:
 	@if [ -f $(DOGFOOD_CONFIG) ]; then \
 		echo "$(DOGFOOD_CONFIG) already exists (delete to regenerate)"; \
 	else \
+		ckv_path=""; ckv_bin=""; \
+		if [ "$(USE_CKV)" = "1" ]; then \
+			ckv_path="./$(CKV_DATA)"; \
+			ckv_bin=$$(command -v $(CKV) || echo $(CKV)); \
+		fi; \
 		printf '%s\n' \
 			'version: 1' \
 			'backends:' \
@@ -147,7 +183,9 @@ dogfood-config:
 			'    path: ./$(CKG_DATA)/graph.db' \
 			'    timeout_ms: 5000' \
 			'  ckv:' \
-			'    path: ""' \
+			"    path: \"$$ckv_path\"" \
+			"    binary_path: \"$$ckv_bin\"" \
+			"    embed_model: $(CKV_EMBEDDER)" \
 			'    timeout_ms: 3000' \
 			'listen:' \
 			'  http_addr: "127.0.0.1:8080"' \
@@ -162,10 +200,16 @@ dogfood-config:
 			'  default_action: "drop"' \
 			'  fail_closed_on_unknown_rule: true' \
 			> $(DOGFOOD_CONFIG); \
-		echo "wrote $(DOGFOOD_CONFIG)"; \
+		echo "wrote $(DOGFOOD_CONFIG) (USE_CKV=$(USE_CKV))"; \
 	fi
 
-dogfood-eval: build-bins ckg-index dogfood-config
+# dogfood-eval-deps switches the ckv-index prerequisite on USE_CKV.
+DOGFOOD_DEPS = build-bins ckg-index dogfood-config
+ifeq ($(USE_CKV),1)
+DOGFOOD_DEPS += ckv-index
+endif
+
+dogfood-eval: $(DOGFOOD_DEPS)
 	@mkdir -p $$(dirname $(EVAL_REPORT))
 	./$(BIN_DIR)/cks-eval \
 		-scenarios $(EVAL_SCENARIOS) \
