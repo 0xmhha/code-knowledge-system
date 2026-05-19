@@ -38,6 +38,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/0xmhha/code-knowledge-system/internal/ckgclient"
 	"github.com/0xmhha/code-knowledge-system/internal/ckvclient"
@@ -152,11 +153,15 @@ func buildCKVClient(ctx context.Context, cfg config.CKVConfig) (ckvclient.Client
 		f := &ckvclient.Fake{HealthVal: ckvclient.Health{Reachable: true, StatsHash: "fake-phase0"}}
 		return f, func() error { return nil }, nil
 	}
-	real, err := ckvclient.NewReal(ctx, ckvclient.RealOpts{
+	opts := ckvclient.RealOpts{
 		BinaryPath: cfg.BinaryPath,
 		DataPath:   cfg.Path,
 		Embedder:   cfg.EmbedModel,
-	})
+	}
+	if cfg.TimeoutMS > 0 {
+		opts.CallTimeout = time.Duration(cfg.TimeoutMS) * time.Millisecond
+	}
+	real, err := ckvclient.NewReal(ctx, opts)
 	if err != nil {
 		return nil, func() error { return nil }, err
 	}

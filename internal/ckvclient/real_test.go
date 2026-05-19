@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	mcpgotransport "github.com/mark3labs/mcp-go/client/transport"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/0xmhha/code-knowledge-system/pkg/contract"
@@ -365,6 +366,136 @@ func TestRealCKV_Close_IsIdempotent(t *testing.T) {
 	}
 	if !m.closed {
 		t.Error("underlying Close not called")
+	}
+}
+
+// --- Transport restart ---
+//
+// These tests use newRealWithSpawn so the spawn closure can hand out a
+// fresh mock client on restart. They mirror the production crash
+// scenario surfaced by task #38 dogfood runs: a ckv subprocess
+// transport dies mid-session and Real should reconnect rather than
+// permanently fail.
+
+func sequentialSpawn(t *testing.T, clients ...*mockMCPClient) clientSpawnFunc {
+	t.Helper()
+	idx := 0
+	return func(_ context.Context) (mcpClient, error) {
+		if idx >= len(clients) {
+			t.Fatalf("spawn called %d times, only %d clients provisioned", idx+1, len(clients))
+		}
+		c := clients[idx]
+		idx++
+		return c, nil
+	}
+}
+
+func TestRealCKV_CallToolRestartsOnTransportClosed(t *testing.T) {
+	t.Parallel()
+	// First client dies with transport closed; second client returns
+	// a usable result. SemanticSearch should swallow the recovery
+	// and return the second client's hits.
+	first := &mockMCPClient{
+		callErr: map[string]error{toolSemanticSearch: mcpgotransport.ErrTransportClosed},
+	}
+	second := &mockMCPClient{
+		callOut: map[string]*mcpgo.CallToolResult{
+			toolSemanticSearch: textResult(`{"hits":[{"chunk_id":"c","citation":{"file":"a.go","start_line":1,"end_line":5,"commit_hash":"h"},"score":{"normalized":0.9,"vector_rank":1}}]}`),
+		},
+	}
+	r, err := newRealWithSpawn(context.Background(), sequentialSpawn(t, first, second))
+	if err != nil {
+		t.Fatalf("newRealWithSpawn: %v", err)
+	}
+
+	hits, err := r.SemanticSearch(context.Background(), "x", SearchOpts{})
+	if err != nil {
+		t.Fatalf("SemanticSearch should recover via restart: %v", err)
+	}
+	if len(hits) != 1 || hits[0].Citation.File != "a.go" {
+		t.Errorf("hits = %+v, want one hit on a.go", hits)
+	}
+	if !first.closed {
+		t.Error("broken client should have been Closed during restart")
+	}
+}
+
+func TestRealCKV_RestartFailurePropagates(t *testing.T) {
+	t.Parallel()
+	// Spawn returns the first client only; restart finds no second
+	// client and returns an error. SemanticSearch should surface the
+	// underlying transport error AND the restart failure.
+	first := &mockMCPClient{
+		callErr: map[string]error{toolSemanticSearch: mcpgotransport.ErrTransportClosed},
+	}
+	spawn := func(_ context.Context) (mcpClient, error) {
+		if first != nil {
+			c := first
+			first = nil
+			return c, nil
+		}
+		return nil, errors.New("spawn refused")
+	}
+	r, err := newRealWithSpawn(context.Background(), spawn)
+	if err != nil {
+		t.Fatalf("newRealWithSpawn: %v", err)
+	}
+	_, err = r.SemanticSearch(context.Background(), "x", SearchOpts{})
+	if err == nil {
+		t.Fatal("expected error when restart fails")
+	}
+	if !strings.Contains(err.Error(), "spawn refused") {
+		t.Errorf("err = %v, expected to mention restart failure", err)
+	}
+}
+
+func TestRealCKV_NonTransportErrorDoesNotRestart(t *testing.T) {
+	t.Parallel()
+	// A regular ckv tool error (rule mismatch, bad arg, etc.) should
+	// flow back to the caller without burning a restart cycle.
+	first := &mockMCPClient{
+		callErr: map[string]error{toolSemanticSearch: errors.New("some other failure")},
+	}
+	spawnCalls := 0
+	spawn := func(_ context.Context) (mcpClient, error) {
+		spawnCalls++
+		return first, nil
+	}
+	r, err := newRealWithSpawn(context.Background(), spawn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialSpawns := spawnCalls
+	_, err = r.SemanticSearch(context.Background(), "x", SearchOpts{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if spawnCalls != initialSpawns {
+		t.Errorf("spawn called %d times after non-transport error (expected %d)", spawnCalls, initialSpawns)
+	}
+}
+
+func TestRealCKV_HealthAlsoRestarts(t *testing.T) {
+	t.Parallel()
+	// Health is on the same restart path as SemanticSearch.
+	first := &mockMCPClient{
+		callErr: map[string]error{toolHealth: mcpgotransport.ErrTransportClosed},
+	}
+	second := &mockMCPClient{
+		callOut: map[string]*mcpgo.CallToolResult{
+			toolHealth: textResult(`{"server":"ckv","embedding_model":"mock","indexed_head":"h","built_at":""}`),
+		},
+	}
+	r, err := newRealWithSpawn(context.Background(), sequentialSpawn(t, first, second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := r.Health(context.Background())
+	if err != nil {
+		t.Fatalf("Health should recover: %v", err)
+	}
+	if !h.Reachable {
+		t.Error("Reachable should be true after successful recovery")
 	}
 }
 
