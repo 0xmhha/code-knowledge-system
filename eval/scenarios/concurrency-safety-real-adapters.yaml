@@ -1,0 +1,20 @@
+version: 1
+name: concurrency-safety-real-adapters
+description: |
+  An operator wants to know whether cks-mcp's ckg and ckv real client
+  adapters are safe to call from multiple goroutines simultaneously.
+  Both adapters carry an explicit Concurrency doc comment on the
+  Real struct that answers this — ckg.Real is concurrent-safe for
+  reads, ckv.Real is not (sequential mcp-go stdio constraint). Recall
+  failure means the operator didn't get the answer they need.
+prompt: "concurrency safety of ckg and ckv real client adapters under multiple goroutines"
+intent: concurrency_safety
+match_mode: overlap
+runs: 5
+expected_citations:
+  - file: internal/ckgclient/real.go
+    start_line: 80
+    end_line: 96        # Real struct + Concurrency doc
+  - file: internal/ckvclient/real.go
+    start_line: 62
+    end_line: 79        # Real struct + Concurrency doc

@@ -1,0 +1,16 @@
+version: 1
+name: bug-fix-rerank-drop
+description: |
+  A developer noticed that the Stage 1 keyword reranker silently drops
+  unique identifiers when the candidate list exceeds MaxKeywords. To
+  fix it they need to see the rerank function itself — that's where
+  the per-keyword scoring rule lives. Recall failure means cks didn't
+  surface the rerank code in response to a fix-oriented prompt.
+prompt: "fix Stage 1 rerank algorithm that drops unique identifiers at the MaxKeywords cap"
+intent: bug_fix
+match_mode: overlap
+runs: 5
+expected_citations:
+  - file: internal/composer/stage1/rerank.go
+    start_line: 32
+    end_line: 77        # (*Extractor).rerank

@@ -1,0 +1,16 @@
+version: 1
+name: qa-review-intent
+description: |
+  A developer adding PR-review style prompts to cks needs to find
+  the IntentQAReview definition: the doc comment that describes
+  what triggers it, the Stage 1/2 hints, and the const declaration
+  itself. The doc comment block is the single source of truth for
+  what cks's QA-review intent means.
+prompt: "QAReview intent definition and how it routes Stage 1 and Stage 2 retrieval"
+intent: qa_review
+match_mode: overlap
+runs: 5
+expected_citations:
+  - file: pkg/contract/intent.go
+    start_line: 129
+    end_line: 141       # IntentQAReview doc comment + const

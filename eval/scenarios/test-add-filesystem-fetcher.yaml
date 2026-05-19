@@ -1,0 +1,23 @@
+version: 1
+name: test-add-filesystem-fetcher
+description: |
+  Someone is extending Stage 4's body sourcing and wants to see the
+  existing FilesystemFetcher test patterns before adding a new one
+  (e.g. for a different fetcher implementation). The three flagship
+  tests — happy path, out-of-range, path-escape — cover the
+  contract corners. Recall failure means cks didn't surface the
+  test file's representative cases.
+prompt: "table-driven tests for FilesystemFetcher line range reads and path escape rejection"
+intent: test_add
+match_mode: overlap
+runs: 5
+expected_citations:
+  - file: internal/composer/budget/filesystem_test.go
+    start_line: 25
+    end_line: 42        # TestFilesystemFetcher_ReturnsCitedLineRange
+  - file: internal/composer/budget/filesystem_test.go
+    start_line: 76
+    end_line: 107       # TestFilesystemFetcher_OutOfRangeReturnsEmpty
+  - file: internal/composer/budget/filesystem_test.go
+    start_line: 126
+    end_line: 149       # TestFilesystemFetcher_RejectsPathEscape
