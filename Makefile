@@ -4,8 +4,20 @@ GOLANGCI_LINT ?= golangci-lint
 BIN_DIR := bin
 LOG_DIR := logs
 
+# Dogfood eval (cks indexing cks itself) — used to produce the retrieval
+# baseline in eval/reports/. Override these to point at a different
+# target repo for cross-repo eval runs.
+CKG            ?= ckg
+CKG_DATA       ?= .ckg-data
+CKG_SRC        ?= .
+CKG_LANG       ?= go
+DOGFOOD_CONFIG ?= cks-dogfood.yaml
+EVAL_SCENARIOS ?= eval/scenarios
+EVAL_REPORT    ?= eval/reports/baseline-dogfood.json
+
 .PHONY: all build build-bins test test-short race vet lint fmt fmt-check tidy clean help \
-        log-clear log-tail
+        log-clear log-tail \
+        ckg-index ckg-index-clean dogfood-config dogfood-eval dogfood-eval-summary
 
 all: build
 
@@ -28,6 +40,14 @@ help:
 	@echo "  log-tail      show tail of each .jsonl log, jq-prettified if available"
 	@echo "                (auditlog.Verify() is exposed as a library; a CLI flag"
 	@echo "                 lands with cks-eval in Phase E)"
+	@echo ""
+	@echo "Dogfood eval (cks indexing cks itself):"
+	@echo "  ckg-index           build a fresh ckg index from \$$(CKG_SRC) into \$$(CKG_DATA)"
+	@echo "  ckg-index-clean     remove \$$(CKG_DATA)"
+	@echo "  dogfood-config      generate \$$(DOGFOOD_CONFIG) (cks.yaml pointing at the index)"
+	@echo "  dogfood-eval        full pipeline: build bins -> ckg-index -> cks-eval -> \$$(EVAL_REPORT)"
+	@echo "  dogfood-eval-summary  print one-line metric summary from \$$(EVAL_REPORT)"
+	@echo "                  overrides: CKG=/path/to/ckg, CKG_SRC, CKG_DATA, etc."
 	@echo ""
 	@echo "  clean         remove ./bin and go build cache"
 
@@ -66,9 +86,10 @@ fmt-check:
 tidy:
 	$(GO) mod tidy
 
-clean:
-	rm -rf $(BIN_DIR)
-	$(GO) clean -cache
+clean: ckg-index-clean
+	rm -rf $(BIN_DIR) $(DOGFOOD_CONFIG)
+	@echo "cleaned $(BIN_DIR), $(CKG_DATA), $(DOGFOOD_CONFIG)"
+	@echo "(go build cache untouched — run 'go clean -cache' manually)"
 
 log-clear:
 	@rm -rf $(LOG_DIR)
@@ -87,4 +108,92 @@ log-tail:
 		fi; \
 	done; \
 	if [ $$found -eq 0 ]; then echo "no logs found in $(LOG_DIR)/"; fi
+
+# ---------------------------------------------------------------------
+# Dogfood eval — cks-mcp runs against a ckg index built from cks itself,
+# then cks-eval scores the corpus and writes a JSON report.
+#
+# The whole flow is wire-up only — every artifact is rebuilt every time
+# so the resulting baseline always reflects the current working tree.
+# Override CKG / CKG_SRC / CKG_DATA / DOGFOOD_CONFIG / EVAL_REPORT to
+# retarget against a different repo or a different scenario set.
+# ---------------------------------------------------------------------
+
+# ckg-index always rebuilds (.PHONY): cks changes invalidate the index,
+# and ckg's own incremental cache is fast enough that a clean rebuild
+# is cheap.
+ckg-index:
+	@command -v $(CKG) >/dev/null 2>&1 || { \
+		echo "ckg binary not found on PATH; set CKG=/path/to/ckg"; exit 1; }
+	@rm -rf $(CKG_DATA)
+	@mkdir -p $(CKG_DATA)
+	$(CKG) build --src $(CKG_SRC) --out $(CKG_DATA) --lang $(CKG_LANG)
+	@echo "ckg index built: $(CKG_DATA)/graph.db"
+
+ckg-index-clean:
+	rm -rf $(CKG_DATA)
+
+# dogfood-config writes a minimal cks.yaml that points at the local
+# index. Skips overwrite if the file already exists; delete it first
+# to regenerate.
+dogfood-config:
+	@if [ -f $(DOGFOOD_CONFIG) ]; then \
+		echo "$(DOGFOOD_CONFIG) already exists (delete to regenerate)"; \
+	else \
+		printf '%s\n' \
+			'version: 1' \
+			'backends:' \
+			'  ckg:' \
+			'    path: ./$(CKG_DATA)/graph.db' \
+			'    timeout_ms: 5000' \
+			'  ckv:' \
+			'    path: ""' \
+			'    timeout_ms: 3000' \
+			'listen:' \
+			'  http_addr: "127.0.0.1:8080"' \
+			'  mcp_stdio: true' \
+			'logging:' \
+			'  level: info' \
+			'  mode: prod' \
+			'  footprint_dir: "./logs/footprint"' \
+			'  audit_dir: "./logs/audit"' \
+			'sanitize:' \
+			'  rules_path: "./policies/sanitization_rules.yaml"' \
+			'  default_action: "drop"' \
+			'  fail_closed_on_unknown_rule: true' \
+			> $(DOGFOOD_CONFIG); \
+		echo "wrote $(DOGFOOD_CONFIG)"; \
+	fi
+
+dogfood-eval: build-bins ckg-index dogfood-config
+	@mkdir -p $$(dirname $(EVAL_REPORT))
+	./$(BIN_DIR)/cks-eval \
+		-scenarios $(EVAL_SCENARIOS) \
+		-cks-mcp ./$(BIN_DIR)/cks-mcp \
+		-config $(DOGFOOD_CONFIG) \
+		-output $(EVAL_REPORT)
+	@echo ""
+	@$(MAKE) -s dogfood-eval-summary
+
+dogfood-eval-summary:
+	@if [ ! -f $(EVAL_REPORT) ]; then \
+		echo "no report at $(EVAL_REPORT) — run 'make dogfood-eval' first"; \
+		exit 1; \
+	fi
+	@python3 -c "import json; \
+		d = json.load(open('$(EVAL_REPORT)')); \
+		print('='*70); \
+		print('cks-eval baseline (%d scenarios, schema v%d)' % (len(d['results']), d['schema_version'])); \
+		print('='*70); \
+		print('%-34s %-22s %5s %5s %5s' % ('scenario', 'intent', 'P', 'R', 'F1')); \
+		print('-'*70); \
+		[print('%-34s %-22s %5.2f %5.2f %5.2f' % (r['name'], r.get('intent','-'), r['metrics']['file_precision'], r['metrics']['file_recall'], r['metrics']['file_f1'])) for r in d['results']]; \
+		ok = [r for r in d['results'] if not r.get('error')]; \
+		avg_r = sum(r['metrics']['file_recall'] for r in ok)/len(ok) if ok else 0; \
+		print('-'*70); \
+		print('avg recall (errored runs excluded): %.3f over %d scenarios' % (avg_r, len(ok))); \
+		print(); \
+		print('per-intent rollup:'); \
+		[print('  %-22s n=%d R=%.2f lat=%dms' % (s['intent'], s['count'], s['avg_recall'], s['avg_latency_ms'])) for s in d.get('intent_summary', [])]"
+
 
