@@ -12,7 +12,7 @@ description: |
 prompt: "composer ErrFailClosed sentinel and the Compose-level error wrap"
 intent: security
 match_mode: overlap
-runs: 1
+runs: 5
 expected_citations:
   - file: internal/composer/composer.go
     start_line: 54

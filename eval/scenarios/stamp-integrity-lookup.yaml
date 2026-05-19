@@ -9,7 +9,7 @@ description: |
 prompt: "EvidencePack integrity hash stamping and verification"
 intent: arch_explain
 match_mode: overlap
-runs: 1
+runs: 5
 expected_citations:
   - file: pkg/contract/pack.go
     start_line: 252

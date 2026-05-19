@@ -9,7 +9,7 @@ description: |
 prompt: "cks MCP server tool registration and handlers for get_for_task and health"
 intent: arch_explain
 match_mode: overlap
-runs: 1
+runs: 5
 expected_citations:
   - file: internal/mcp/server.go
     start_line: 60
