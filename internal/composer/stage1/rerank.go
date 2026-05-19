@@ -40,14 +40,30 @@ func (e *Extractor) rerank(ctx context.Context, candidates []string) ([]string, 
 		if err != nil {
 			continue
 		}
-		total := 0.0
+		// Score policy: MAX of per-hit scores, not the sum.
+		//
+		// History: an earlier draft summed hit.Score. With ckgclient.Real's
+		// synthesized score (1 - i/(N+1)), any keyword that filled all K
+		// slots ended up with the same constant sum (3.333 for K=5),
+		// regardless of whether the keyword was a unique identifier or a
+		// common word. The cap-at-MaxKeywords step then dropped rare
+		// identifiers ("ErrFailClosed", 1 hit, sum=1.0) in favor of
+		// common ones ("level", 5 hits, sum=3.333).
+		//
+		// MAX preserves "how strong was the strongest match for this
+		// keyword" — exactly the signal a reranker should pick on. A
+		// unique identifier with one strong hit beats a common word with
+		// five mediocre hits, which matches reader intuition.
+		best := 0.0
 		for _, h := range hits {
-			total += h.Score
+			if h.Score > best {
+				best = h.Score
+			}
 		}
-		if total <= 0 {
+		if best <= 0 {
 			continue // zero-score keyword = not present in indexed code
 		}
-		scored = append(scored, scoredKeyword{Keyword: kw, Score: total, Hits: len(hits)})
+		scored = append(scored, scoredKeyword{Keyword: kw, Score: best, Hits: len(hits)})
 	}
 
 	sort.SliceStable(scored, func(i, j int) bool { return scored[i].Score > scored[j].Score })
