@@ -38,6 +38,7 @@ type Scenario struct {
 	Name              string
 	Description       string
 	Prompt            string
+	Intent            contract.Intent
 	ExpectedCitations []contract.Citation
 	MatchMode         MatchMode
 	Runs              int
@@ -52,6 +53,7 @@ type scenarioWire struct {
 	Name              string               `yaml:"name"`
 	Description       string               `yaml:"description,omitempty"`
 	Prompt            string               `yaml:"prompt"`
+	Intent            string               `yaml:"intent,omitempty"`
 	ExpectedCitations []scenarioCitationWire `yaml:"expected_citations,omitempty"`
 	MatchMode         MatchMode            `yaml:"match_mode,omitempty"`
 	Runs              int                  `yaml:"runs,omitempty"`
@@ -78,6 +80,7 @@ func ParseScenario(data []byte) (*Scenario, error) {
 		Name:        w.Name,
 		Description: w.Description,
 		Prompt:      w.Prompt,
+		Intent:      contract.Intent(w.Intent),
 		MatchMode:   w.MatchMode,
 		Runs:        w.Runs,
 	}
@@ -133,6 +136,14 @@ func (s *Scenario) Validate() error {
 	}
 	if !s.MatchMode.IsValid() {
 		return fmt.Errorf("scenario: match_mode=%q invalid (overlap|strict)", s.MatchMode)
+	}
+	// Intent is optional, but if set must be a known contract.Intent.
+	// Empty string is contract.IntentUnknown which is also a valid
+	// value — but for scenario authoring we treat "" as "intent omitted"
+	// rather than "explicitly unknown". The distinction does not affect
+	// the runner; it only matters for per-intent breakdown grouping.
+	if s.Intent != "" && !s.Intent.IsValid() {
+		return fmt.Errorf("scenario: intent=%q invalid", s.Intent)
 	}
 	if s.Runs < 1 {
 		return fmt.Errorf("scenario: runs=%d invalid (must be >= 1)", s.Runs)

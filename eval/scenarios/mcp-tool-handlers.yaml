@@ -7,6 +7,7 @@ description: |
   on Register, handleGetForTask, and handleHealth. Spanning three
   files makes this a graph-traversal heavy scenario.
 prompt: "cks MCP server tool registration and handlers for get_for_task and health"
+intent: arch_explain
 match_mode: overlap
 runs: 1
 expected_citations:

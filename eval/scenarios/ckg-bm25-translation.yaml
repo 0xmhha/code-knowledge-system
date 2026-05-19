@@ -7,6 +7,7 @@ description: |
   developer working on the ckg adapter's score/citation shape
   should see both.
 prompt: "ckg client BM25Search wrapper and Node to Citation translation"
+intent: refactor
 match_mode: overlap
 runs: 1
 expected_citations:

@@ -7,6 +7,7 @@ description: |
   Compute/Stamp/Verify trio that callers rely on; precision failure
   means cks pulled in unrelated pack code.
 prompt: "EvidencePack integrity hash stamping and verification"
+intent: arch_explain
 match_mode: overlap
 runs: 1
 expected_citations:

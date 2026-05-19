@@ -129,6 +129,55 @@ runs: -1
 	}
 }
 
+func TestParseScenario_AcceptsKnownIntent(t *testing.T) {
+	t.Parallel()
+	yaml := `
+version: 1
+name: x
+prompt: y
+intent: arch_explain
+`
+	s, err := ParseScenario([]byte(yaml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Intent != "arch_explain" {
+		t.Errorf("Intent = %q", s.Intent)
+	}
+}
+
+func TestParseScenario_AcceptsEmptyIntent(t *testing.T) {
+	t.Parallel()
+	// Intent is optional. Scenarios without one group under
+	// "(unspecified)" in the report (validated separately).
+	yaml := `
+version: 1
+name: x
+prompt: y
+`
+	s, err := ParseScenario([]byte(yaml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Intent != "" {
+		t.Errorf("Intent = %q, want empty", s.Intent)
+	}
+}
+
+func TestParseScenario_RejectsUnknownIntent(t *testing.T) {
+	t.Parallel()
+	yaml := `
+version: 1
+name: x
+prompt: y
+intent: scribble_thoughts
+`
+	_, err := ParseScenario([]byte(yaml))
+	if err == nil {
+		t.Fatal("expected error for unknown intent")
+	}
+}
+
 func TestParseScenario_RejectsInvalidCitation(t *testing.T) {
 	t.Parallel()
 	yaml := `version: 1

@@ -8,6 +8,7 @@ description: |
   of every cks evidence pack; missing either signals a serious
   retrieval failure.
 prompt: "how does composer Compose chain the stages end to end"
+intent: arch_explain
 match_mode: overlap
 runs: 1
 expected_citations:

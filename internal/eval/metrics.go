@@ -163,3 +163,45 @@ func median(xs []float64) float64 {
 	}
 	return (sorted[mid-1] + sorted[mid]) / 2
 }
+
+// percentile returns the nearest-rank percentile of xs (0 < p <= 1)
+// without mutating the input.
+//
+// Nearest-rank (NIST method): the value at sorted index ceil(p*N)
+// (1-based), clamped to N. This is the simplest definition that
+// agrees with intuition on small samples — p50 of a 10-element
+// sorted slice is the 5th value, p95 is the 10th, p100 is the max.
+// Interpolated percentiles (e.g. linear, R-style "type 7") give
+// fractionally-different answers on small N and add complexity
+// without changing the cks story; cks-eval typically runs N in
+// the single digits.
+//
+// Edge handling:
+//   - empty xs: returns 0 (same convention as median).
+//   - p <= 0: returns the min.
+//   - p >= 1: returns the max.
+//
+// Used by Runner to compute LatencyMSP50 / LatencyMSP95 / LatencyMSMax.
+func percentile(xs []float64, p float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	sorted := make([]float64, len(xs))
+	copy(sorted, xs)
+	sort.Float64s(sorted)
+	if p <= 0 {
+		return sorted[0]
+	}
+	if p >= 1 {
+		return sorted[len(sorted)-1]
+	}
+	// Nearest-rank: idx = ceil(p * N), then clamp 1..N, then 0-based.
+	idx := int(p*float64(len(sorted)) + 0.999999999) // ceil via float trick
+	if idx < 1 {
+		idx = 1
+	}
+	if idx > len(sorted) {
+		idx = len(sorted)
+	}
+	return sorted[idx-1]
+}

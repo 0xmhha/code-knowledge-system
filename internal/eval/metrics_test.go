@@ -199,3 +199,69 @@ func TestMedian_DoesNotMutateInput(t *testing.T) {
 func approxEq(a, b float64) bool {
 	return math.Abs(a-b) < 1e-9
 }
+
+// --- percentile ---
+
+func TestPercentile_Single(t *testing.T) {
+	t.Parallel()
+	got := percentile([]float64{42}, 0.5)
+	if !approxEq(got, 42) {
+		t.Errorf("percentile([42], 0.5) = %v, want 42", got)
+	}
+	// Any p must collapse to the single value for a 1-element slice.
+	if !approxEq(percentile([]float64{42}, 0.95), 42) {
+		t.Error("p95 of single-element slice must equal the value")
+	}
+}
+
+func TestPercentile_TenValues(t *testing.T) {
+	t.Parallel()
+	// [10,20,30,40,50,60,70,80,90,100]; nearest-rank percentile:
+	//   p50 -> index ceil(0.5*10)=5 (1-based) -> 50
+	//   p95 -> index ceil(0.95*10)=10 -> 100
+	xs := []float64{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	if got := percentile(xs, 0.5); !approxEq(got, 50) {
+		t.Errorf("p50 = %v, want 50", got)
+	}
+	if got := percentile(xs, 0.95); !approxEq(got, 100) {
+		t.Errorf("p95 = %v, want 100", got)
+	}
+	if got := percentile(xs, 1.0); !approxEq(got, 100) {
+		t.Errorf("max = %v, want 100", got)
+	}
+}
+
+func TestPercentile_HandlesUnsortedInput(t *testing.T) {
+	t.Parallel()
+	xs := []float64{90, 10, 30, 70, 50}
+	// Sorted is [10,30,50,70,90]; p50 -> ceil(0.5*5)=3 -> 50.
+	if got := percentile(xs, 0.5); !approxEq(got, 50) {
+		t.Errorf("p50 = %v, want 50", got)
+	}
+	// Input must not be mutated.
+	if xs[0] != 90 {
+		t.Errorf("input mutated: %v", xs)
+	}
+}
+
+func TestPercentile_EmptyReturnsZero(t *testing.T) {
+	t.Parallel()
+	if got := percentile(nil, 0.5); got != 0 {
+		t.Errorf("percentile(nil) = %v, want 0", got)
+	}
+	if got := percentile([]float64{}, 0.95); got != 0 {
+		t.Errorf("percentile([]) = %v, want 0", got)
+	}
+}
+
+func TestPercentile_ClampsP(t *testing.T) {
+	t.Parallel()
+	xs := []float64{10, 20, 30}
+	// p<=0 collapses to the min; p>=1 to the max — no off-by-one rage.
+	if got := percentile(xs, 0); !approxEq(got, 10) {
+		t.Errorf("p=0 = %v, want 10 (min)", got)
+	}
+	if got := percentile(xs, 1.5); !approxEq(got, 30) {
+		t.Errorf("p=1.5 = %v, want 30 (max)", got)
+	}
+}

@@ -98,6 +98,7 @@ func run(ctx context.Context, scenariosPath, mcpBinary, mcpConfig, outputPath st
 		report.Results = append(report.Results, *result)
 	}
 	report.FinishedAt = time.Now().UTC()
+	report.IntentSummary = eval.SummarizeByIntent(report.Results)
 
 	out, closer, err := openOutput(outputPath)
 	if err != nil {

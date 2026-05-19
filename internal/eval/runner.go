@@ -33,24 +33,32 @@ type mcpClient interface {
 // Compile-time guarantee mcp-go's *client.Client satisfies our seam.
 var _ mcpClient = (*mcpgoclient.Client)(nil)
 
-// Metrics are the per-scenario retrieval metrics. Each field is
-// either median across runs (when Scenario.Runs > 1) or the single
-// per-run value (when Runs == 1).
+// Metrics are the per-scenario retrieval metrics. Scalar fields are
+// the median across runs (when Scenario.Runs > 1) or the single
+// per-run value (when Runs == 1). LatencyMS_* fields expose the
+// raw distribution: P50 == LatencyMS for 1 run, otherwise the
+// nearest-rank percentile across runs. P95/Max are useful only
+// at Runs >= 5 and Runs >= 2 respectively; smaller N degrades
+// gracefully (P95 of 1 sample == that sample).
 type Metrics struct {
-	FilePrecision    float64       `json:"file_precision"`
-	FileRecall       float64       `json:"file_recall"`
-	FileF1           float64       `json:"file_f1"`
-	TokenUtilization float64       `json:"token_utilization"`
-	CitationCount    int           `json:"citation_count"`
-	BodyCount        int           `json:"body_count"`
-	RedactionCount   int           `json:"redaction_count"`
-	LatencyMS        int64         `json:"latency_ms"`
+	FilePrecision    float64 `json:"file_precision"`
+	FileRecall       float64 `json:"file_recall"`
+	FileF1           float64 `json:"file_f1"`
+	TokenUtilization float64 `json:"token_utilization"`
+	CitationCount    int     `json:"citation_count"`
+	BodyCount        int     `json:"body_count"`
+	RedactionCount   int     `json:"redaction_count"`
+	LatencyMS        int64   `json:"latency_ms"` // median (legacy)
+	LatencyMSP50     int64   `json:"latency_ms_p50"`
+	LatencyMSP95     int64   `json:"latency_ms_p95"`
+	LatencyMSMax     int64   `json:"latency_ms_max"`
 }
 
 // ScenarioResult is the per-scenario row in the final report.
 type ScenarioResult struct {
 	Name      string  `json:"name"`
 	Prompt    string  `json:"prompt"`
+	Intent    string  `json:"intent,omitempty"`
 	Runs      int     `json:"runs"`
 	MatchMode string  `json:"match_mode"`
 	Metrics   Metrics `json:"metrics"`
@@ -149,6 +157,7 @@ func (r *Runner) Execute(ctx context.Context, s *Scenario) (*ScenarioResult, err
 	out := &ScenarioResult{
 		Name:      s.Name,
 		Prompt:    s.Prompt,
+		Intent:    string(s.Intent),
 		Runs:      s.Runs,
 		MatchMode: string(s.MatchMode),
 		Metrics:   medianMetrics(perRun),
@@ -193,10 +202,15 @@ func (r *Runner) executeOnce(ctx context.Context, s *Scenario) (Metrics, error) 
 	}, nil
 }
 
-// medianMetrics folds per-run Metrics into one. Each scalar field is
-// the median of its per-run values; counts (citation/body/redaction)
-// use the median too — they are typically stable across runs because
-// cks is deterministic, so the median is the run-1 value in practice.
+// medianMetrics folds per-run Metrics into one. Scalar fields and
+// counts use the median (cks is deterministic so median ~= run-1).
+// Latency gets the percentile treatment because operationally it's
+// the field most likely to vary across runs:
+//
+//   LatencyMS    = p50 (legacy field name kept for backwards compat)
+//   LatencyMSP50 = p50 (explicit alias)
+//   LatencyMSP95 = p95 (== p50 when len < 5)
+//   LatencyMSMax = p100 (max observed)
 func medianMetrics(ms []Metrics) Metrics {
 	if len(ms) == 0 {
 		return Metrics{}
@@ -219,6 +233,7 @@ func medianMetrics(ms []Metrics) Metrics {
 		red[i] = float64(m.RedactionCount)
 		lat[i] = float64(m.LatencyMS)
 	}
+	p50 := int64(percentile(lat, 0.5))
 	return Metrics{
 		FilePrecision:    median(prec),
 		FileRecall:       median(rec),
@@ -227,7 +242,10 @@ func medianMetrics(ms []Metrics) Metrics {
 		CitationCount:    int(median(cit)),
 		BodyCount:        int(median(bod)),
 		RedactionCount:   int(median(red)),
-		LatencyMS:        int64(median(lat)),
+		LatencyMS:        p50,
+		LatencyMSP50:     p50,
+		LatencyMSP95:     int64(percentile(lat, 0.95)),
+		LatencyMSMax:     int64(percentile(lat, 1.0)),
 	}
 }
 
