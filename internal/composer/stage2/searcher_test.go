@@ -55,6 +55,84 @@ func TestNew_AppliesDefaultConfig(t *testing.T) {
 	}
 }
 
+// --- Intent-driven supplemental BM25 (IntentTestAdd) ---
+
+func TestSearch_IntentTestAddTriggersSupplementalGlobPass(t *testing.T) {
+	t.Parallel()
+	// IntentTestAdd promises Stage 2 surfaces "target symbol plus
+	// same-package *_test.go files". Verify the supplemental BM25
+	// call runs with PathGlob="*_test.go".
+	ckg := &ckgclient.Fake{
+		BM25Hits: []contract.Hit{bm25Hit("a.go", 1, 5, 0.9)},
+	}
+	s, _ := New(ckg)
+	_, err := s.Search(context.Background(), []string{"Foo"}, contract.IntentTestAdd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(ckg.Calls.BM25Search); got != 2 {
+		t.Fatalf("BM25Search calls = %d, want 2 (1 unfiltered + 1 *_test.go pass)", got)
+	}
+	// First call: unfiltered.
+	if pg := ckg.Calls.BM25Search[0].Opts.Filter.PathGlob; pg != "" {
+		t.Errorf("first call PathGlob = %q, want empty", pg)
+	}
+	// Second call: same keyword, *_test.go filter.
+	if c := ckg.Calls.BM25Search[1]; c.Query != "Foo" || c.Opts.Filter.PathGlob != "*_test.go" {
+		t.Errorf("supplemental call = %+v, want Query=Foo PathGlob=*_test.go", c)
+	}
+}
+
+func TestSearch_NonTestAddIntentSkipsSupplementalPass(t *testing.T) {
+	t.Parallel()
+	// Every non-TestAdd intent stays on the single-pass path. Adding
+	// a routing for another intent (e.g. DocsUpdate) is a deliberate
+	// change; the supplemental pass must NOT fire by default.
+	ckg := &ckgclient.Fake{
+		BM25Hits: []contract.Hit{bm25Hit("a.go", 1, 5, 0.9)},
+	}
+	s, _ := New(ckg)
+	for _, intent := range []contract.Intent{
+		contract.IntentUnknown,
+		contract.IntentBugFix,
+		contract.IntentArchExplain,
+		contract.IntentRefactor,
+		contract.IntentSecurity,
+		contract.IntentConcurrencySafety,
+		contract.IntentQAReview,
+		contract.IntentDocsUpdate,
+		contract.IntentFeatureAdd,
+	} {
+		ckg.Calls.Reset()
+		_, _ = s.Search(context.Background(), []string{"Foo"}, intent)
+		if got := len(ckg.Calls.BM25Search); got != 1 {
+			t.Errorf("intent=%s: BM25Search calls = %d, want 1", intent, got)
+		}
+	}
+}
+
+func TestSearch_IntentTestAddAggregatesBothPasses(t *testing.T) {
+	t.Parallel()
+	// The supplemental hit's score should add to the aggregator on
+	// top of the unfiltered hit's score (double-count is the
+	// intentional boost — that's how the *_test.go promise lands).
+	ckg := &ckgclient.Fake{
+		BM25Hits: []contract.Hit{bm25Hit("foo_test.go", 10, 20, 0.5)},
+	}
+	s, _ := New(ckg)
+	out, err := s.Search(context.Background(), []string{"Foo"}, contract.IntentTestAdd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Aggregator accumulated the hit twice (one per pass).
+	if len(out.Citations) != 1 {
+		t.Fatalf("citations = %d, want 1", len(out.Citations))
+	}
+	if out.Citations[0].Score < 0.9 { // 0.5 + 0.5 = 1.0 (minus rounding)
+		t.Errorf("aggregated score = %.3f, expected ~1.0 (two passes summed)", out.Citations[0].Score)
+	}
+}
+
 // --- Search / happy paths ---
 
 func TestSearch_EmptyKeywordsReturnsEmpty(t *testing.T) {

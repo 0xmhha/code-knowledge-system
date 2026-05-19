@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/0xmhha/code-knowledge-graph/pkg/store"
@@ -16,6 +17,14 @@ import (
 // is zero. Mirrors ckg's typical default; tuned downward in callers that
 // budget for fewer hits.
 const DefaultSearchLimit = 10
+
+// FilterOverfetchRatio scales the SearchFTS limit when a non-empty
+// SearchOpts.Filter is present. Post-filter discards rows the caller
+// did not want, so we pull this many times more rows up front to keep
+// the kept-row count close to the caller's K. 3× balances "enough
+// survivors" against "extra SQLite work per call." Phase E may tune
+// this based on miss rates.
+const FilterOverfetchRatio = 3
 
 // ManifestSnapshot is the cks-internal projection of ckg's persist.Manifest.
 //
@@ -128,15 +137,22 @@ func newRealWithStore(s storeReader) *Real {
 // BM25Search forwards query to ckg's SearchFTS, then translates the
 // returned Nodes into Hits stamped with HitSourceCKG.
 //
-// Filter handling: opts.Filter (Language/PathGlob/CommitHash) is NOT
-// forwarded to ckg.SearchFTS — that method takes only (query, limit).
-// A pure-Go post-filter could be added in a follow-up; C.1 keeps the
-// surface honest by ignoring the filter and documenting it here.
+// Filter handling: opts.Filter.Language and opts.Filter.PathGlob are
+// applied as client-side post-filters because ckg's SearchFTS takes
+// only (query, limit). To compensate for the post-filter dropping
+// rows, we over-fetch by FilterOverfetchRatio× when a filter is set.
+// opts.Filter.CommitHash is currently ignored — the entire index
+// represents one snapshot pinned by manifest.SrcCommit, so a
+// per-Citation commit filter has no incremental signal until ckg
+// supports cross-commit search.
 //
 // Score policy: ckg's SearchFTS returns nodes in FTS-rank order but does
 // not return a numeric score. cks Hit.Score is synthesized as
 // `1 - i/(N+1)` (descending in [1/(N+1), 1)) so downstream stages that
 // rely on relative score ordering still get a deterministic gradient.
+// Scores are computed from the original rank (pre-filter), so a
+// surviving Hit at filtered rank 1 keeps its high score even if it
+// was rank 5 in the unfiltered result.
 func (r *Real) BM25Search(ctx context.Context, query string, opts SearchOpts) ([]contract.Hit, error) {
 	if query == "" {
 		return nil, errors.New("ckgclient: empty query")
@@ -146,7 +162,15 @@ func (r *Real) BM25Search(ctx context.Context, query string, opts SearchOpts) ([
 		limit = DefaultSearchLimit
 	}
 
-	nodes, err := r.s.SearchFTS(query, limit)
+	// Over-fetch when a filter is set so the post-filter has rows to
+	// pick from. Otherwise pull exactly K rows.
+	fetchLimit := limit
+	hasFilter := opts.Filter.Language != "" || opts.Filter.PathGlob != ""
+	if hasFilter {
+		fetchLimit = limit * FilterOverfetchRatio
+	}
+
+	nodes, err := r.s.SearchFTS(query, fetchLimit)
 	if err != nil {
 		return nil, fmt.Errorf("ckgclient: SearchFTS: %w", err)
 	}
@@ -157,15 +181,39 @@ func (r *Real) BM25Search(ctx context.Context, query string, opts SearchOpts) ([
 	commit, _ := r.commit()
 	hits := make([]contract.Hit, 0, len(nodes))
 	n := len(nodes)
+	kept := 0
 	for i, nd := range nodes {
+		if !matchesFilter(nd, opts.Filter) {
+			continue
+		}
 		hits = append(hits, contract.Hit{
 			Citation: nodeToCitation(nd, commit),
 			Rank:     i + 1,
 			Score:    1.0 - float64(i)/float64(n+1),
 			Source:   contract.HitSourceCKG,
 		})
+		kept++
+		if kept >= limit {
+			break
+		}
 	}
 	return hits, nil
+}
+
+// matchesFilter reports whether n satisfies every set field of f.
+// Empty fields are ignored. PathGlob uses filepath.Match semantics —
+// single-star, no "**" expansion — matched against n.FilePath.
+func matchesFilter(n types.Node, f SearchFilter) bool {
+	if f.Language != "" && f.Language != n.Language {
+		return false
+	}
+	if f.PathGlob != "" {
+		ok, err := filepath.Match(f.PathGlob, n.FilePath)
+		if err != nil || !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // FindSymbol delegates to ckg's FindSymbol with exact=false (suffix match

@@ -3,6 +3,7 @@ package ckgclient
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/0xmhha/code-knowledge-graph/pkg/types"
@@ -172,6 +173,78 @@ func TestReal_BM25Search_DefaultsZeroKToBackendDefault(t *testing.T) {
 	}
 	if got := m.searchCh[0].limit; got != DefaultSearchLimit {
 		t.Errorf("limit = %d, want DefaultSearchLimit (%d)", got, DefaultSearchLimit)
+	}
+}
+
+func TestReal_BM25Search_PathGlobPostFilter(t *testing.T) {
+	t.Parallel()
+	// SearchFTS returns a mix of test and production files; PathGlob
+	// "*_test.go" must keep only the test rows. The over-fetch ratio
+	// is exercised because the filter discards rows: we ask for K=2,
+	// so the backend should be hit with K * FilterOverfetchRatio.
+	m := &mockStoreReader{
+		manifest: ManifestSnapshot{SrcCommit: "h"},
+		searchOut: []types.Node{
+			node("n1", "Foo", "a.go", 1, 5, types.NodeFunction, "go"),
+			node("n2", "TestFoo", "a_test.go", 10, 20, types.NodeFunction, "go"),
+			node("n3", "Bar", "b.go", 1, 5, types.NodeFunction, "go"),
+			node("n4", "TestBar", "b_test.go", 10, 20, types.NodeFunction, "go"),
+		},
+	}
+	r := newRealWithStore(m)
+	hits, err := r.BM25Search(context.Background(), "q",
+		SearchOpts{K: 2, Filter: SearchFilter{PathGlob: "*_test.go"}})
+	if err != nil {
+		t.Fatalf("BM25Search: %v", err)
+	}
+	if got := m.searchCh[0].limit; got != 2*FilterOverfetchRatio {
+		t.Errorf("backend limit = %d, want %d (K * FilterOverfetchRatio)", got, 2*FilterOverfetchRatio)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("got %d hits, want 2", len(hits))
+	}
+	for _, h := range hits {
+		if !strings.HasSuffix(h.Citation.File, "_test.go") {
+			t.Errorf("non-test file leaked through filter: %+v", h.Citation)
+		}
+	}
+}
+
+func TestReal_BM25Search_LanguageFilter(t *testing.T) {
+	t.Parallel()
+	m := &mockStoreReader{
+		manifest: ManifestSnapshot{SrcCommit: "h"},
+		searchOut: []types.Node{
+			node("n1", "Foo", "a.go", 1, 5, types.NodeFunction, "go"),
+			node("n2", "Bar", "b.ts", 1, 5, types.NodeFunction, "ts"),
+		},
+	}
+	r := newRealWithStore(m)
+	hits, err := r.BM25Search(context.Background(), "q",
+		SearchOpts{K: 5, Filter: SearchFilter{Language: "ts"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].Citation.File != "b.ts" {
+		t.Errorf("got %v, want only b.ts", hits)
+	}
+}
+
+func TestReal_BM25Search_NoFilterKeepsExactLimit(t *testing.T) {
+	t.Parallel()
+	// Without a filter, the backend limit must equal K — no over-fetch.
+	m := &mockStoreReader{
+		manifest: ManifestSnapshot{SrcCommit: "h"},
+		searchOut: []types.Node{
+			node("n1", "A", "a.go", 1, 5, types.NodeFunction, "go"),
+		},
+	}
+	r := newRealWithStore(m)
+	if _, err := r.BM25Search(context.Background(), "q", SearchOpts{K: 7}); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.searchCh[0].limit; got != 7 {
+		t.Errorf("backend limit = %d, want 7 (no over-fetch without filter)", got)
 	}
 }
 

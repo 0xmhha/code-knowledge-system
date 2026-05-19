@@ -146,11 +146,12 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 		Symbols: make(map[string][]contract.Citation),
 	}
 	if len(keywords) == 0 {
-		s.emitFootprint(ctx, intent, keywords, out, 0, 0)
+		s.emitFootprint(ctx, intent, keywords, out, 0, 0, "")
 		return out, nil
 	}
 
 	kinds := intentToKinds(intent)
+	pathGlob := intentPathGlob(intent)
 	agg := newAggregator(s.config.SymbolBonus)
 	hitCount := 0
 	bm25Errors := 0
@@ -188,19 +189,45 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 		hitCount++
 	}
 
+	// Intent-driven supplemental BM25 pass: pulls in extra hits from
+	// a path subset the intent doc names (e.g. *_test.go for TestAdd).
+	// Results feed the same aggregator so a path-filtered match that
+	// also appeared in the unfiltered pass double-counts on purpose —
+	// that overlap IS the boost the intent promises.
+	if pathGlob != "" {
+		for _, kw := range keywords {
+			extraHits, extraErr := s.ckg.BM25Search(ctx, kw, ckgclient.SearchOpts{
+				K:      s.config.BM25K,
+				Filter: ckgclient.SearchFilter{PathGlob: pathGlob},
+			})
+			if extraErr != nil {
+				bm25Errors++
+				continue
+			}
+			if len(extraHits) == 0 {
+				continue
+			}
+			out.Hits = append(out.Hits, extraHits...)
+			for _, h := range extraHits {
+				agg.addBM25Hit(kw, h)
+			}
+		}
+	}
+
 	out.Citations = agg.results(s.config.MaxCitations)
 	out.Coverage = float64(hitCount) / float64(len(keywords))
 
-	s.emitFootprint(ctx, intent, keywords, out, bm25Errors, symbolErrors)
+	s.emitFootprint(ctx, intent, keywords, out, bm25Errors, symbolErrors, pathGlob)
 	return out, nil
 }
 
-func (s *Searcher) emitFootprint(ctx context.Context, intent contract.Intent, keywords []string, out Stage2Output, bm25Errors, symbolErrors int) {
+func (s *Searcher) emitFootprint(ctx context.Context, intent contract.Intent, keywords []string, out Stage2Output, bm25Errors, symbolErrors int, pathGlob string) {
 	if s.fp == nil {
 		return
 	}
 	fields := []zap.Field{
 		zap.String("intent", string(intent)),
+		zap.String("intent_path_glob", pathGlob),
 		zap.Int("keyword_count", len(keywords)),
 		zap.Int("hit_keywords", len(keywords)-len(out.FailedKeywords)),
 		zap.Strings("failed_keywords", out.FailedKeywords),
