@@ -50,9 +50,30 @@ func TestNew_AppliesDefaultConfig(t *testing.T) {
 	if s.config.MaxCitations != DefaultMaxCitations {
 		t.Errorf("MaxCitations = %d, want %d", s.config.MaxCitations, DefaultMaxCitations)
 	}
-	if s.config.SymbolBonus != DefaultSymbolBonus {
-		t.Errorf("SymbolBonus = %v, want %v", s.config.SymbolBonus, DefaultSymbolBonus)
+	if s.config.RRFK != DefaultRRFK {
+		t.Errorf("RRFK = %d, want %d", s.config.RRFK, DefaultRRFK)
 	}
+	if s.config.BMWeight != DefaultBMWeight {
+		t.Errorf("BMWeight = %v, want %v", s.config.BMWeight, DefaultBMWeight)
+	}
+	if s.config.SymbolWeight != DefaultSymbolWeight {
+		t.Errorf("SymbolWeight = %v, want %v", s.config.SymbolWeight, DefaultSymbolWeight)
+	}
+}
+
+// rrfContribution computes one RRF term so tests stay readable when the
+// default constants move. weight / (k + rank).
+func rrfContribution(weight float64, rank int) float64 {
+	return weight / float64(DefaultRRFK+rank)
+}
+
+// almostEqual avoids floating-point exact-equality flakiness in tests.
+func almostEqual(a, b float64) bool {
+	d := a - b
+	if d < 0 {
+		d = -d
+	}
+	return d < 1e-9
 }
 
 // --- Intent-driven supplemental BM25 (IntentTestAdd) ---
@@ -124,12 +145,14 @@ func TestSearch_IntentTestAddAggregatesBothPasses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Aggregator accumulated the hit twice (one per pass).
+	// Aggregator accumulated the hit twice (one per pass) as two
+	// separate RRF-ranked lists. Each contributes BMWeight/(K+1).
 	if len(out.Citations) != 1 {
 		t.Fatalf("citations = %d, want 1", len(out.Citations))
 	}
-	if out.Citations[0].Score < 0.9 { // 0.5 + 0.5 = 1.0 (minus rounding)
-		t.Errorf("aggregated score = %.3f, expected ~1.0 (two passes summed)", out.Citations[0].Score)
+	want := 2 * rrfContribution(DefaultBMWeight, 1)
+	if !almostEqual(out.Citations[0].Score, want) {
+		t.Errorf("aggregated score = %.6f, want %.6f (two passes, rank 1 each)", out.Citations[0].Score, want)
 	}
 }
 
@@ -161,8 +184,9 @@ func TestSearch_BM25HitsContribute(t *testing.T) {
 	if len(out.Citations) != 1 {
 		t.Fatalf("Citations count = %d, want 1", len(out.Citations))
 	}
-	if out.Citations[0].Score != 8.0 {
-		t.Errorf("Score = %v, want 8.0", out.Citations[0].Score)
+	want := rrfContribution(DefaultBMWeight, 1)
+	if !almostEqual(out.Citations[0].Score, want) {
+		t.Errorf("Score = %v, want %v (rank 1 BM25)", out.Citations[0].Score, want)
 	}
 	if len(out.Citations[0].Sources) != 1 || !strings.HasPrefix(out.Citations[0].Sources[0], "bm25:Login") {
 		t.Errorf("Sources = %v", out.Citations[0].Sources)
@@ -183,8 +207,9 @@ func TestSearch_SymbolHitsAddBonus(t *testing.T) {
 	if len(out.Citations) != 1 {
 		t.Fatalf("Citations count = %d, want 1", len(out.Citations))
 	}
-	if out.Citations[0].Score != DefaultSymbolBonus {
-		t.Errorf("Score = %v, want %v", out.Citations[0].Score, DefaultSymbolBonus)
+	want := rrfContribution(DefaultSymbolWeight, 1)
+	if !almostEqual(out.Citations[0].Score, want) {
+		t.Errorf("Score = %v, want %v (rank 1 Symbol)", out.Citations[0].Score, want)
 	}
 	if !strings.Contains(out.Citations[0].Sources[0], "symbol:Login") {
 		t.Errorf("Sources = %v", out.Citations[0].Sources)
@@ -205,9 +230,9 @@ func TestSearch_BM25AndSymbolSumOnSameCitation(t *testing.T) {
 	if len(out.Citations) != 1 {
 		t.Fatalf("Citations count = %d, want 1 (dedup)", len(out.Citations))
 	}
-	want := 8.0 + DefaultSymbolBonus
-	if out.Citations[0].Score != want {
-		t.Errorf("Score = %v, want %v", out.Citations[0].Score, want)
+	want := rrfContribution(DefaultBMWeight, 1) + rrfContribution(DefaultSymbolWeight, 1)
+	if !almostEqual(out.Citations[0].Score, want) {
+		t.Errorf("Score = %v, want %v (rank 1 BM25 + rank 1 Symbol)", out.Citations[0].Score, want)
 	}
 	if len(out.Citations[0].Sources) != 2 {
 		t.Errorf("Sources length = %d, want 2", len(out.Citations[0].Sources))
@@ -227,22 +252,28 @@ func TestSearch_MultipleKeywordsAccumulate(t *testing.T) {
 	if len(out.Citations) != 1 {
 		t.Fatalf("Citations count = %d, want 1", len(out.Citations))
 	}
-	// Two keywords each contributing 3.0 -> 6.0 total.
-	if out.Citations[0].Score != 6.0 {
-		t.Errorf("Score = %v, want 6.0", out.Citations[0].Score)
+	// Two keywords each pull the same citation at BM25 rank 1 of their
+	// individual ranked list, so the RRF total is twice the rank-1 term.
+	want := 2 * rrfContribution(DefaultBMWeight, 1)
+	if !almostEqual(out.Citations[0].Score, want) {
+		t.Errorf("Score = %v, want %v (two keywords, BM25 rank 1 each)", out.Citations[0].Score, want)
 	}
 	if len(out.Citations[0].Sources) != 2 {
 		t.Errorf("Sources length = %d, want 2", len(out.Citations[0].Sources))
 	}
 }
 
-func TestSearch_SortsByScoreDescending(t *testing.T) {
+func TestSearch_SortsByRankInRRF(t *testing.T) {
 	t.Parallel()
+	// RRF is rank-only: a citation's contribution is weight/(K+rank),
+	// independent of the backend's native score. So the rank-1 entry
+	// in the BM25 list always lands at the head of Stage2Output even
+	// when its native score is the smallest.
 	ckg := &ckgclient.Fake{
 		BM25Hits: []contract.Hit{
-			bm25Hit("low.go", 1, 10, 1.0),
-			bm25Hit("high.go", 1, 10, 9.0),
-			bm25Hit("mid.go", 1, 10, 5.0),
+			bm25Hit("rank1.go", 1, 10, 0.1), // rank 1 — smallest native score
+			bm25Hit("rank2.go", 1, 10, 9.9), // rank 2 — largest native score
+			bm25Hit("rank3.go", 1, 10, 5.0), // rank 3
 		},
 	}
 	s, _ := New(ckg)
@@ -251,7 +282,7 @@ func TestSearch_SortsByScoreDescending(t *testing.T) {
 	if len(out.Citations) != 3 {
 		t.Fatalf("Citations count = %d, want 3", len(out.Citations))
 	}
-	want := []string{"high.go", "mid.go", "low.go"}
+	want := []string{"rank1.go", "rank2.go", "rank3.go"}
 	for i, sc := range out.Citations {
 		if sc.Citation.File != want[i] {
 			t.Errorf("Citations[%d].File = %q, want %q", i, sc.Citation.File, want[i])
@@ -259,27 +290,26 @@ func TestSearch_SortsByScoreDescending(t *testing.T) {
 	}
 }
 
-func TestSearch_TiesBrokenByFileThenStartLine(t *testing.T) {
+func TestAggregator_TiesBrokenByFileThenStartLine(t *testing.T) {
 	t.Parallel()
-	// All hits have the same score -> deterministic tiebreaker by file,
-	// then start_line.
-	ckg := &ckgclient.Fake{
-		BM25Hits: []contract.Hit{
-			bm25Hit("b.go", 30, 40, 5.0),
-			bm25Hit("a.go", 1, 10, 5.0),
-			bm25Hit("b.go", 1, 10, 5.0),
-		},
-	}
-	s, _ := New(ckg)
-	out, _ := s.Search(context.Background(), []string{"k"}, contract.IntentBugFix)
+	// Force an exact RRF tie by feeding each citation as a rank-1
+	// hit on its own single-element list. All three end up with the
+	// same total contribution, and the deterministic tiebreaker
+	// (file path, then start line) decides the final order.
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight)
+	a.addBM25List("k1", []contract.Hit{bm25Hit("b.go", 30, 40, 5.0)})
+	a.addBM25List("k2", []contract.Hit{bm25Hit("a.go", 1, 10, 5.0)})
+	a.addBM25List("k3", []contract.Hit{bm25Hit("b.go", 1, 10, 5.0)})
+
+	out := a.results(0)
 	want := []contract.Citation{
 		cit("a.go", 1, 10),
 		cit("b.go", 1, 10),
 		cit("b.go", 30, 40),
 	}
-	for i, sc := range out.Citations {
+	for i, sc := range out {
 		if sc.Citation != want[i] {
-			t.Errorf("Citations[%d] = %+v, want %+v", i, sc.Citation, want[i])
+			t.Errorf("results[%d] = %+v, want %+v", i, sc.Citation, want[i])
 		}
 	}
 }
@@ -298,7 +328,9 @@ func TestSearch_RespectsMaxCitations(t *testing.T) {
 	s, _ := New(ckg, WithConfig(Config{
 		BM25K:        DefaultBM25K,
 		MaxCitations: 2,
-		SymbolBonus:  DefaultSymbolBonus,
+		RRFK:         DefaultRRFK,
+		BMWeight:     DefaultBMWeight,
+		SymbolWeight: DefaultSymbolWeight,
 	}))
 
 	out, _ := s.Search(context.Background(), []string{"k"}, contract.IntentBugFix)
@@ -384,8 +416,9 @@ func TestSearch_SymbolErrorIsTolerated(t *testing.T) {
 	if len(out.FailedKeywords) != 0 {
 		t.Errorf("FailedKeywords = %v, want empty (BM25 succeeded)", out.FailedKeywords)
 	}
-	if out.Citations[0].Score != 2.0 {
-		t.Errorf("Score = %v, want 2.0", out.Citations[0].Score)
+	want := rrfContribution(DefaultBMWeight, 1)
+	if !almostEqual(out.Citations[0].Score, want) {
+		t.Errorf("Score = %v, want %v (BM25 rank 1 only)", out.Citations[0].Score, want)
 	}
 }
 
@@ -538,26 +571,56 @@ func TestSearch_FootprintRecordsErrorCounts(t *testing.T) {
 
 func TestAggregator_DedupsByCitationKey(t *testing.T) {
 	t.Parallel()
-	a := newAggregator(5.0)
-	a.addBM25Hit("k1", bm25Hit("x.go", 1, 10, 3.0))
-	a.addBM25Hit("k2", bm25Hit("x.go", 1, 10, 4.0))
-	a.addSymbolHit("k3", cit("x.go", 1, 10))
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight)
+	// Three single-element ranked lists, all rank 1, all on the same
+	// citation. RRF total = 2 BM25 contributions + 1 Symbol contribution.
+	a.addBM25List("k1", []contract.Hit{bm25Hit("x.go", 1, 10, 3.0)})
+	a.addBM25List("k2", []contract.Hit{bm25Hit("x.go", 1, 10, 4.0)})
+	a.addSymbolList("k3", []contract.Citation{cit("x.go", 1, 10)})
 
 	out := a.results(0)
 	if len(out) != 1 {
 		t.Fatalf("len = %d, want 1 (dedup)", len(out))
 	}
-	if out[0].Score != 3.0+4.0+5.0 {
-		t.Errorf("Score = %v, want %v", out[0].Score, 3.0+4.0+5.0)
+	want := 2*rrfContribution(DefaultBMWeight, 1) + rrfContribution(DefaultSymbolWeight, 1)
+	if !almostEqual(out[0].Score, want) {
+		t.Errorf("Score = %v, want %v", out[0].Score, want)
 	}
 	if len(out[0].Sources) != 3 {
 		t.Errorf("Sources length = %d, want 3", len(out[0].Sources))
 	}
 }
 
+func TestAggregator_RankAffectsContribution(t *testing.T) {
+	t.Parallel()
+	// A single BM25 list of length 3 should give the head citation
+	// strictly more weight than the tail, regardless of native score.
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight)
+	a.addBM25List("k", []contract.Hit{
+		bm25Hit("a.go", 1, 1, 0.1), // rank 1
+		bm25Hit("b.go", 1, 1, 0.9), // rank 2
+		bm25Hit("c.go", 1, 1, 0.5), // rank 3
+	})
+	out := a.results(0)
+	if len(out) != 3 {
+		t.Fatalf("len = %d, want 3", len(out))
+	}
+	// Head wins despite its tiny native score — that is exactly the
+	// property RRF promises and the old score-sum aggregator failed.
+	if out[0].Citation.File != "a.go" {
+		t.Errorf("head = %s, want a.go", out[0].Citation.File)
+	}
+	if !almostEqual(out[0].Score, rrfContribution(DefaultBMWeight, 1)) {
+		t.Errorf("head score = %v, want rank-1 contribution", out[0].Score)
+	}
+	if !almostEqual(out[2].Score, rrfContribution(DefaultBMWeight, 3)) {
+		t.Errorf("tail score = %v, want rank-3 contribution", out[2].Score)
+	}
+}
+
 func TestAggregator_EmptyResultsNil(t *testing.T) {
 	t.Parallel()
-	a := newAggregator(5.0)
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight)
 	if got := a.results(10); got != nil {
 		t.Errorf("results on empty aggregator = %v, want nil", got)
 	}

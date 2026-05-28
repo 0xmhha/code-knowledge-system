@@ -39,7 +39,14 @@ import (
 const (
 	DefaultBM25K        = 10
 	DefaultMaxCitations = 30
-	DefaultSymbolBonus  = 5.0
+	// DefaultBMWeight is the RRF weight applied to every BM25Search list.
+	DefaultBMWeight = 1.0
+	// DefaultSymbolWeight is the RRF weight applied to every FindSymbol
+	// list. Set above DefaultBMWeight so exact symbol matches still beat
+	// pure keyword overlap when their RRF ranks are comparable — without
+	// the magnitude blow-up the old SymbolBonus = 5.0 produced under the
+	// raw score-sum aggregator.
+	DefaultSymbolWeight = 1.5
 )
 
 // Config tunes the searcher's call budget and ranking weights.
@@ -49,10 +56,15 @@ type Config struct {
 	// MaxCitations caps the final ScoredCitation slice length. The
 	// downstream graph expander (B.5) sees at most this many seeds.
 	MaxCitations int
-	// SymbolBonus is the score increment a citation receives for each
-	// FindSymbol match. Comparable to a single strong BM25 hit so exact
-	// matches weigh meaningfully without dominating semantic evidence.
-	SymbolBonus float64
+	// RRFK is the k constant in the RRF formula 1/(k+rank). Default 60
+	// (Cormack et al., 2009). Lower values bias toward the head of each
+	// ranked list; higher values flatten the rank distribution.
+	RRFK int
+	// BMWeight is the RRF weight applied to BM25Search ranked lists.
+	BMWeight float64
+	// SymbolWeight is the RRF weight applied to FindSymbol ranked lists.
+	// Symbol matches typically outweigh keyword-only overlap.
+	SymbolWeight float64
 }
 
 // DefaultConfig returns the Phase-0 tuning baseline.
@@ -60,7 +72,9 @@ func DefaultConfig() Config {
 	return Config{
 		BM25K:        DefaultBM25K,
 		MaxCitations: DefaultMaxCitations,
-		SymbolBonus:  DefaultSymbolBonus,
+		RRFK:         DefaultRRFK,
+		BMWeight:     DefaultBMWeight,
+		SymbolWeight: DefaultSymbolWeight,
 	}
 }
 
@@ -152,7 +166,7 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 
 	kinds := intentToKinds(intent)
 	pathGlob := intentPathGlob(intent)
-	agg := newAggregator(s.config.SymbolBonus)
+	agg := newAggregator(s.config.RRFK, s.config.BMWeight, s.config.SymbolWeight)
 	hitCount := 0
 	bm25Errors := 0
 	symbolErrors := 0
@@ -166,9 +180,7 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 		} else if len(bm25Hits) > 0 {
 			anyHit = true
 			out.Hits = append(out.Hits, bm25Hits...)
-			for _, h := range bm25Hits {
-				agg.addBM25Hit(kw, h)
-			}
+			agg.addBM25List(kw, bm25Hits)
 		}
 
 		symbolCits, symErr := s.ckg.FindSymbol(ctx, kw, ckgclient.SymbolOpts{Kinds: kinds})
@@ -177,9 +189,7 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 		} else if len(symbolCits) > 0 {
 			anyHit = true
 			out.Symbols[kw] = symbolCits
-			for _, c := range symbolCits {
-				agg.addSymbolHit(kw, c)
-			}
+			agg.addSymbolList(kw, symbolCits)
 		}
 
 		if !anyHit {
@@ -191,8 +201,9 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 
 	// Intent-driven supplemental BM25 pass: pulls in extra hits from
 	// a path subset the intent doc names (e.g. *_test.go for TestAdd).
-	// Results feed the same aggregator so a path-filtered match that
-	// also appeared in the unfiltered pass double-counts on purpose —
+	// Results feed the same RRF aggregator as a separate ranked list
+	// per keyword, so a path-filtered match that also appeared in the
+	// unfiltered pass adds a second 1/(k+rank) contribution on purpose —
 	// that overlap IS the boost the intent promises.
 	if pathGlob != "" {
 		for _, kw := range keywords {
@@ -208,9 +219,7 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 				continue
 			}
 			out.Hits = append(out.Hits, extraHits...)
-			for _, h := range extraHits {
-				agg.addBM25Hit(kw, h)
-			}
+			agg.addBM25List(kw+"@"+pathGlob, extraHits)
 		}
 	}
 
