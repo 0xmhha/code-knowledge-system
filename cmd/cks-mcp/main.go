@@ -129,12 +129,15 @@ func run(ctx context.Context, configPath string) error {
 }
 
 // buildCKGClient picks the real adapter when a path is configured and
-// falls back to the in-memory Fake otherwise. The returned closer should
-// be deferred by the caller; the Fake's closer is a no-op.
+// falls back to the Smart Dummy otherwise. The Dummy records each
+// would-have-been ckg call on the Composer's instruction collector so
+// the upstream LLM can fulfil the request via skills against the
+// go-stablenet source tree. The returned closer should be deferred by
+// the caller; the Dummy's closer is a no-op.
 func buildCKGClient(path string) (ckgclient.Client, func() error, error) {
 	if path == "" {
-		f := &ckgclient.Fake{HealthVal: ckgclient.Health{Reachable: true, SchemaVersion: "fake-phase0"}}
-		return f, func() error { return nil }, nil
+		d := ckgclient.NewDummy()
+		return d, d.Close, nil
 	}
 	real, err := ckgclient.NewReal(path)
 	if err != nil {
@@ -144,14 +147,16 @@ func buildCKGClient(path string) (ckgclient.Client, func() error, error) {
 }
 
 // buildCKVClient picks the real ckv adapter (subprocess MCP proxy) when
-// a data path is configured and falls back to the in-memory Fake
-// otherwise. NewReal spawns the ckv binary and runs the MCP initialize
-// handshake; failures here surface before the cks-mcp server starts
-// accepting stdio frames.
+// a data path is configured and falls back to the Smart Dummy otherwise.
+// The Dummy records each would-have-been ckv call on the Composer's
+// instruction collector so the upstream LLM can fulfil the request via
+// skills against the go-stablenet source tree. NewReal spawns the ckv
+// binary and runs the MCP initialize handshake; failures here surface
+// before the cks-mcp server starts accepting stdio frames.
 func buildCKVClient(ctx context.Context, cfg config.CKVConfig) (ckvclient.Client, func() error, error) {
 	if cfg.Path == "" {
-		f := &ckvclient.Fake{HealthVal: ckvclient.Health{Reachable: true, StatsHash: "fake-phase0"}}
-		return f, func() error { return nil }, nil
+		d := ckvclient.NewDummy()
+		return d, d.Close, nil
 	}
 	opts := ckvclient.RealOpts{
 		BinaryPath: cfg.BinaryPath,

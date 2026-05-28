@@ -168,13 +168,19 @@ type PackMetadata struct {
 // is present in the contract from P0.3.1 so the type does not change shape
 // when B.5 ships.
 type EvidencePack struct {
-	Intent         Intent       `json:"intent,omitempty"`
-	Query          string       `json:"query"`
-	Citations      []Citation   `json:"citations"`
-	Bodies         []Body       `json:"bodies,omitempty"`
-	GraphNeighbors []Neighbor   `json:"graph_neighbors,omitempty"`
-	SanitizeReport []Redaction  `json:"sanitize_report,omitempty"`
-	Metadata       PackMetadata `json:"metadata"`
+	Intent         Intent             `json:"intent,omitempty"`
+	Query          string             `json:"query"`
+	Citations      []Citation         `json:"citations"`
+	Bodies         []Body             `json:"bodies,omitempty"`
+	GraphNeighbors []Neighbor         `json:"graph_neighbors,omitempty"`
+	SanitizeReport []Redaction        `json:"sanitize_report,omitempty"`
+	// Instructions is populated by Compose runs that used dummy ckv/ckg
+	// backends in place of real ones. Each entry directs the upstream
+	// LLM (coding-agent) to execute a skill against go-stablenet source
+	// to produce the response the real backend would have returned.
+	// Always empty once ckv/ckg are wired in.
+	Instructions   []DummyInstruction `json:"instructions,omitempty"`
+	Metadata       PackMetadata       `json:"metadata"`
 }
 
 // IsValid reports whether p is structurally sound:

@@ -1,0 +1,287 @@
+package ckgclient
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/0xmhha/code-knowledge-system/pkg/contract"
+)
+
+// Dummy is a Client that, instead of calling a real ckg backend, records
+// each invocation on the InstructionCollector attached to ctx and returns
+// minimal placeholder data so the Composer pipeline keeps flowing. The
+// collected instructions surface in EvidencePack.Instructions so the
+// upstream LLM (coding-agent) can execute the corresponding skill against
+// the go-stablenet source tree and provide the response the real ckg
+// would have returned.
+//
+// Once ckg is ready, callers swap Dummy out for Real. The Composer and
+// every other CKS module remain unchanged — they speak Client either way.
+type Dummy struct {
+	// SkillPath is the absolute path to the skill directory the upstream
+	// LLM will consult. Defaults to DefaultSkillPath when empty.
+	SkillPath string
+	// SourcePath is the absolute path to the go-stablenet source tree.
+	// Defaults to DefaultSourcePath when empty.
+	SourcePath string
+}
+
+// DefaultSkillPath / DefaultSourcePath mirror the constants in
+// ckvclient so both dummies point at the same on-disk skill set and
+// source tree without an external config file.
+const (
+	DefaultSkillPath  = "/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest/.claude"
+	DefaultSourcePath = "/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest"
+)
+
+// NewDummy returns a Dummy with the default skill + source paths.
+func NewDummy() *Dummy {
+	return &Dummy{SkillPath: DefaultSkillPath, SourcePath: DefaultSourcePath}
+}
+
+// Compile-time assertion that Dummy satisfies Client.
+var _ Client = (*Dummy)(nil)
+
+func (d *Dummy) skill() string {
+	if d.SkillPath == "" {
+		return DefaultSkillPath
+	}
+	return d.SkillPath
+}
+
+func (d *Dummy) source() string {
+	if d.SourcePath == "" {
+		return DefaultSourcePath
+	}
+	return d.SourcePath
+}
+
+// BM25Search records a ckg.BM25Search instruction and returns a single
+// placeholder Hit so downstream stages have non-empty input.
+func (d *Dummy) BM25Search(ctx context.Context, query string, opts SearchOpts) ([]contract.Hit, error) {
+	args := map[string]string{
+		"k":        fmt.Sprintf("%d", opts.K),
+		"language": opts.Filter.Language,
+		"path":     opts.Filter.PathGlob,
+		"commit":   opts.Filter.CommitHash,
+	}
+	directive := fmt.Sprintf(
+		"Use the skills under %s to run a BM25 keyword search over go-stablenet source at %s "+
+			"for the query %q. Respect filters in Args. Respond with a JSON array of contract.Hit, "+
+			"each containing Citation{File, StartLine, EndLine}, Rank (1-based), Score, and Source=\"ckg\".",
+		d.skill(), d.source(), query,
+	)
+	d.record(ctx, contract.DummyInstruction{
+		Backend:    "ckg",
+		Operation:  "BM25Search",
+		SkillPath:  d.skill(),
+		SourcePath: d.source(),
+		Query:      query,
+		Args:       args,
+		Expected:   "[]contract.Hit",
+		Directive:  directive,
+	})
+	return []contract.Hit{placeholderHit(contract.HitSourceCKG)}, nil
+}
+
+// FindSymbol records a ckg.FindSymbol instruction and returns a single
+// placeholder Citation.
+func (d *Dummy) FindSymbol(ctx context.Context, name string, opts SymbolOpts) ([]contract.Citation, error) {
+	args := map[string]string{
+		"kinds":  strings.Join(opts.Kinds, ","),
+		"path":   opts.PathGlob,
+		"commit": opts.CommitHash,
+	}
+	directive := fmt.Sprintf(
+		"Use the skills under %s to resolve the symbol %q against go-stablenet source at %s. "+
+			"Respect kind/path filters in Args. Respond with a JSON array of contract.Citation, "+
+			"one per definition site, each containing File, StartLine, EndLine, CommitHash.",
+		d.skill(), name, d.source(),
+	)
+	d.record(ctx, contract.DummyInstruction{
+		Backend:    "ckg",
+		Operation:  "FindSymbol",
+		SkillPath:  d.skill(),
+		SourcePath: d.source(),
+		Query:      name,
+		Args:       args,
+		Expected:   "[]contract.Citation",
+		Directive:  directive,
+	})
+	return []contract.Citation{placeholderCitation()}, nil
+}
+
+// Neighbors records a ckg.Neighbors instruction and returns no edges;
+// the Composer's stage3 expander tolerates an empty neighbour set so
+// returning a synthetic edge would risk feeding garbage to later stages.
+func (d *Dummy) Neighbors(ctx context.Context, src contract.Citation, opts NeighborsOpts) ([]contract.Neighbor, error) {
+	relations := make([]string, 0, len(opts.Relations))
+	for _, r := range opts.Relations {
+		relations = append(relations, string(r))
+	}
+	args := map[string]string{
+		"relations": strings.Join(relations, ","),
+		"hops":      fmt.Sprintf("%d", opts.Hops),
+		"max_total": fmt.Sprintf("%d", opts.MaxTotal),
+		"src":       src.String(),
+	}
+	directive := fmt.Sprintf(
+		"Use the skills under %s to walk the call/relationship graph around %s in go-stablenet "+
+			"source at %s. Respect relations + hop limits in Args. Respond with a JSON array of "+
+			"contract.Neighbor entries, each containing Source/Target citations, Relation, and Distance.",
+		d.skill(), src.String(), d.source(),
+	)
+	d.record(ctx, contract.DummyInstruction{
+		Backend:    "ckg",
+		Operation:  "Neighbors",
+		SkillPath:  d.skill(),
+		SourcePath: d.source(),
+		Query:      src.String(),
+		Args:       args,
+		Expected:   "[]contract.Neighbor",
+		Directive:  directive,
+	})
+	return nil, nil
+}
+
+// ImpactOfChange records a ckg.ImpactOfChange instruction and returns
+// an empty ImpactResult.
+func (d *Dummy) ImpactOfChange(ctx context.Context, seedQname string, opts ImpactOpts) (contract.ImpactResult, error) {
+	args := map[string]string{
+		"depth":     fmt.Sprintf("%d", opts.Depth),
+		"max_total": fmt.Sprintf("%d", opts.MaxTotal),
+	}
+	directive := fmt.Sprintf(
+		"Use the skills under %s to compute the reverse-dependency closure of %q in go-stablenet "+
+			"source at %s. Group hits by coupling category (callers, interface, type_users, "+
+			"distributed, concurrent, other). Respond with a JSON contract.ImpactResult "+
+			"{Seed, Groups[{Category, Hits[Citation]}]}.",
+		d.skill(), seedQname, d.source(),
+	)
+	d.record(ctx, contract.DummyInstruction{
+		Backend:    "ckg",
+		Operation:  "ImpactOfChange",
+		SkillPath:  d.skill(),
+		SourcePath: d.source(),
+		Query:      seedQname,
+		Args:       args,
+		Expected:   "contract.ImpactResult",
+		Directive:  directive,
+	})
+	return contract.ImpactResult{Seed: seedQname}, nil
+}
+
+// EvidenceForIntent records a ckg.EvidenceForIntent instruction and
+// returns an empty ChangeHistoryResult.
+func (d *Dummy) EvidenceForIntent(ctx context.Context, intent string, opts EvidenceOpts) (contract.ChangeHistoryResult, error) {
+	args := map[string]string{
+		"seed_qname": opts.SeedQname,
+		"k":          fmt.Sprintf("%d", opts.K),
+	}
+	directive := fmt.Sprintf(
+		"Use the skills under %s to surface git history hunks relevant to the intent %q in "+
+			"go-stablenet source at %s. Rank by BM25 against the intent text. Respond with a "+
+			"JSON contract.ChangeHistoryResult {Seed, PRs, Hunks[{File, StartLine, EndLine, Patch, Score}]}.",
+		d.skill(), intent, d.source(),
+	)
+	d.record(ctx, contract.DummyInstruction{
+		Backend:    "ckg",
+		Operation:  "EvidenceForIntent",
+		SkillPath:  d.skill(),
+		SourcePath: d.source(),
+		Query:      intent,
+		Args:       args,
+		Expected:   "contract.ChangeHistoryResult",
+		Directive:  directive,
+	})
+	return contract.ChangeHistoryResult{Seed: opts.SeedQname}, nil
+}
+
+// GetNodePRs records a ckg.GetNodePRs instruction and returns no PRs.
+func (d *Dummy) GetNodePRs(ctx context.Context, qname string, opts PRRefOpts) ([]contract.PRRef, error) {
+	args := map[string]string{
+		"max_count": fmt.Sprintf("%d", opts.MaxCount),
+	}
+	directive := fmt.Sprintf(
+		"Use the skills under %s to enumerate merge-commits that touched %q in go-stablenet "+
+			"source at %s. Respond with a JSON array of contract.PRRef "+
+			"{Number, Title, Summary, BaseSHA, HeadSHA, MergedAt, Repo}, newest first.",
+		d.skill(), qname, d.source(),
+	)
+	d.record(ctx, contract.DummyInstruction{
+		Backend:    "ckg",
+		Operation:  "GetNodePRs",
+		SkillPath:  d.skill(),
+		SourcePath: d.source(),
+		Query:      qname,
+		Args:       args,
+		Expected:   "[]contract.PRRef",
+		Directive:  directive,
+	})
+	return nil, nil
+}
+
+// GetSubgraph records a ckg.GetSubgraph instruction and returns no nodes
+// or edges.
+func (d *Dummy) GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts) ([]contract.Citation, []contract.Neighbor, error) {
+	args := map[string]string{
+		"depth":     fmt.Sprintf("%d", opts.Depth),
+		"max_total": fmt.Sprintf("%d", opts.MaxTotal),
+	}
+	directive := fmt.Sprintf(
+		"Use the skills under %s to walk every relation type around %q in go-stablenet source "+
+			"at %s up to the requested depth. Respond with two JSON arrays: contract.Citation[] "+
+			"(node set) and contract.Neighbor[] (edge set).",
+		d.skill(), qname, d.source(),
+	)
+	d.record(ctx, contract.DummyInstruction{
+		Backend:    "ckg",
+		Operation:  "GetSubgraph",
+		SkillPath:  d.skill(),
+		SourcePath: d.source(),
+		Query:      qname,
+		Args:       args,
+		Expected:   "([]contract.Citation, []contract.Neighbor)",
+		Directive:  directive,
+	})
+	return nil, nil, nil
+}
+
+// Health reports the dummy as reachable without recording an
+// instruction; health checks are part of bootstrap, not retrieval.
+func (d *Dummy) Health(ctx context.Context) (Health, error) {
+	return Health{
+		Reachable:     true,
+		SchemaVersion: "dummy",
+	}, nil
+}
+
+// Close is a no-op; the dummy holds no resources.
+func (d *Dummy) Close() error { return nil }
+
+func (d *Dummy) record(ctx context.Context, i contract.DummyInstruction) {
+	if c := contract.CollectorFrom(ctx); c != nil {
+		c.Add(i)
+	}
+}
+
+// placeholderHit returns a Hit with a sentinel Citation. Symmetric to
+// ckvclient's placeholderHit; kept package-local so the two dummies
+// stay independent.
+func placeholderHit(src contract.HitSource) contract.Hit {
+	return contract.Hit{
+		Citation: placeholderCitation(),
+		Rank:     1,
+		Score:    1.0,
+		Source:   src,
+	}
+}
+
+func placeholderCitation() contract.Citation {
+	return contract.Citation{
+		File:      "DUMMY",
+		StartLine: 1,
+		EndLine:   1,
+	}
+}

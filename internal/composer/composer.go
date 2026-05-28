@@ -138,6 +138,14 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 	}
 	start := time.Now()
 
+	// Attach an InstructionCollector so dummy ckv/ckg clients can record
+	// the calls they would have made; real clients ignore the collector.
+	// The collected instructions ride out on EvidencePack.Instructions so
+	// the upstream LLM (coding-agent) can execute the corresponding
+	// skills against go-stablenet source.
+	collector := contract.NewInstructionCollector()
+	ctx = contract.WithCollector(ctx, collector)
+
 	// 1. Intent classification — degrade to Unknown on error.
 	cls, err := c.intent.Classify(ctx, prompt)
 	if err != nil {
@@ -191,6 +199,10 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 	// neighbors whose endpoints are missing from the final citation
 	// set (required for EvidencePack.IsValid).
 	pack := assemblePack(prompt, intentVal, s3Out, s4Out, s5Out, c.builderVersion)
+
+	// Attach any dummy-backend instructions accumulated during the run
+	// (empty when the wired backends are real).
+	pack.Instructions = collector.All()
 
 	// 8. Integrity stamp — SHA-256 over the canonical pack form.
 	if err := contract.StampIntegrity(&pack); err != nil {
