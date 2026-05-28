@@ -73,6 +73,15 @@ func Register(s *mcpserver.MCPServer, d Deps) error {
 
 	registerGetForTask(s, d)
 	registerHealth(s, d)
+	registerFindSymbol(s, d)
+	registerFindCallers(s, d)
+	registerFindCallees(s, d)
+	registerGetSubgraph(s, d)
+	registerImpactAnalysis(s, d)
+	registerChangeHistory(s, d)
+	registerSemanticSearch(s, d)
+	registerSearchText(s, d)
+	registerFreshness(s, d)
 	return nil
 }
 
