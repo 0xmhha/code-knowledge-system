@@ -39,6 +39,24 @@ type Client interface {
 	// Phase B.5 expander.
 	Neighbors(ctx context.Context, src contract.Citation, opts NeighborsOpts) ([]contract.Neighbor, error)
 
+	// ImpactOfChange computes reverse-dependency closure from a seed symbol,
+	// grouped by coupling category (callers, interface, type users, distributed,
+	// concurrent, other). Used by cks.context.impact_analysis.
+	ImpactOfChange(ctx context.Context, seedQname string, opts ImpactOpts) (contract.ImpactResult, error)
+
+	// EvidenceForIntent returns BM25-ranked hunk evidence relevant to an
+	// intent query. Used by cks.context.change_history to surface past
+	// modifications related to the current task.
+	EvidenceForIntent(ctx context.Context, intent string, opts EvidenceOpts) (contract.ChangeHistoryResult, error)
+
+	// GetNodePRs returns PR references for a symbol, ordered by merge date
+	// descending. Used by cks.context.change_history.
+	GetNodePRs(ctx context.Context, qname string, opts PRRefOpts) ([]contract.PRRef, error)
+
+	// GetSubgraph returns all nodes and edges within depth hops of a seed
+	// symbol, traversing all edge types. Used by cks.context.get_subgraph.
+	GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts) ([]contract.Citation, []contract.Neighbor, error)
+
 	// Health reports backend reachability and version pins.
 	//
 	// Callers that need round-trip latency should measure time.Since
@@ -90,6 +108,29 @@ type NeighborsOpts struct {
 	// MaxTotal caps the total number of neighbors returned across all
 	// relations. Zero means no cap (the backend may still apply its own).
 	MaxTotal int
+}
+
+// ImpactOpts shapes a single ImpactOfChange call.
+type ImpactOpts struct {
+	Depth    int // max traversal depth; zero means backend default (typically 2)
+	MaxTotal int // cap on total citations across all categories; zero means no cap
+}
+
+// EvidenceOpts shapes a single EvidenceForIntent call.
+type EvidenceOpts struct {
+	SeedQname string // optional seed symbol to narrow scope
+	K         int    // max hunk evidence items; zero means backend default
+}
+
+// PRRefOpts shapes a single GetNodePRs call.
+type PRRefOpts struct {
+	MaxCount int // max PR refs to return; zero means no cap
+}
+
+// SubgraphOpts shapes a single GetSubgraph call.
+type SubgraphOpts struct {
+	Depth    int // max traversal depth; zero means 1
+	MaxTotal int // cap on total nodes; zero means no cap
 }
 
 // Health is the result of a Client.Health() call. Reports backend state

@@ -45,9 +45,25 @@ type Client interface {
 	// single in-band measurement carries no statistical meaning.
 	Health(ctx context.Context) (Health, error)
 
+	// Freshness reports whether the index is up-to-date with the source
+	// repository. Returns changed files since the last index build.
+	Freshness(ctx context.Context) (FreshnessReport, error)
+
 	// Close releases any resources (connections, mmap'd files).
 	// Idempotent.
 	Close() error
+}
+
+// FreshnessReport is the result of a Client.Freshness() call.
+type FreshnessReport struct {
+	// Fresh is true when the index matches the current source HEAD.
+	Fresh bool
+	// IndexedHead is the git commit the index was built against.
+	IndexedHead string
+	// CurrentHead is the current git HEAD of the source.
+	CurrentHead string
+	// ChangedFiles lists files modified since the indexed commit.
+	ChangedFiles []string
 }
 
 // SearchOpts shapes a single SemanticSearch call.

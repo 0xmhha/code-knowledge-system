@@ -23,6 +23,11 @@ type Fake struct {
 	// SearchErr, when non-nil, is returned by SemanticSearch.
 	SearchErr error
 
+	// FreshnessVal is returned by Freshness on success.
+	FreshnessVal FreshnessReport
+	// FreshnessErr, when non-nil, is returned by Freshness.
+	FreshnessErr error
+
 	// HealthVal is returned by Health on success.
 	HealthVal Health
 	// HealthErr, when non-nil, is returned by Health.
@@ -42,8 +47,9 @@ type Fake struct {
 // FakeCalls records the methods invoked on a Fake and their arguments.
 type FakeCalls struct {
 	SemanticSearch []SemanticSearchCall
-	Health         int // number of Health calls
-	Close          int // number of Close calls
+	Freshness      int
+	Health         int
+	Close          int
 }
 
 // SemanticSearchCall captures the arguments of one SemanticSearch invocation.
@@ -78,6 +84,15 @@ func (f *Fake) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 		out = out[:opts.K]
 	}
 	return out, nil
+}
+
+// Freshness records the call, then returns f.FreshnessVal or f.FreshnessErr.
+func (f *Fake) Freshness(ctx context.Context) (FreshnessReport, error) {
+	f.Calls.Freshness++
+	if f.FreshnessErr != nil {
+		return FreshnessReport{}, f.FreshnessErr
+	}
+	return f.FreshnessVal, nil
 }
 
 // Health records the call, then returns f.HealthVal or f.HealthErr.

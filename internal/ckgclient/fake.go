@@ -25,6 +25,23 @@ type Fake struct {
 	NeighborEdges []contract.Neighbor
 	NeighborErr   error
 
+	// ImpactResult is returned by ImpactOfChange on success.
+	ImpactResult contract.ImpactResult
+	ImpactErr    error
+
+	// EvidenceResult is returned by EvidenceForIntent on success.
+	EvidenceResult contract.ChangeHistoryResult
+	EvidenceErr    error
+
+	// PRRefs is returned by GetNodePRs on success.
+	PRRefs []contract.PRRef
+	PRErr  error
+
+	// SubgraphCitations and SubgraphNeighbors are returned by GetSubgraph.
+	SubgraphCitations []contract.Citation
+	SubgraphNeighbors []contract.Neighbor
+	SubgraphErr       error
+
 	HealthVal Health
 	HealthErr error
 
@@ -38,11 +55,35 @@ type Fake struct {
 
 // FakeCalls records the methods invoked on a Fake and their arguments.
 type FakeCalls struct {
-	BM25Search []BM25SearchCall
-	FindSymbol []FindSymbolCall
-	Neighbors  []NeighborsCall
-	Health     int
-	Close      int
+	BM25Search      []BM25SearchCall
+	FindSymbol      []FindSymbolCall
+	Neighbors       []NeighborsCall
+	ImpactOfChange  []ImpactOfChangeCall
+	EvidenceForIntent []EvidenceForIntentCall
+	GetNodePRs      []GetNodePRsCall
+	GetSubgraph     []GetSubgraphCall
+	Health          int
+	Close           int
+}
+
+type ImpactOfChangeCall struct {
+	SeedQname string
+	Opts      ImpactOpts
+}
+
+type EvidenceForIntentCall struct {
+	Intent string
+	Opts   EvidenceOpts
+}
+
+type GetNodePRsCall struct {
+	Qname string
+	Opts  PRRefOpts
+}
+
+type GetSubgraphCall struct {
+	Qname string
+	Opts  SubgraphOpts
 }
 
 // BM25SearchCall captures the arguments of one BM25Search invocation.
@@ -118,6 +159,58 @@ func (f *Fake) Neighbors(ctx context.Context, src contract.Citation, opts Neighb
 		return f.NeighborEdges[:opts.MaxTotal], nil
 	}
 	return f.NeighborEdges, nil
+}
+
+// ImpactOfChange records the call, then returns f.ImpactResult or f.ImpactErr.
+func (f *Fake) ImpactOfChange(ctx context.Context, seedQname string, opts ImpactOpts) (contract.ImpactResult, error) {
+	f.Calls.ImpactOfChange = append(f.Calls.ImpactOfChange, ImpactOfChangeCall{SeedQname: seedQname, Opts: opts})
+	if f.ImpactErr != nil {
+		return contract.ImpactResult{}, f.ImpactErr
+	}
+	if seedQname == "" {
+		return contract.ImpactResult{}, errors.New("ckgclient: empty seed qname")
+	}
+	return f.ImpactResult, nil
+}
+
+// EvidenceForIntent records the call, then returns f.EvidenceResult or f.EvidenceErr.
+func (f *Fake) EvidenceForIntent(ctx context.Context, intent string, opts EvidenceOpts) (contract.ChangeHistoryResult, error) {
+	f.Calls.EvidenceForIntent = append(f.Calls.EvidenceForIntent, EvidenceForIntentCall{Intent: intent, Opts: opts})
+	if f.EvidenceErr != nil {
+		return contract.ChangeHistoryResult{}, f.EvidenceErr
+	}
+	if intent == "" {
+		return contract.ChangeHistoryResult{}, errors.New("ckgclient: empty intent")
+	}
+	return f.EvidenceResult, nil
+}
+
+// GetNodePRs records the call, then returns f.PRRefs or f.PRErr.
+func (f *Fake) GetNodePRs(ctx context.Context, qname string, opts PRRefOpts) ([]contract.PRRef, error) {
+	f.Calls.GetNodePRs = append(f.Calls.GetNodePRs, GetNodePRsCall{Qname: qname, Opts: opts})
+	if f.PRErr != nil {
+		return nil, f.PRErr
+	}
+	if qname == "" {
+		return nil, errors.New("ckgclient: empty qname")
+	}
+	out := f.PRRefs
+	if opts.MaxCount > 0 && len(out) > opts.MaxCount {
+		out = out[:opts.MaxCount]
+	}
+	return out, nil
+}
+
+// GetSubgraph records the call, then returns f.SubgraphCitations/SubgraphNeighbors or f.SubgraphErr.
+func (f *Fake) GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts) ([]contract.Citation, []contract.Neighbor, error) {
+	f.Calls.GetSubgraph = append(f.Calls.GetSubgraph, GetSubgraphCall{Qname: qname, Opts: opts})
+	if f.SubgraphErr != nil {
+		return nil, nil, f.SubgraphErr
+	}
+	if qname == "" {
+		return nil, nil, errors.New("ckgclient: empty qname")
+	}
+	return f.SubgraphCitations, f.SubgraphNeighbors, nil
 }
 
 // Health returns f.HealthVal or f.HealthErr.

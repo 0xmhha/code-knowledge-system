@@ -26,6 +26,18 @@ func (r *rerankFake) FindSymbol(_ context.Context, _ string, _ ckgclient.SymbolO
 func (r *rerankFake) Neighbors(_ context.Context, _ contract.Citation, _ ckgclient.NeighborsOpts) ([]contract.Neighbor, error) {
 	return nil, nil
 }
+func (r *rerankFake) ImpactOfChange(_ context.Context, _ string, _ ckgclient.ImpactOpts) (contract.ImpactResult, error) {
+	return contract.ImpactResult{}, nil
+}
+func (r *rerankFake) EvidenceForIntent(_ context.Context, _ string, _ ckgclient.EvidenceOpts) (contract.ChangeHistoryResult, error) {
+	return contract.ChangeHistoryResult{}, nil
+}
+func (r *rerankFake) GetNodePRs(_ context.Context, _ string, _ ckgclient.PRRefOpts) ([]contract.PRRef, error) {
+	return nil, nil
+}
+func (r *rerankFake) GetSubgraph(_ context.Context, _ string, _ ckgclient.SubgraphOpts) ([]contract.Citation, []contract.Neighbor, error) {
+	return nil, nil, nil
+}
 func (r *rerankFake) Health(_ context.Context) (ckgclient.Health, error) {
 	return ckgclient.Health{Reachable: true}, nil
 }

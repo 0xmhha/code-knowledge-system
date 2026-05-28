@@ -257,6 +257,12 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 	return parseSemanticSearchResult(res)
 }
 
+// Freshness calls the ckv freshness tool. Not yet wired to the ckv
+// subprocess MCP — returns a stub report until the real adapter is implemented.
+func (r *Real) Freshness(ctx context.Context) (FreshnessReport, error) {
+	return FreshnessReport{}, nil
+}
+
 // Health calls the ckv health tool and translates the manifest payload
 // into ckvclient.Health. On any failure (transport, tool error, decode)
 // Reachable is false and the error is wrapped.

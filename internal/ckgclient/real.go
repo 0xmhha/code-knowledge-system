@@ -51,6 +51,7 @@ type storeReader interface {
 	FindSymbol(name, lang string, exact bool) ([]types.Node, error)
 	NodesByFilePath(path string) ([]types.Node, error)
 	NeighborhoodByQname(qname string, depth int, reverse bool, edgeTypes ...string) ([]types.Node, []types.Edge, error)
+	SubgraphByQname(qname string, depth int) ([]types.Node, []types.Edge, error)
 	Close() error
 }
 
@@ -85,6 +86,9 @@ func (a *realStoreReader) NodesByFilePath(path string) ([]types.Node, error) {
 }
 func (a *realStoreReader) NeighborhoodByQname(qname string, depth int, reverse bool, edgeTypes ...string) ([]types.Node, []types.Edge, error) {
 	return a.r.NeighborhoodByQname(qname, depth, reverse, edgeTypes...)
+}
+func (a *realStoreReader) SubgraphByQname(qname string, depth int) ([]types.Node, []types.Edge, error) {
+	return a.r.SubgraphByQname(qname, depth)
 }
 func (a *realStoreReader) Close() error {
 	return a.r.Close()
@@ -321,6 +325,77 @@ func (r *Real) Neighbors(ctx context.Context, src contract.Citation, opts Neighb
 		})
 	}
 	return out, nil
+}
+
+// ImpactOfChange is not yet wired to ckg's pkg/impact.Compute. Returns
+// an empty result until the real adapter is implemented.
+func (r *Real) ImpactOfChange(ctx context.Context, seedQname string, opts ImpactOpts) (contract.ImpactResult, error) {
+	if seedQname == "" {
+		return contract.ImpactResult{}, errors.New("ckgclient: empty seed qname")
+	}
+	return contract.ImpactResult{Seed: seedQname}, nil
+}
+
+// EvidenceForIntent is not yet wired to ckg's pkg/evidence.BuildPack.
+// Returns an empty result until the real adapter is implemented.
+func (r *Real) EvidenceForIntent(ctx context.Context, intent string, opts EvidenceOpts) (contract.ChangeHistoryResult, error) {
+	if intent == "" {
+		return contract.ChangeHistoryResult{}, errors.New("ckgclient: empty intent")
+	}
+	return contract.ChangeHistoryResult{Seed: opts.SeedQname}, nil
+}
+
+// GetNodePRs is not yet wired to ckg's store.Reader.GetNodePRs. Returns
+// nil until the real adapter is implemented.
+func (r *Real) GetNodePRs(ctx context.Context, qname string, opts PRRefOpts) ([]contract.PRRef, error) {
+	if qname == "" {
+		return nil, errors.New("ckgclient: empty qname")
+	}
+	return nil, nil
+}
+
+// GetSubgraph delegates to ckg's SubgraphByQname and translates the result.
+func (r *Real) GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts) ([]contract.Citation, []contract.Neighbor, error) {
+	if qname == "" {
+		return nil, nil, errors.New("ckgclient: empty qname")
+	}
+	depth := opts.Depth
+	if depth == 0 {
+		depth = 1
+	}
+	nodes, edges, err := r.s.SubgraphByQname(qname, depth)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ckgclient: SubgraphByQname: %w", err)
+	}
+	commit, _ := r.commit()
+	byID := make(map[string]types.Node, len(nodes))
+	citations := make([]contract.Citation, 0, len(nodes))
+	for _, n := range nodes {
+		byID[n.ID] = n
+		citations = append(citations, nodeToCitation(n, commit))
+	}
+	neighbors := make([]contract.Neighbor, 0, len(edges))
+	for _, e := range edges {
+		rel, ok := relationFromEdgeType(e.Type, false)
+		if !ok {
+			continue
+		}
+		srcN, srcOK := byID[e.Src]
+		dstN, dstOK := byID[e.Dst]
+		if !srcOK || !dstOK {
+			continue
+		}
+		if opts.MaxTotal > 0 && len(neighbors) >= opts.MaxTotal {
+			break
+		}
+		neighbors = append(neighbors, contract.Neighbor{
+			Source:   nodeToCitation(srcN, commit),
+			Target:   nodeToCitation(dstN, commit),
+			Relation: rel,
+			Distance: 1,
+		})
+	}
+	return citations, neighbors, nil
 }
 
 // Health round-trips a manifest read and reports reachability + the

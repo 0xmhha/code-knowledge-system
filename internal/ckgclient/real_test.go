@@ -83,6 +83,9 @@ func (m *mockStoreReader) NodesByFilePath(path string) ([]types.Node, error) {
 	m.pathCh = append(m.pathCh, path)
 	return m.pathNodes, m.pathErr
 }
+func (m *mockStoreReader) SubgraphByQname(qname string, depth int) ([]types.Node, []types.Edge, error) {
+	return m.neighOut, m.neighEdges, m.neighErr
+}
 func (m *mockStoreReader) Close() error {
 	m.closed = true
 	return m.closeErr
