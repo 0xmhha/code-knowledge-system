@@ -49,9 +49,9 @@ english_aliases:
   - "governance contract addresses"
 
 related_concepts:
-  - A4.system_contracts.versions
   - A5.account_extra.bit_layout
-  - A8.genesis.inject_contracts
+  - A8.genesis.inject_contracts_two_phase
+  - A3.validator_set.epoch_transition
 
 constants:
   - name: NativeCoinAdapter

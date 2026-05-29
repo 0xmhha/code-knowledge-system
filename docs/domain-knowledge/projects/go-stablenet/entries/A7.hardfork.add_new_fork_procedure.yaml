@@ -66,8 +66,8 @@ english_aliases:
 
 related_concepts:
   - A4.system_contracts.addresses
-  - A7.hardfork.collect_upgrades_ordering
-  - A8.genesis.inject_contracts
+  - A8.genesis.inject_contracts_two_phase
+  - A8.genesis.bootstrap_architecture
 
 invariants:
   - "Each new fork's block number must be >= the previous fork's block number (enforced by CheckConfigForkOrder)."

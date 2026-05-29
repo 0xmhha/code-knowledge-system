@@ -1,0 +1,91 @@
+id: A8.genesis.bootstrap_architecture
+subsystem: A8
+knowledge_type: B1
+title: "Genesis bootstrap architecture: from JSON to first block on disk"
+
+summary: |
+  Node startup with an empty DB takes a Genesis struct (parsed from
+  embedded JSON for Mainnet/Testnet) through three sequential stages:
+  (1) validateAnzeonGenesisConfig enforces that the Anzeon section is
+  well-formed; (2) initializeAnzeonGenesis builds the initial block
+  Extra (vanity + initial validator set + initial BLS keys) and calls
+  InjectContracts which deploys every system contract listed in
+  config.Anzeon.SystemContracts plus any block-0 hardfork overlays
+  collected from CollectUpgrades; (3) genesis.ToBlock writes the
+  resulting Alloc to the state DB, computes the state root, and
+  embeds it in the block header; finally genesis.Commit flushes the
+  trie to disk. The genesis_generator CLI uses the same path with
+  user-supplied parameters and serialises the result to JSON for
+  bootstrapping a new network.
+
+code_anchors:
+  - file: core/genesis.go
+    symbol: SetupGenesisBlockWithOverride
+    line: 282
+    reason: "top-level entry point invoked by node init"
+  - file: core/genesis.go
+    symbol: validateAnzeonGenesisConfig
+    line: 231
+    reason: "stage 1 — schema/shape validation"
+  - file: core/genesis.go
+    symbol: initializeAnzeonGenesis
+    line: 242
+    reason: "stage 2 — initial Extra + InjectContracts"
+  - file: core/genesis.go
+    symbol: "Genesis.ToBlock"
+    line: 510
+    reason: "stage 3a — Alloc → stateDB, computes state root"
+  - file: core/genesis.go
+    symbol: "Genesis.Commit"
+    line: 575
+    reason: "stage 3b — flush state trie to disk"
+  - file: core/genesis.go
+    symbol: InjectContracts
+    line: 735
+    reason: "deploys the 5 system contracts + applies any block-0 hardfork overlays"
+  - file: core/stablenet_genesis.go
+    reason: "embedded Mainnet/Testnet genesis JSON"
+  - file: cmd/genesis_generator/
+    reason: "CLI that generates a fresh network's genesis JSON"
+
+code_keywords:
+  - SetupGenesisBlockWithOverride
+  - validateAnzeonGenesisConfig
+  - initializeAnzeonGenesis
+  - InjectContracts
+  - applyUpgradeOverlay
+  - CreateInitialExtraData
+  - ToBlock
+  - Commit
+  - CollectUpgrades
+  - genesis_generator
+
+korean_aliases:
+  - "제네시스 부트스트랩"
+  - "제네시스 블록 생성"
+  - "노드 초기화 흐름"
+  - "Genesis JSON 적용"
+
+english_aliases:
+  - "genesis bootstrap"
+  - "node initialization flow"
+  - "first block setup"
+
+related_concepts:
+  - A4.system_contracts.addresses
+  - A7.hardfork.add_new_fork_procedure
+  - A8.genesis.inject_contracts_two_phase
+
+existing_doc_ref:
+  - file: .claude/docs/SYSTEM_CONTRACT_FLOW.md
+    section: "2. Path A — Genesis Initialization (Block 0)"
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "20. 제네시스 생성"
+
+risk_level: low
+source_of_truth: "code+docs"
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

@@ -60,7 +60,6 @@ english_aliases:
 related_concepts:
   - A5.account_extra.bit_layout
   - A6.fee_delegation.signing_model
-  - A11.tx_types.taxonomy
 
 invariants:
   - "Every blacklist check is gated by rules.IsAnzeon — pre-Anzeon nodes do not apply these guards."

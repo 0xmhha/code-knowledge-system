@@ -48,9 +48,8 @@ english_aliases:
   - "voting quorum"
 
 related_concepts:
-  - A1.wbft_core.preprepare
-  - A1.wbft_core.commit
-  - A3.validator_set.f_function
+  - A1.wbft_core.consensus_flow_architecture
+  - A3.validator_set.epoch_transition
 
 invariants:
   - "ValidatorSet.F() returns float64. Casting to int before division loses precision and produces a wrong QuorumSize for some N."

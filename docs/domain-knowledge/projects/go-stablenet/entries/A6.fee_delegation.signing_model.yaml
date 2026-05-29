@@ -54,7 +54,6 @@ english_aliases:
 
 related_concepts:
   - A5.account_extra.bit_layout
-  - A6.anzeon_gas.tip_override
   - A11.state_transition.blacklist_check_points
 
 pitfalls:

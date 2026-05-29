@@ -1,0 +1,99 @@
+id: A9.istanbul_rpc.api_reference
+subsystem: A9
+knowledge_type: B7
+title: "WBFT custom RPC API (istanbul namespace) — method reference"
+
+summary: |
+  The WBFT consensus engine exposes a JSON-RPC API under the istanbul
+  namespace via consensus/wbft/backend/api.go. The methods cover
+  node identity (NodeAddress, IsValidator), block-attestation lookup
+  (GetCommitSignersFromBlock / ByHash), validator-set introspection
+  (GetValidators / AtHash), aggregate activity stats over a range
+  (Status), and raw WBFTExtra inspection (GetWbftExtraInfo). These
+  are the operational entry points for monitoring tools and any
+  external client that needs to confirm who signed which block.
+
+code_anchors:
+  - file: consensus/wbft/backend/api.go
+    symbol: "API.NodeAddress"
+    line: 84
+  - file: consensus/wbft/backend/api.go
+    symbol: "API.GetCommitSignersFromBlock"
+    line: 90
+  - file: consensus/wbft/backend/api.go
+    symbol: "API.GetCommitSignersFromBlockByHash"
+    line: 107
+  - file: consensus/wbft/backend/api.go
+    symbol: "API.GetValidators"
+    line: 136
+  - file: consensus/wbft/backend/api.go
+    symbol: "API.GetValidatorsAtHash"
+    line: 156
+  - file: consensus/wbft/backend/api.go
+    symbol: "API.Status"
+    line: 168
+    reason: "validator activity statistics over a range"
+  - file: consensus/wbft/backend/api.go
+    symbol: BlockSigners
+    reason: "return type for GetCommitSignersFromBlock"
+  - file: consensus/wbft/backend/api.go
+    symbol: Status
+    line: 76
+    reason: "return type for Status method"
+
+code_keywords:
+  - istanbul
+  - NodeAddress
+  - GetCommitSignersFromBlock
+  - GetCommitSignersFromBlockByHash
+  - GetValidators
+  - GetValidatorsAtHash
+  - IsValidator
+  - GetWbftExtraInfo
+  - Status
+  - BlockSigners
+  - SealerActivity
+  - AuthorCounts
+  - RoundStats
+
+korean_aliases:
+  - "WBFT RPC API"
+  - "istanbul 네임스페이스"
+  - "검증자 RPC"
+  - "블록 서명자 조회"
+
+english_aliases:
+  - "WBFT JSON-RPC"
+  - "istanbul namespace API"
+  - "validator activity stats"
+
+related_concepts:
+  - A3.validator_set.epoch_transition
+  - A2.block_encoding.wbft_extra_struct
+
+constants:
+  - name: rpc_namespace
+    value: "istanbul"
+    source_file: consensus/wbft/backend/api.go
+  - name: NodeAddress_params
+    value: 0
+    unit: parameters
+    source_file: consensus/wbft/backend/api.go
+  - name: GetValidators_params
+    value: "*rpc.BlockNumber"
+    source_file: consensus/wbft/backend/api.go
+  - name: Status_params
+    value: "*rpc.BlockNumber x2 (start, end)"
+    source_file: consensus/wbft/backend/api.go
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "15. WBFT 커스텀 RPC API"
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P1
+
+last_verified_at: null
+verified_by: null

@@ -1,0 +1,87 @@
+id: A8.genesis.inject_contracts_two_phase
+subsystem: A8
+knowledge_type: B3
+title: "InjectContracts two-phase deploy: baseline then block-0 hardfork overlay"
+
+summary: |
+  InjectContracts seeds genesis.Alloc with system contract code and
+  storage in two ordered phases. Phase 1 calls
+  GetSystemContractsTransition with config.Anzeon.SystemContracts —
+  this deploys every v1 contract and runs each initializeXxx() to
+  populate its full Solidity storage layout. Phase 2 iterates
+  config.CollectUpgrades() and applies, for each upgrade whose block
+  is 0, applyUpgradeOverlay onto the same Alloc. The overlay path
+  REPLACES the contract Code only and merges any explicit State
+  entries; pre-existing Balance and Storage from Phase 1 are
+  preserved. Upgrades whose Block is not 0 are skipped at genesis
+  time and are instead applied at runtime by Engine.processFinalize
+  when the chain reaches their activation height.
+
+code_anchors:
+  - file: core/genesis.go
+    symbol: InjectContracts
+    line: 735
+    reason: "two-phase entry point"
+  - file: core/genesis.go
+    symbol: applyUpgradeOverlay
+    line: 774
+    reason: "code-only overlay semantics for block-0 hardforks"
+  - file: systemcontracts/systemcontracts.go
+    symbol: GetSystemContractsTransition
+    reason: "Phase 1 transition builder — deploys code + runs initializers"
+  - file: params/config.go
+    symbol: "ChainConfig.CollectUpgrades"
+    reason: "ascending-block-order list of system contract upgrades"
+
+code_keywords:
+  - InjectContracts
+  - applyUpgradeOverlay
+  - GetSystemContractsTransition
+  - CollectUpgrades
+  - Anzeon
+  - SystemContracts
+  - "genesis.Alloc"
+  - Upgrade
+
+korean_aliases:
+  - "InjectContracts"
+  - "시스템 컨트랙트 배포"
+  - "제네시스 오버레이"
+  - "Anzeon 베이스라인"
+  - "block-0 하드포크"
+
+english_aliases:
+  - "system contract injection"
+  - "genesis overlay"
+  - "block-0 hardfork deployment"
+
+related_concepts:
+  - A4.system_contracts.addresses
+  - A8.genesis.bootstrap_architecture
+  - A7.hardfork.add_new_fork_procedure
+
+invariants:
+  - "Phase 1 runs before Phase 2; Phase 2 entries with Block != 0 are skipped here and handled by processFinalize at runtime."
+  - "applyUpgradeOverlay replaces Code only; Balance and Storage written by Phase 1 are preserved unless the upgrade explicitly supplies State entries."
+  - "initializeXxx() functions are called only on Version == \"v1\" during Phase 1 — running them again during an overlay would corrupt storage."
+  - "CollectUpgrades returns entries in ascending block order; the runtime path relies on this and breaks on the first block > target, so out-of-order genesis entries silently drop later upgrades."
+
+pitfalls:
+  - "Adding a block-0 hardfork that supplies a Params map intended to re-initialize storage — the overlay path will not run the initializer, producing a contract whose storage layout disagrees with its code."
+  - "Assuming Mainnet behaviour generalises to Testnet: Mainnet BohoBlock = 0 so Boho's GovMinter v2 is applied via overlay; Testnet BohoBlock = 100 so the overlay is skipped and v2 only appears later via processFinalize."
+  - "Skipping CollectUpgrades wiring for a new hardfork — the overlay never runs and the upgraded contract code is never deployed."
+
+existing_doc_ref:
+  - file: .claude/docs/SYSTEM_CONTRACT_FLOW.md
+    section: "2. Path A — Genesis Initialization (Block 0)"
+    subsection: "Phase 1 / Phase 2"
+  - file: .claude/docs/review-test-result-with-ast.md
+    section: "4. 불변식 & 금지 사항"
+
+risk_level: low
+source_of_truth: "code+docs"
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

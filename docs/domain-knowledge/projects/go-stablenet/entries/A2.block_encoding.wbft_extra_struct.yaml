@@ -1,0 +1,113 @@
+id: A2.block_encoding.wbft_extra_struct
+subsystem: A2
+knowledge_type: B2
+title: "WBFTExtra struct layout and contained types"
+
+summary: |
+  WBFTExtra is the RLP-encoded payload that lives inside every WBFT
+  block's Header.Extra. It carries vanity bytes, randao reveal, the
+  previous and current round numbers, the previous and current
+  PreparedSeal / CommittedSeal aggregated BLS signatures, the
+  governance-voted GasTip for this block, and (on epoch-boundary
+  blocks only) the EpochInfo that pins the next epoch's validator
+  set. AggregatedSeal pairs a SealerSet bit-packed bitmap with a 96-byte
+  BLS aggregate signature; the bit index in SealerSet corresponds to
+  the validator index in the active ValidatorSet. EpochInfo lists
+  Candidate {Addr, Diligence} entries plus a Validators slice of
+  *indices* (not addresses) into Candidates, and a parallel
+  BLSPublicKeys slice.
+
+code_anchors:
+  - file: core/types/istanbul.go
+    symbol: WBFTExtra
+    line: 81
+    reason: "main struct definition"
+  - file: core/types/istanbul.go
+    symbol: WBFTAggregatedSeal
+    line: 52
+    reason: "PreparedSeal / CommittedSeal payload (BLS aggregate)"
+  - file: core/types/istanbul.go
+    symbol: SealerSet
+    line: 290
+    reason: "bit-packed bitmap; SetSealer / IsSealer / GetSealers helpers"
+  - file: core/types/istanbul.go
+    symbol: EpochInfo
+    line: 99
+    reason: "next-epoch validator manifest"
+  - file: core/types/istanbul.go
+    symbol: Candidate
+    line: 94
+    reason: "{Addr, Diligence} entry referenced by EpochInfo.Validators indices"
+  - file: core/types/istanbul.go
+    symbol: IstanbulExtraVanity
+    line: 34
+    reason: "32-byte fixed vanity prefix"
+  - file: core/types/istanbul.go
+    symbol: IstanbulExtraSeal
+    line: 35
+    reason: "96-byte fixed BLS signature length"
+
+code_keywords:
+  - WBFTExtra
+  - WBFTAggregatedSeal
+  - SealerSet
+  - SetSealer
+  - IsSealer
+  - GetSealers
+  - EpochInfo
+  - Candidate
+  - IstanbulExtraVanity
+  - IstanbulExtraSeal
+  - ExtractWBFTExtra
+  - VanityData
+  - RandaoReveal
+  - PrevRound
+  - PrevPreparedSeal
+  - PrevCommittedSeal
+  - PreparedSeal
+  - CommittedSeal
+  - GasTip
+
+korean_aliases:
+  - "WBFTExtra 구조"
+  - "블록 헤더 Extra"
+  - "BLS 집계 시그니처"
+  - "SealerSet 비트팩"
+  - "EpochInfo"
+
+english_aliases:
+  - "WBFT extra format"
+  - "block header extra payload"
+  - "BLS aggregate seal"
+  - "sealer bitmap"
+
+related_concepts:
+  - A1.wbft_core.consensus_flow_architecture
+  - A2.block_encoding.filtered_header_hash
+  - A3.validator_set.epoch_transition
+
+constants:
+  - name: IstanbulExtraVanity
+    value: 32
+    unit: bytes
+    source_file: core/types/istanbul.go
+  - name: IstanbulExtraSeal
+    value: 96
+    unit: bytes
+    source_file: core/types/istanbul.go
+  - name: DefaultDiligence
+    value: 1900000
+    unit: "ratio (1e-6 units; 95% of max 2_000_000)"
+    source_file: core/types/istanbul.go
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "14. WBFT 블록 헤더 Extra 포맷"
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

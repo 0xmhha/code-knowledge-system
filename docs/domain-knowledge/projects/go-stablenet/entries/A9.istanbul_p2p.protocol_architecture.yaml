@@ -1,0 +1,95 @@
+id: A9.istanbul_p2p.protocol_architecture
+subsystem: A9
+knowledge_type: B1
+title: "istanbul/100 subprotocol architecture: piggy-backed on eth peers"
+
+summary: |
+  WBFT consensus messages travel over a dedicated P2P subprotocol
+  named istanbul, version 100, registered alongside the standard
+  eth protocol. The 22-message subprotocol does not create its own
+  peer set — every istanbul peer is an existing eth Peer whose
+  EthPeerRegistered channel signals when it is ready to carry
+  consensus traffic. When an istanbul message arrives, the handler
+  dispatches it into the consensus engine's HandleMsg, which routes
+  it to Core.handleEvents. Messages exceeding protocolMaxMsgSize
+  are rejected before any consensus parsing. wbft.ErrStoppedEngine
+  during peer-receive while the eth downloader is synchronising is
+  expected and downgraded to debug-level logging — the engine starts
+  consuming messages only after sync completes.
+
+code_anchors:
+  - file: eth/quorum_protocol.go
+    symbol: Istanbul100
+    line: 39
+    reason: "protocol version constant"
+  - file: eth/quorum_protocol.go
+    symbol: quorumConsensusProtocolName
+    line: 41
+    reason: "protocol name literal — \"istanbul\""
+  - file: eth/quorum_protocol.go
+    symbol: quorumConsensusProtocolLengths
+    line: 54
+    reason: "22 messages on Istanbul100"
+  - file: eth/handler_istanbul.go
+    symbol: EthPeerRegistered
+    line: 82
+    reason: "eth-peer-ready signal — istanbul reuses eth peers, never creates its own"
+  - file: eth/handler_istanbul.go
+    symbol: protocolMaxMsgSize
+    line: 138
+    reason: "message size gate — rejection happens before consensus parsing"
+  - file: eth/handler_istanbul.go
+    symbol: "wbft.ErrStoppedEngine"
+    line: 120
+    reason: "sync-time error path — debug log only, not warn/error"
+  - file: consensus/wbft/backend/handler.go
+    reason: "HandleMsg implementation that bridges P2P to consensus Core"
+
+code_keywords:
+  - Istanbul100
+  - quorumConsensusProtocolName
+  - quorumConsensusProtocolVersions
+  - quorumConsensusProtocolLengths
+  - EthPeerRegistered
+  - HandleMsg
+  - protocolMaxMsgSize
+  - ErrStoppedEngine
+
+korean_aliases:
+  - "istanbul 프로토콜"
+  - "P2P 합의 프로토콜"
+  - "istanbul/100"
+  - "합의 메시지 전송"
+
+english_aliases:
+  - "istanbul subprotocol"
+  - "consensus P2P"
+  - "p2p consensus piggyback"
+
+related_concepts:
+  - A1.wbft_core.consensus_flow_architecture
+
+constants:
+  - name: Istanbul100
+    value: 100
+    unit: protocol_version
+    source_file: eth/quorum_protocol.go
+  - name: quorumConsensusProtocolName
+    value: "istanbul"
+    source_file: eth/quorum_protocol.go
+  - name: "Istanbul100 message count"
+    value: 22
+    unit: messages
+    source_file: eth/quorum_protocol.go
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "16. Istanbul P2P 프로토콜"
+
+risk_level: low
+source_of_truth: "code+docs"
+status: needs_verification
+priority: P1
+
+last_verified_at: null
+verified_by: null
