@@ -1,0 +1,79 @@
+id: A5.native_coin.issuance_burn_flow
+subsystem: A5
+knowledge_type: B3
+title: "Native coin issuance and burn via NativeCoinManager precompile"
+
+summary: |
+  Native coin mint, burn, and transfer are precompile operations on
+  NativeCoinManager. coinManagerMint credits a target address;
+  coinManagerBurn debits an account; coinManagerTransfer moves between
+  accounts without changing total supply. All three gate on
+  canRunCoinManger, which requires the caller to be NativeCoinAdapter
+  (0x1000) and the opcode to be CALL (not DELEGATECALL or STATICCALL).
+  Total-supply changes therefore route exclusively through 0x1000.
+
+code_anchors:
+  - file: core/vm/native_manager.go
+    symbol: "coinManagerMint.Run"
+    line: 202
+    reason: "executes mint(address,uint256): credits target, increases total supply"
+  - file: core/vm/native_manager.go
+    symbol: "coinManagerMint.CanRun"
+    line: 199
+    reason: "authorisation guard delegating to canRunCoinManger"
+  - file: core/vm/native_manager.go
+    symbol: "coinManagerBurn.Run"
+    line: 225
+    reason: "executes burn(address,uint256): debits account, decreases total supply"
+  - file: core/vm/native_manager.go
+    symbol: "coinManagerTransfer.Run"
+    line: 259
+    reason: "executes transfer(from,to,amount) with no supply change"
+  - file: core/vm/native_manager.go
+    symbol: canRunCoinManger
+    line: 463
+    reason: "central authorisation: caller must be NativeCoinAdapter and op must be CALL"
+
+code_keywords:
+  - coinManagerMint
+  - coinManagerBurn
+  - coinManagerTransfer
+  - canRunCoinManger
+  - NativeCoinAdapter
+  - NativeCoinManager
+
+korean_aliases:
+  - "네이티브 발행"
+  - "네이티브 소각"
+  - "민트 번"
+  - "코인 발행"
+  - "네이티브 매니저"
+
+english_aliases:
+  - "native coin mint"
+  - "native coin burn"
+  - "precompile mint burn"
+  - "supply management"
+
+related_concepts:
+  - A4.system_contracts.gov_minter
+  - A4.system_contracts.addresses
+  - A5.account_extra.bit_layout
+
+invariants:
+  - "coinManagerMint and coinManagerBurn require the EVM caller to be NativeCoinAdapter (0x1000); any other caller fails canRunCoinManger."
+  - "DELEGATECALL and STATICCALL into the precompile are rejected; only CALL is allowed."
+
+pitfalls:
+  - "Assuming mint and burn can be invoked by any contract: they are gated to NativeCoinAdapter, so direct ERC-20-style external calls do not move native supply."
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P1
+
+last_verified_at: null
+verified_by: null

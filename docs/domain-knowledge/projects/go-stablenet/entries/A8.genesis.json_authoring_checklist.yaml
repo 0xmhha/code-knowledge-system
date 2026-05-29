@@ -1,0 +1,74 @@
+id: A8.genesis.json_authoring_checklist
+subsystem: A8
+knowledge_type: B6
+title: "Genesis JSON authoring checklist for stablenet chains"
+
+summary: |
+  validateAnzeonGenesisConfig is the gate every stablenet genesis JSON
+  passes through before initializeAnzeonGenesis materialises the
+  block-zero state. The authoring checklist captures every section the
+  validator requires: ChainConfig with the Anzeon hardfork block, WBFT
+  consensus parameters, the Init section (validators plus matching BLS
+  keys), the SystemContracts section selecting versions for each of
+  the five governance contracts, and per-account Extra bits that must
+  satisfy ValidateExtra. cmd/genesis_generator provides an interactive
+  tool for filling these in.
+
+code_anchors:
+  - file: core/genesis.go
+    symbol: validateAnzeonGenesisConfig
+    line: 231
+    reason: "the gate; calls ChainConfig.Anzeon.CheckValidity on every required section"
+  - file: core/genesis.go
+    symbol: initializeAnzeonGenesis
+    line: 242
+    reason: "after validate succeeds, sets up WBFT extra data and calls InjectContracts"
+  - file: cmd/genesis_generator/genesis_generator.go
+    reason: "interactive CLI that produces a valid genesis JSON skeleton"
+
+procedure_steps:
+  - "Set ChainConfig.Anzeon (block number, hardfork transitions). CheckValidity rejects a missing Anzeon section, so everything below presumes it is present."
+  - "Fill ChainConfig.Anzeon.WBFT with RequestTimeoutSeconds, BlockPeriodSeconds, and EpochLength (see A3.timing.wbft_config_defaults for canonical defaults)."
+  - "Fill ChainConfig.Anzeon.Init.Validators with every initial validator address and matching BLS public key in BLSPublicKeys; the two lists must align by index."
+  - "Fill ChainConfig.Anzeon.SystemContracts: GovValidator, NativeCoinAdapter, GovMasterMinter, GovMinter, GovCouncil. Each entry pins the version (V1 or V2). See A4 entries for canonical addresses and version semantics."
+  - "For every account in Alloc that carries authorisation bits, set Extra so it passes ValidateExtra (see A5.account_extra.bit_layout)."
+  - "Run cmd/genesis_generator to scaffold the JSON, or hand-edit and rely on validateAnzeonGenesisConfig at first start to catch missing fields."
+
+code_keywords:
+  - validateAnzeonGenesisConfig
+  - initializeAnzeonGenesis
+  - InjectContracts
+  - CheckValidity
+  - ValidateExtra
+  - genesis_generator
+
+korean_aliases:
+  - "제네시스 작성"
+  - "제네시스 JSON 체크리스트"
+  - "체인 초기화"
+  - "초기 검증자 설정"
+
+english_aliases:
+  - "genesis authoring"
+  - "chain bootstrap config"
+  - "validator initial set"
+  - "genesis checklist"
+
+related_concepts:
+  - A8.genesis.bootstrap_architecture
+  - A8.genesis.inject_contracts_two_phase
+  - A3.timing.wbft_config_defaults
+  - A4.system_contracts.addresses
+  - A4.system_contracts.gov_minter
+  - A5.account_extra.bit_layout
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P1
+
+last_verified_at: null
+verified_by: null

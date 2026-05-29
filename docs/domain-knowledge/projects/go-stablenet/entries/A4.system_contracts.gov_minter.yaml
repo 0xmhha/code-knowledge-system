@@ -1,0 +1,79 @@
+id: A4.system_contracts.gov_minter
+subsystem: A4
+knowledge_type: B1
+title: "GovMinter (0x1003): native coin minting authority with v1/v2 versions"
+
+summary: |
+  GovMinter is the system contract at address 0x1003 that holds the
+  mint authority for native coin. The MasterMinter (0x1002) approves
+  mint proposals which GovMinter executes against NativeCoinAdapter
+  (0x1000). Two versioned implementations exist: v1 (initial) and v2
+  (current). ChainConfig.Anzeon.SystemContracts.GovMinter selects the
+  version per chain. Storage tracks the fiat-token reference, mint
+  proposals, per-account burn balances, refundable balances, and
+  emergency-pause state.
+
+code_anchors:
+  - file: systemcontracts/gov_minter.go
+    symbol: initializeMinter
+    line: 87
+    reason: "Go initializer writes fiatToken from genesis param into contract storage at deploy time"
+  - file: systemcontracts/gov_minter.go
+    symbol: GetMintProposalAmount
+    line: 122
+    reason: "reads the reserved mint amount for a given proposalId from contract storage"
+  - file: systemcontracts/gov_minter.go
+    symbol: GetBurnBalance
+    line: 130
+    reason: "reads per-address burn balance from contract storage"
+  - file: systemcontracts/contracts.go
+    symbol: GovMinterContractV1
+    line: 44
+    reason: "go:embed of compiled v1 bytecode at artifacts/v1/GovMinter"
+  - file: systemcontracts/contracts.go
+    symbol: GovMinterContractV2
+    line: 53
+    reason: "go:embed of compiled v2 bytecode at artifacts/v2/GovMinter"
+  - file: systemcontracts/solidity/v1/GovMinter.sol
+    reason: "Solidity source for v1 (regenerate artifacts via systemcontracts/compile)"
+  - file: systemcontracts/solidity/v2/GovMinter.sol
+    reason: "Solidity source for v2"
+
+code_keywords:
+  - GovMinter
+  - initializeMinter
+  - GovMinterContractV1
+  - GovMinterContractV2
+  - GetMintProposalAmount
+  - GetBurnBalance
+  - GetRefundableBalance
+  - CONTRACT_GOV_MINTER
+
+korean_aliases:
+  - "거브 민터"
+  - "민터 컨트랙트"
+  - "발행 권한"
+  - "민팅 시스템 컨트랙트"
+
+english_aliases:
+  - "minter contract"
+  - "minting authority"
+  - "native coin minter"
+  - "0x1003 contract"
+
+related_concepts:
+  - A4.system_contracts.addresses
+  - A5.native_coin.issuance_burn_flow
+  - A8.genesis.inject_contracts_two_phase
+  - A10.codegen.contract_regen_procedure
+
+existing_doc_ref:
+  - file: .claude/docs/SYSTEM_CONTRACT_FLOW.md
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P1
+
+last_verified_at: null
+verified_by: null

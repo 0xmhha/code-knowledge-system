@@ -1,0 +1,75 @@
+id: A6.anzeon_gas.tip_override
+subsystem: A6
+knowledge_type: B3
+title: "Anzeon authorized-account gas tip override"
+
+summary: |
+  Under the Anzeon hardfork, AnzeonTipEnv overrides the effective gas
+  tip for transactions signed by authorised accounts. GetAnzeonTipCap
+  returns the transaction's own GasTipCap (the sender's chosen tip)
+  for authorised senders, and the block header's GasTip for everyone
+  else. Authorisation is read from StateAccount.Extra at the current
+  block's state root; AnzeonTipEnv caches the lookup per block to avoid
+  re-reading state on every transaction.
+
+code_anchors:
+  - file: eth/gasprice/anzeon.go
+    symbol: AnzeonTipEnv
+    line: 31
+    reason: "struct holding currentBlock, currentState, signer cache for per-block tip evaluation"
+  - file: eth/gasprice/anzeon.go
+    symbol: "AnzeonTipEnv.SetCurrentBlock"
+    line: 53
+    reason: "advances to a new block, refreshes state when root or header GasTip changes"
+  - file: eth/gasprice/anzeon.go
+    symbol: "AnzeonTipEnv.IsAnzeon"
+    line: 74
+    reason: "gate: the override only applies when IsAnzeon is true at the current block"
+  - file: eth/gasprice/anzeon.go
+    symbol: "AnzeonTipEnv.GetAnzeonTipCap"
+    line: 104
+    reason: "the override itself: returns tx tip for authorised senders, block GasTip otherwise"
+
+code_keywords:
+  - AnzeonTipEnv
+  - GetAnzeonTipCap
+  - NewAnzeonTipEnv
+  - SetCurrentBlock
+  - SetBaseFee
+  - GetBaseFee
+  - IsAnzeon
+
+korean_aliases:
+  - "안제온 가스 팁"
+  - "팁 오버라이드"
+  - "권한 계정 팁"
+  - "가스 가격 우대"
+
+english_aliases:
+  - "anzeon tip cap"
+  - "authorized account tip"
+  - "gas tip override"
+  - "minter gas discount"
+
+related_concepts:
+  - A5.account_extra.bit_layout
+  - A6.fee_delegation.signing_model
+  - A7.hardfork.add_new_fork_procedure
+
+invariants:
+  - "AnzeonTipEnv is only consulted on chains where IsAnzeon returns true at the current block; pre-Anzeon blocks use the standard tip path."
+  - "The cached state is invalidated when SetCurrentBlock observes a new block whose state root or header GasTip differs from the cache."
+
+pitfalls:
+  - "Reusing a stale AnzeonTipEnv across a reorg can yield wrong authorisation answers: the consumer must call SetCurrentBlock on each new block before reading GetAnzeonTipCap."
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P1
+
+last_verified_at: null
+verified_by: null

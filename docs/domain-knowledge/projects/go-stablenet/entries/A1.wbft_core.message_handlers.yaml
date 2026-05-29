@@ -1,0 +1,74 @@
+id: A1.wbft_core.message_handlers
+subsystem: A1
+knowledge_type: B3
+title: "WBFT consensus message handlers: preprepare, prepare, commit"
+
+summary: |
+  Three handlers drive the per-round state machine. handlePreprepareMsg
+  validates the proposer's block and transitions to StatePreprepared;
+  handlePrepareMsg accumulates PREPARE votes and transitions to
+  StatePrepared at quorum; handleCommitMsg accumulates COMMIT votes and
+  finalises the block at quorum. Every handler verifies the message
+  signature, the sequence/round view, and the sender's authorisation
+  before applying state changes.
+
+code_anchors:
+  - file: consensus/wbft/core/preprepare.go
+    symbol: "Core.handlePreprepareMsg"
+    line: 113
+    reason: "validates proposer signature and block, transitions to StatePreprepared"
+  - file: consensus/wbft/core/prepare.go
+    symbol: "Core.handlePrepareMsg"
+    line: 87
+    reason: "accumulates PREPARE messages, transition to StatePrepared at QuorumSize"
+  - file: consensus/wbft/core/commit.go
+    symbol: "Core.handleCommitMsg"
+    line: 90
+    reason: "accumulates COMMIT messages, finalises block at QuorumSize"
+
+code_keywords:
+  - handlePreprepareMsg
+  - handlePrepareMsg
+  - handleCommitMsg
+  - StatePreprepared
+  - StatePrepared
+  - StateCommitted
+  - WBFTPrepares
+  - WBFTCommits
+
+korean_aliases:
+  - "프리프리페어"
+  - "프리페어"
+  - "커밋 메시지"
+  - "합의 메시지 처리"
+  - "BFT 메시지 핸들러"
+
+english_aliases:
+  - "BFT message handlers"
+  - "preprepare prepare commit"
+  - "WBFT state transitions"
+  - "consensus phase handlers"
+
+related_concepts:
+  - A1.wbft_core.consensus_flow_architecture
+  - A1.wbft_core.quorum_calc
+  - A1.wbft_core.round_change_protocol
+
+invariants:
+  - "Each handler is idempotent for duplicate messages from the same sender at the same view (sequence, round)."
+  - "Per-round state progresses strictly StatePreprepared -> StatePrepared -> StateCommitted; out-of-order messages are buffered or rejected."
+
+pitfalls:
+  - "Treating a PREPARE quorum as committable proof: PREPARE quorum only justifies the prepared block inside ROUND-CHANGE messages. Block finalisation requires a COMMIT quorum."
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "13. WBFT 합의 엔진 내부 구조"
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

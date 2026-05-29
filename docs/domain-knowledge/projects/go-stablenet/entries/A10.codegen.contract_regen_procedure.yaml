@@ -1,0 +1,79 @@
+id: A10.codegen.contract_regen_procedure
+subsystem: A10
+knowledge_type: B6
+title: "System contract artifact regeneration: solc 0.8.14 to artifacts/v1 and v2"
+
+summary: |
+  System contract bytecode (governance v1 and v2, NativeCoinAdapter) is
+  produced by systemcontracts/compile. The tool downloads solc 0.8.14
+  to ~/.solc-bin if absent, invokes it on the Solidity sources under
+  systemcontracts/solidity/, and writes binaries to
+  systemcontracts/artifacts/v1 and artifacts/v2/. Those binaries are
+  go:embed'd into contracts.go and consumed at genesis time via
+  InjectContracts. The do-not-edit constraint on the artifacts (see
+  A10.codegen.no_edit_zones) is enforced by re-running this procedure,
+  not by static checks.
+
+code_anchors:
+  - file: systemcontracts/compile/main.go
+    reason: "entry point; orchestrates compile and ExportContractCode for v1 and v2 sources"
+  - file: systemcontracts/compile/compiler/compiler.go
+    symbol: solcVersion
+    line: 37
+    reason: "pinned solc version; bump here when intentionally upgrading the compiler"
+  - file: systemcontracts/compile/compiler/compiler.go
+    symbol: Compile
+    line: 40
+    reason: "downloads solc to ~/.solc-bin, runs it, parses ParseCombinedJSON output"
+  - file: systemcontracts/compile/compiler/compiler.go
+    symbol: "compiledTy.ExportContractCode"
+    line: 123
+    reason: "writes the bytecode files under systemcontracts/artifacts/"
+  - file: systemcontracts/contracts.go
+    reason: "go:embed lines that consume the artifacts; new versions are wired here"
+
+procedure_steps:
+  - "Edit the Solidity sources under systemcontracts/solidity/v1/ or v2/ as appropriate."
+  - "Run `go run ./systemcontracts/compile`. The first run downloads solc 0.8.14 into ~/.solc-bin if absent."
+  - "Verify systemcontracts/artifacts/v1/<ContractName> or v2/<ContractName> were updated; the binary content is hex-encoded bytecode."
+  - "When adding a new version (e.g. v3), add a go:embed line in systemcontracts/contracts.go pointing at artifacts/v3/<ContractName> and register it in SystemContractCodes."
+  - "Run go test ./systemcontracts/... and consensus integration tests to confirm the new artifact deploys correctly under InjectContracts."
+  - "Do not hand-edit anything under systemcontracts/artifacts/; those files are codegen output (see A10.codegen.no_edit_zones)."
+
+code_keywords:
+  - solcVersion
+  - Compile
+  - ExportContractCode
+  - GovMinterContractV1
+  - GovMinterContractV2
+  - SystemContractCodes
+  - CONTRACT_GOV_MINTER
+  - "go:embed"
+
+korean_aliases:
+  - "시스템 컨트랙트 재생성"
+  - "솔리디티 컴파일"
+  - "아티팩트 빌드"
+  - "컨트랙트 코드젠"
+
+english_aliases:
+  - "regenerate contracts"
+  - "solc compile pipeline"
+  - "artifact regeneration"
+  - "system contract codegen"
+
+related_concepts:
+  - A4.system_contracts.addresses
+  - A4.system_contracts.gov_minter
+  - A10.codegen.no_edit_zones
+
+existing_doc_ref:
+  - file: .claude/docs/BUILD_SOURCE_FILES.md
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P2
+
+last_verified_at: null
+verified_by: null

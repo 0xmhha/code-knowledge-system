@@ -88,7 +88,7 @@
     applyUpgradeOverlay code-only semantics, genesis_generator CLI.
   code_paths:
     - core/genesis.go
-    - core/stablenet_genesis.go
+    - core/genesis_alloc.go
     - cmd/genesis_generator/
 
 - id: A9

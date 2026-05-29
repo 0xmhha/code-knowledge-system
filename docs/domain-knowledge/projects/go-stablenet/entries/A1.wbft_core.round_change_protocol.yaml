@@ -1,0 +1,82 @@
+id: A1.wbft_core.round_change_protocol
+subsystem: A1
+knowledge_type: B3
+title: "WBFT round change: timeout-triggered round bump with prepared-block justification"
+
+summary: |
+  WBFT recovers from a stuck round (PRE-PREPARE or COMMIT quorum not
+  reached within RequestTimeout) by broadcasting a ROUND-CHANGE message
+  for round+1. The message carries the highest prepared block and its
+  PREPARE justification from prior rounds; a node accepts the view
+  change once it has collected a quorum of ROUND-CHANGE messages for
+  the same target round.
+
+code_anchors:
+  - file: consensus/wbft/core/roundchange.go
+    symbol: "Core.broadcastNextRoundChange"
+    line: 40
+    reason: "entry point fired on RequestTimeout; increments round and broadcasts a signed ROUND-CHANGE"
+  - file: consensus/wbft/core/roundchange.go
+    symbol: "Core.broadcastRoundChange"
+    line: 52
+    reason: "builds and signs ROUND-CHANGE for a target round, attaches prepared-block justification"
+  - file: consensus/wbft/core/roundchange.go
+    symbol: "Core.handleRoundChangeMsg"
+    line: 103
+    reason: "validates and accumulates incoming ROUND-CHANGE messages, triggers view change at quorum"
+  - file: consensus/wbft/messages/roundchange.go
+    symbol: RoundChange
+    line: 37
+    reason: "message struct: Sequence, Round, PreparedRound, PreparedBlock"
+  - file: consensus/wbft/messages/roundchange.go
+    symbol: SignedRoundChangePayload
+    line: 64
+    reason: "signed payload, encodePayloadInternal defines the digest used for signing"
+
+code_keywords:
+  - broadcastNextRoundChange
+  - broadcastRoundChange
+  - handleRoundChangeMsg
+  - RoundChange
+  - SignedRoundChangePayload
+  - PreparedRound
+  - PreparedBlock
+  - StateNewRound
+
+korean_aliases:
+  - "라운드 체인지"
+  - "라운드 변경"
+  - "뷰 체인지"
+  - "타임아웃 처리"
+  - "재라운드"
+
+english_aliases:
+  - "view change"
+  - "round bump"
+  - "consensus timeout recovery"
+  - "BFT round change"
+
+related_concepts:
+  - A1.wbft_core.consensus_flow_architecture
+  - A1.wbft_core.quorum_calc
+  - A1.wbft_core.message_handlers
+  - A3.timing.wbft_config_defaults
+
+invariants:
+  - "A ROUND-CHANGE carries the highest prepared block this node has seen, so a quorum of view changes resumes from that prepared state and never from a lower round."
+  - "ROUND-CHANGE quorum threshold matches the PREPARE/COMMIT quorum (see A1.wbft_core.quorum_calc)."
+
+pitfalls:
+  - "Bumping rounds without attaching the prepared-block justification when one exists: the cluster can fork by accepting two different blocks at different rounds for the same height."
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "13. WBFT 합의 엔진 내부 구조"
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

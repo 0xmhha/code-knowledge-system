@@ -43,8 +43,9 @@ code_anchors:
     symbol: InjectContracts
     line: 735
     reason: "deploys the 5 system contracts + applies any block-0 hardfork overlays"
-  - file: core/stablenet_genesis.go
-    reason: "embedded Mainnet/Testnet genesis JSON"
+  - file: core/genesis.go
+    symbol: DefaultStableNetMainnetGenesisBlock
+    reason: "embedded Mainnet/Testnet genesis builders (also DefaultStableNetTestnetGenesisBlock); consumed by cmd/utils/flags.go to bootstrap a node with the canonical chain"
   - file: cmd/genesis_generator/
     reason: "CLI that generates a fresh network's genesis JSON"
 

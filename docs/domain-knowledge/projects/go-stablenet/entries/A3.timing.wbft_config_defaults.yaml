@@ -1,0 +1,75 @@
+id: A3.timing.wbft_config_defaults
+subsystem: A3
+knowledge_type: B7
+title: "WBFT timing and config defaults: RequestTimeout, BlockPeriod, EpochLength"
+
+summary: |
+  WBFT consensus timing is parameterised by RequestTimeoutSeconds (per-
+  round timeout before bumping rounds), BlockPeriodSeconds (target
+  inter-block interval enforced by the proposer), and EpochLength
+  (blocks per epoch, after which the validator set transitions). The
+  Anzeon default config sets these to 2 / 1 / 10 respectively; chains
+  may override per-network. CheckValidity enforces ranges at genesis
+  load time.
+
+code_anchors:
+  - file: params/config_wbft.go
+    symbol: WBFTConfig
+    line: 186
+    reason: "struct holding RequestTimeoutSeconds, BlockPeriodSeconds, EpochLength, ProposerPolicy, MaxRequestTimeoutSeconds"
+  - file: params/config_wbft.go
+    symbol: "WBFTConfig.CheckValidity"
+    reason: "rejects non-positive timing values and EpochLength < 2 at genesis time"
+
+constants:
+  - name: RequestTimeoutSeconds
+    value: 2
+    unit: "seconds"
+    source_file: params/config_wbft.go
+  - name: BlockPeriodSeconds
+    value: 1
+    unit: "seconds"
+    source_file: params/config_wbft.go
+  - name: EpochLength
+    value: 10
+    unit: "blocks"
+    source_file: params/config_wbft.go
+
+code_keywords:
+  - WBFTConfig
+  - RequestTimeoutSeconds
+  - BlockPeriodSeconds
+  - EpochLength
+  - MaxRequestTimeoutSeconds
+  - ProposerPolicy
+  - DefaultAnzeonConfig
+  - CheckValidity
+
+korean_aliases:
+  - "라운드 타임아웃"
+  - "블록 주기"
+  - "에폭 길이"
+  - "합의 타이밍"
+  - "WBFT 기본 설정"
+
+english_aliases:
+  - "WBFT timing parameters"
+  - "consensus timeouts"
+  - "epoch length"
+  - "block period"
+
+related_concepts:
+  - A1.wbft_core.round_change_protocol
+  - A3.validator_set.epoch_transition
+
+invariants:
+  - "RequestTimeoutSeconds and BlockPeriodSeconds are strictly positive; EpochLength is at least 2."
+  - "Validator set transitions occur at block heights that are multiples of EpochLength."
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P1
+
+last_verified_at: null
+verified_by: null
