@@ -52,6 +52,7 @@ import (
 	"github.com/0xmhha/code-knowledge-system/internal/config"
 	"github.com/0xmhha/code-knowledge-system/internal/footprint"
 	cksmcp "github.com/0xmhha/code-knowledge-system/internal/mcp"
+	"github.com/0xmhha/code-knowledge-system/internal/vocab"
 )
 
 // builderVersion is stamped into the MCP server name/version handshake and
@@ -114,7 +115,12 @@ func run(ctx context.Context, configPath string) error {
 	// returned EvidencePack is the operator's drift signal.
 	fetcher := &budget.FilesystemFetcher{Root: cfg.Backends.CKG.SourceRoot}
 
-	c, err := buildComposer(ctx, ckg, ckv, embedder, fetcher, ruleset, fp)
+	vocabResolver, err := buildVocabResolver(cfg.Vocab.GlossaryPath)
+	if err != nil {
+		return fmt.Errorf("vocab.Load: %w", err)
+	}
+
+	c, err := buildComposer(ctx, ckg, ckv, embedder, fetcher, ruleset, vocabResolver, fp)
 	if err != nil {
 		return fmt.Errorf("build composer: %w", err)
 	}
@@ -144,6 +150,20 @@ func buildCKGClient(path string) (ckgclient.Client, func() error, error) {
 		return nil, func() error { return nil }, err
 	}
 	return real, real.Close, nil
+}
+
+// buildVocabResolver loads the project glossary at the configured path
+// and wraps it in a vocab.Resolver. An empty path skips loading and
+// returns (nil, nil) — Stage 1 treats a nil resolver as "no expansion"
+// and continues with the verbatim prompt, so vocab is strictly opt-in.
+// A path that points at a missing or malformed file is fatal here; we
+// would rather refuse to start than silently lose the expansion the
+// operator asked for.
+func buildVocabResolver(path string) (*vocab.Resolver, error) {
+	if path == "" {
+		return nil, nil
+	}
+	return vocab.Load(path)
 }
 
 // buildCKVClient picks the real ckv adapter (subprocess MCP proxy) when
@@ -209,13 +229,18 @@ func buildComposer(
 	embedder intent.Embedder,
 	fetcher budget.BodyFetcher,
 	ruleset *config.SanitizeRuleset,
+	vocabResolver *vocab.Resolver,
 	fp *footprint.Logger,
 ) (*composer.Composer, error) {
 	ic, err := intent.New(ctx, embedder, intent.WithFootprint(fp))
 	if err != nil {
 		return nil, fmt.Errorf("intent.New: %w", err)
 	}
-	s1, err := stage1.New(ckv, ckg, stage1.WithFootprint(fp))
+	stage1Opts := []stage1.Option{stage1.WithFootprint(fp)}
+	if vocabResolver != nil {
+		stage1Opts = append(stage1Opts, stage1.WithVocab(vocabResolver))
+	}
+	s1, err := stage1.New(ckv, ckg, stage1Opts...)
 	if err != nil {
 		return nil, fmt.Errorf("stage1.New: %w", err)
 	}

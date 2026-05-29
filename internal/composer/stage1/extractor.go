@@ -33,6 +33,7 @@ import (
 	"github.com/0xmhha/code-knowledge-system/internal/ckgclient"
 	"github.com/0xmhha/code-knowledge-system/internal/ckvclient"
 	"github.com/0xmhha/code-knowledge-system/internal/footprint"
+	"github.com/0xmhha/code-knowledge-system/internal/vocab"
 	"github.com/0xmhha/code-knowledge-system/pkg/contract"
 )
 
@@ -102,12 +103,25 @@ type Stage1Output struct {
 	// each round. Round 0 is the raw prompt; later entries are
 	// prompt + " " + top reranked keywords.
 	AugmentedQueries []string
+
+	// VocabExpanded reports whether the vocabulary resolver matched at
+	// least one glossary entry against the original prompt. False means
+	// either no resolver was wired or no alias hit; in both cases the
+	// ckv query and the prompt match verbatim.
+	VocabExpanded bool
+
+	// VocabKeywords are the code keywords appended to the original prompt
+	// by the vocabulary resolver. Empty when VocabExpanded is false.
+	// Stage 2 can union these into its keyword candidate set so BM25
+	// search lands on identifiers the prompt itself never mentioned.
+	VocabKeywords []string
 }
 
 // Extractor runs Stage 1 of the composer pipeline.
 type Extractor struct {
 	ckv    ckvclient.Client
 	ckg    ckgclient.Client
+	vocab  *vocab.Resolver
 	fp     *footprint.Logger
 	config Config
 }
@@ -124,6 +138,17 @@ func WithFootprint(fp *footprint.Logger) Option {
 // WithConfig overrides the default tuning.
 func WithConfig(cfg Config) Option {
 	return func(e *Extractor) { e.config = cfg }
+}
+
+// WithVocab attaches a vocabulary resolver. When set, Extract expands the
+// incoming prompt with project-specific code keywords (e.g., "쿼럼 미달"
+// -> "QuorumSize F() WBFTPrepares") before issuing the ckv semantic
+// search, so retrieval lands on the right symbols even when the user
+// types Korean or domain-vague English. nil resolver is a no-op:
+// vocab.Resolver.Resolve already returns the input unchanged when the
+// glossary is empty or the receiver is nil.
+func WithVocab(r *vocab.Resolver) Option {
+	return func(e *Extractor) { e.vocab = r }
 }
 
 // New constructs an Extractor. Returns an error if either client is nil.
@@ -157,7 +182,16 @@ func (e *Extractor) Extract(ctx context.Context, prompt string, intent contract.
 	}
 
 	out := Stage1Output{}
-	currentQuery := prompt
+
+	// Vocabulary expansion (pre-round): rewrite the user's prompt by
+	// appending project glossary code keywords whose aliases match the
+	// prompt text. The expanded query rides into ckv.SemanticSearch so
+	// retrieval has the literal identifiers to match against. Nil
+	// resolver or empty glossary degrade to a verbatim pass-through.
+	expansion := e.vocab.Resolve(prompt)
+	currentQuery := expansion.Expanded
+	out.VocabExpanded = len(expansion.MatchedKeywords) > 0
+	out.VocabKeywords = expansion.MatchedKeywords
 
 	for round := 1; round <= e.config.MaxRounds; round++ {
 		// Recall: broad ckv semantic search with the current (possibly
@@ -188,7 +222,9 @@ func (e *Extractor) Extract(ctx context.Context, prompt string, intent contract.
 		if confidence >= e.config.MinConfidence || round == e.config.MaxRounds {
 			break
 		}
-		currentQuery = augmentQuery(prompt, reranked, e.config.AugmentTopN)
+		// Re-augment from the vocab-expanded prompt so subsequent rounds
+		// keep the glossary keywords on top of the reranked additions.
+		currentQuery = augmentQuery(expansion.Expanded, reranked, e.config.AugmentTopN)
 	}
 
 	// Cap the final keyword count.
@@ -212,6 +248,8 @@ func (e *Extractor) emitFootprint(ctx context.Context, intent contract.Intent, o
 		zap.Float64("confidence", out.Confidence),
 		zap.Strings("keywords", out.Keywords),
 		zap.Strings("augmented_queries", out.AugmentedQueries),
+		zap.Bool("vocab_expanded", out.VocabExpanded),
+		zap.Strings("vocab_keywords", out.VocabKeywords),
 	)
 }
 

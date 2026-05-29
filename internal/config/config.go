@@ -34,6 +34,20 @@ type Config struct {
 	Listen   ListenConfig   `yaml:"listen"`
 	Logging  LoggingConfig  `yaml:"logging"`
 	Sanitize SanitizeConfig `yaml:"sanitize"`
+	Vocab    VocabConfig    `yaml:"vocab"`
+}
+
+// VocabConfig controls the optional vocabulary resolver wired into
+// composer Stage 1. The resolver expands user prompts with code keywords
+// drawn from a project's curated glossary, so retrieval can match
+// Korean / domain-vague terms against the identifiers actually present
+// in the source tree. An empty GlossaryPath disables vocab expansion —
+// Stage 1 falls back to the verbatim prompt, which is identical to the
+// pre-vocab behavior.
+type VocabConfig struct {
+	// GlossaryPath is the YAML glossary file the vocab.Resolver loads at
+	// startup. Relative paths resolve against the cks binary's cwd.
+	GlossaryPath string `yaml:"glossary_path"`
 }
 
 // BackendsConfig holds connection settings for ckg and ckv.
