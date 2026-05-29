@@ -1,0 +1,42 @@
+id: go-stablenet
+name: "go-stablenet"
+description: "geth fork — WBFT BFT consensus, native stablecoin (WKRC), governance system contracts"
+
+code_root: /Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest
+skill_root: /Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest/.claude
+
+primary_language: go
+secondary_languages:
+  - solidity
+
+domain: blockchain
+domain_tags:
+  - ethereum-fork
+  - bft-consensus
+  - stablecoin
+  - evm
+  - geth-derived
+
+schema_version: 1
+
+indexing:
+  ckv_index_path: ".ckv-data/go-stablenet"
+  ckg_index_path: ".ckg-data/go-stablenet"
+  glossary_path: "glossary.yaml"
+
+# Authoritative documentation already maintained inside the project.
+# Inventory entries should cross-reference these wherever the same
+# topic is covered, rather than duplicating their content.
+authoritative_docs:
+  - file: CLAUDE.md
+    role: "project overview, unique-code map"
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    role: "comprehensive developer guide (21 sections)"
+  - file: .claude/docs/SYSTEM_CONTRACT_FLOW.md
+    role: "system contract deploy/upgrade architecture"
+  - file: .claude/docs/REVIEW_GUIDE.md
+    role: "code review patterns, unique-file map"
+  - file: .claude/docs/review-test-result-with-ast.md
+    role: "new/upgraded system contract end-to-end checklist"
+  - file: .claude/docs/BUILD_SOURCE_FILES.md
+    role: "build-participating files (160 packages, 781 Go files)"

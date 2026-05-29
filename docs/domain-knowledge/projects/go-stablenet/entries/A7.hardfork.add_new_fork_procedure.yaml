@@ -1,0 +1,95 @@
+id: A7.hardfork.add_new_fork_procedure
+subsystem: A7
+knowledge_type: B6
+title: "Procedure: adding a new hardfork to go-stablenet"
+
+summary: |
+  Adding a hardfork requires changes in seven distinct sites:
+  ChainConfig field, isFork check method, Rules struct + Rules() build,
+  runtime branch in the relevant subsystem, optional NativeManager
+  switch update, optional system contract version pinning via
+  CollectUpgrades, and updates to SetConfigFromChainConfig when WBFT
+  parameters change. The block number must be >= the previous fork's
+  block number; switch-case ordering must place the newest fork on top
+  because the first matching case wins.
+
+procedure_steps:
+  - "Step 1 — params/config.go: add a new field to ChainConfig (e.g. MyNewForkBlock *big.Int)."
+  - "Step 2 — params/config.go: add an activation check method (IsMyNewFork) that delegates to isBlockForked."
+  - "Step 3 — params/config.go: add IsMyNewFork to the Rules struct and to the Rules() builder so runtime sites can branch on it."
+  - "Step 4 — runtime sites: add 'if rules.IsMyNewFork { ... } else { ... }' branches wherever behaviour diverges."
+  - "Step 5 — core/vm/native_manager.go: update ActiveNativeManagers switch if the fork rotates native manager addresses. Put the newest fork's case at the top."
+  - "Step 6 — params/config.go: define MyNewFork *AnzeonConfig with SystemContracts overrides, then register the upgrade in CollectUpgrades (append a Upgrade{Block: MyNewForkBlock, SystemContracts: MyNewFork.SystemContracts})."
+  - "Step 7 — eth/ethconfig/config.go: extend SetConfigFromChainConfig to append a Transition{Block: MyNewForkBlock, WBFTConfig: ...} when the fork changes WBFT parameters; record the block in hfTransitionBlocks to detect duplicates."
+  - "Step 8 (verification) — run 'go test ./params/... ./consensus/wbft/... ./core/...' and check that CheckConfigForkOrder accepts the new fork's block ordering."
+
+code_anchors:
+  - file: params/config.go
+    symbol: ChainConfig
+    reason: "fork block field and IsXxx methods live here"
+  - file: params/config.go
+    symbol: ChainConfig.CollectUpgrades
+    reason: "ascending-block-order upgrade registry"
+  - file: params/config.go
+    symbol: ChainConfig.CheckConfigForkOrder
+    reason: "enforces that each fork's block is >= the previous"
+  - file: eth/ethconfig/config.go
+    symbol: SetConfigFromChainConfig
+    reason: "binds ChainConfig hardforks into the WBFT runtime config"
+  - file: core/vm/native_manager.go
+    symbol: ActiveNativeManagers
+    reason: "newest-fork-on-top switch ordering rule"
+
+code_keywords:
+  - ChainConfig
+  - CollectUpgrades
+  - CheckConfigForkOrder
+  - SetConfigFromChainConfig
+  - ActiveNativeManagers
+  - isBlockForked
+  - Rules
+  - AnzeonConfig
+  - SystemContracts
+  - Upgrade
+  - Transition
+
+korean_aliases:
+  - "하드포크 추가"
+  - "하드포크 등록"
+  - "포크 분기"
+  - "하드포크 절차"
+
+english_aliases:
+  - "add hardfork"
+  - "hardfork registration"
+  - "fork branching"
+
+related_concepts:
+  - A4.system_contracts.addresses
+  - A7.hardfork.collect_upgrades_ordering
+  - A8.genesis.inject_contracts
+
+invariants:
+  - "Each new fork's block number must be >= the previous fork's block number (enforced by CheckConfigForkOrder)."
+  - "CollectUpgrades must return entries in ascending block order; the WBFT runtime breaks on the first block > target, so out-of-order entries silently lose later upgrades."
+  - "In ActiveNativeManagers, the newest fork case must appear first because Go switch-case picks the first matching branch."
+
+pitfalls:
+  - "Adding the new ChainConfig field but forgetting Rules + Rules() update — runtime branches never fire because rules.IsMyNewFork is always false."
+  - "Skipping CollectUpgrades registration — the fork's system contracts never deploy at the activation block."
+  - "Skipping SetConfigFromChainConfig update — WBFT parameter changes never reach the consensus engine."
+  - "Adding the new switch case at the bottom of ActiveNativeManagers — an older fork above matches first and the new addresses are ignored."
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "9. 하드포크 추가 방법"
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "18. 시스템 컨트랙트 업그레이드 실행 흐름"
+
+risk_level: low
+source_of_truth: "code+docs"
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

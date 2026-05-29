@@ -1,0 +1,97 @@
+id: A4.system_contracts.addresses
+subsystem: A4
+knowledge_type: B7
+title: "System contract canonical addresses (Anzeon)"
+
+summary: |
+  Five governance system contracts and two native precompiles are
+  deployed at well-known fixed addresses on go-stablenet. Source of
+  truth for the contract addresses is params/config_wbft.go; precompile
+  addresses live alongside native manager registration in
+  core/vm/native_manager.go. These values are referenced everywhere in
+  hardfork wiring, genesis JSON, and ABI tooling.
+
+code_anchors:
+  - file: params/config_wbft.go
+    symbol: DefaultNativeCoinAdapterAddress
+    line: 32
+  - file: params/config_wbft.go
+    symbol: DefaultGovValidatorAddress
+    line: 35
+  - file: params/config_wbft.go
+    symbol: DefaultGovMasterMinterAddress
+    line: 38
+  - file: params/config_wbft.go
+    symbol: DefaultGovMinterAddress
+    line: 41
+  - file: params/config_wbft.go
+    symbol: DefaultGovCouncilAddress
+    line: 44
+  - file: core/vm/native_manager.go
+    reason: "registers NativeCoinManager (0xB00002) and AccountManager (0xB00003)"
+
+code_keywords:
+  - DefaultNativeCoinAdapterAddress
+  - DefaultGovValidatorAddress
+  - DefaultGovMasterMinterAddress
+  - DefaultGovMinterAddress
+  - DefaultGovCouncilAddress
+  - NativeCoinManager
+  - AccountManager
+
+korean_aliases:
+  - "시스템 컨트랙트 주소"
+  - "거버넌스 컨트랙트 주소"
+  - "네이티브 매니저 주소"
+
+english_aliases:
+  - "system contract addresses"
+  - "governance contract addresses"
+
+related_concepts:
+  - A4.system_contracts.versions
+  - A5.account_extra.bit_layout
+  - A8.genesis.inject_contracts
+
+constants:
+  - name: NativeCoinAdapter
+    value: "0x1000"
+    unit: address
+    source_file: params/config_wbft.go
+  - name: GovValidator
+    value: "0x1001"
+    unit: address
+    source_file: params/config_wbft.go
+  - name: GovMasterMinter
+    value: "0x1002"
+    unit: address
+    source_file: params/config_wbft.go
+  - name: GovMinter
+    value: "0x1003"
+    unit: address
+    source_file: params/config_wbft.go
+  - name: GovCouncil
+    value: "0x1004"
+    unit: address
+    source_file: params/config_wbft.go
+  - name: NativeCoinManager
+    value: "0xB00002"
+    unit: precompile_address
+    source_file: core/vm/native_manager.go
+  - name: AccountManager
+    value: "0xB00003"
+    unit: precompile_address
+    source_file: core/vm/native_manager.go
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "8. 시스템 컨트랙트"
+    subsection: "배포 주소 / 네이티브 매니저 주소"
+
+risk_level: low
+source_of_truth: code
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

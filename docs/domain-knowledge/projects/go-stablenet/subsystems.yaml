@@ -1,0 +1,142 @@
+# Subsystem decomposition for go-stablenet. IDs are append-only;
+# never reorder or renumber after entries reference them.
+#
+# code_paths are relative to project.code_root and must not overlap
+# across subsystems (PROJECT_REGISTRATION.md §4 rule).
+
+- id: A1
+  name: "WBFT Consensus Core"
+  description: |
+    Preprepare/Prepare/Commit/RoundChange state machine, message
+    handling, backlog, justification, BLS extra-seal aggregation. The
+    algorithmic heart of WBFT consensus.
+  code_paths:
+    - consensus/wbft/core/
+    - consensus/wbft/messages/
+    - consensus/wbft/errors.go
+    - consensus/wbft/types.go
+
+- id: A2
+  name: "WBFT Block Encoding & Seal"
+  description: |
+    Block header Extra format (WBFTExtra, AggregatedSeal, SealerSet,
+    EpochInfo), filtered-header helpers used during hash computation,
+    BLS aggregate signature layout.
+  code_paths:
+    - core/types/istanbul.go
+
+- id: A3
+  name: "WBFT Validator Set & Epoch"
+  description: |
+    Validator set membership, BLS public key tracking, proposer
+    selection policy (RoundRobin/Sticky), epoch transition that
+    pulls the next epoch's validators from GovValidator.
+  code_paths:
+    - consensus/wbft/validator/
+    - consensus/wbft/backend/engine.go
+
+- id: A4
+  name: "System Contracts (Governance × 5)"
+  description: |
+    GovValidator (0x1001), GovMasterMinter (0x1002), GovMinter (0x1003),
+    GovCouncil (0x1004), NativeCoinAdapter (0x1000). Solidity sources,
+    artifact embeds, Go initializers, storage-slot mapping helpers,
+    transition builders.
+  code_paths:
+    - systemcontracts/
+
+- id: A5
+  name: "Native Coin & Account Extra"
+  description: |
+    Native coin issuance/burn paths via NativeCoinManager, blacklist
+    and authorize state on StateAccount.Extra bit field, AccountManager
+    native precompile.
+  code_paths:
+    - core/types/state_account_extra.go
+    - core/vm/native_manager.go
+
+- id: A6
+  name: "Fee Delegation & Anzeon Gas"
+  description: |
+    StableNet-specific double-signed transaction (FeeDelegateDynamicFeeTx,
+    0x16) and the Anzeon authorized-account gas-tip override. The
+    state_transition / txpool / signing paths these features hook into
+    live in A11; entries in A6 cross-reference them via code_anchors
+    rather than re-claiming the files.
+  code_paths:
+    - core/types/tx_fee_delegation.go
+    - eth/gasprice/anzeon.go
+
+- id: A7
+  name: "Hardfork & Chain Config"
+  description: |
+    ChainConfig including Anzeon/Boho hardforks, AnzeonConfig with
+    SystemContracts/WBFT/Init, Transition schedule, CollectUpgrades
+    helper, runtime parameter binding via SetConfigFromChainConfig.
+  code_paths:
+    - params/config.go
+    - params/config_wbft.go
+    - params/network_params.go
+    - params/protocol_params.go
+    - eth/ethconfig/config.go
+
+- id: A8
+  name: "Genesis & Bootstrap"
+  description: |
+    Genesis JSON layout, validateAnzeonGenesisConfig, InjectContracts
+    two-phase deploy (baseline + block-0 hardfork overlay),
+    applyUpgradeOverlay code-only semantics, genesis_generator CLI.
+  code_paths:
+    - core/genesis.go
+    - core/stablenet_genesis.go
+    - cmd/genesis_generator/
+
+- id: A9
+  name: "P2P, Istanbul Protocol & Custom RPC"
+  description: |
+    istanbul/100 subprotocol piggy-backed on the eth peer, message
+    routing into the consensus engine, WBFT custom JSON-RPC namespace
+    (NodeAddress, GetCommitSignersFromBlock, GetValidators, Status,
+    GetWbftExtraInfo).
+  code_paths:
+    - eth/handler_istanbul.go
+    - eth/quorum_protocol.go
+    - eth/protocols/eth/qlight_deps.go
+    - consensus/wbft/backend/api.go
+    - consensus/wbft/backend/handler.go
+    - consensus/wbft/backend/backend.go
+
+- id: A10
+  name: "Build, Tooling & Codegen"
+  description: |
+    Makefile + build/ci.go orchestration, solc compilation pipeline
+    for system contracts, go:embed artifact wiring, gencodec/rlpgen
+    auto-generated files (do-not-edit zones), golangci-lint config,
+    GitHub Actions workflows.
+  code_paths:
+    - Makefile
+    - build/
+    - systemcontracts/compile/
+    - .golangci.yml
+    - .github/
+
+- id: A11
+  name: "Transaction Types, Mempool & State Transition"
+  description: |
+    Ethereum-derived transaction taxonomy (Legacy 0x00, AccessList 0x01,
+    DynamicFee 0x02, Blob 0x03, SetCode 0x04), tx signing pipeline,
+    mempool (subpool interface, legacypool, blobpool, validation),
+    and the TransitionDb path that applies a transaction to state —
+    including the blacklist check points that gate state mutation.
+    The StableNet-specific fee delegation type (0x16) lives in A6
+    and references this subsystem's signing / state_transition / pool
+    paths via code_anchors.
+  code_paths:
+    - core/types/transaction.go
+    - core/types/transaction_signing.go
+    - core/types/tx_legacy.go
+    - core/types/tx_access_list.go
+    - core/types/tx_dynamic_fee.go
+    - core/types/tx_blob.go
+    - core/txpool/
+    - core/state_transition.go

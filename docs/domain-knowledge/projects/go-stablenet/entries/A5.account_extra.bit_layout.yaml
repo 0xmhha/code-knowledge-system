@@ -1,0 +1,83 @@
+id: A5.account_extra.bit_layout
+subsystem: A5
+knowledge_type: B4
+title: "StateAccount.Extra bit layout and immutability invariants"
+
+summary: |
+  StateAccount.Extra is a uint64 carrying per-account flags. Bit 63
+  (MSB) marks Blacklisted; bit 62 marks Authorized; bits 0-61 are
+  reserved. All mutation helpers (SetBlacklisted, ClearBlacklisted,
+  SetAuthorized, ClearAuthorized) follow an immutable pattern — they
+  take the existing uint64 and return a new uint64 with the requested
+  bit toggled. The original value is never modified in place. New
+  flags must claim a previously unused bit and may require hardfork
+  gating if they affect consensus-reachable state.
+
+code_anchors:
+  - file: core/types/state_account_extra.go
+    symbol: AccountExtraMaskBlacklisted
+    line: 33
+    reason: "bit 63 mask constant"
+  - file: core/types/state_account_extra.go
+    symbol: AccountExtraMaskAuthorized
+    line: 36
+    reason: "bit 62 mask constant"
+  - file: core/types/state_account_extra.go
+    symbol: AccountExtraValidMask
+    line: 45
+    reason: "OR of all currently-defined bits — used for validity check"
+  - file: core/types/state_account_extra.go
+    symbol: IsBlacklisted
+    line: 72
+  - file: core/types/state_account_extra.go
+    symbol: IsAuthorized
+    line: 87
+
+code_keywords:
+  - AccountExtraMaskBlacklisted
+  - AccountExtraMaskAuthorized
+  - AccountExtraValidMask
+  - IsBlacklisted
+  - SetBlacklisted
+  - ClearBlacklisted
+  - IsAuthorized
+  - SetAuthorized
+  - ClearAuthorized
+
+korean_aliases:
+  - "계정 확장 비트"
+  - "블랙리스트 비트"
+  - "권한 비트"
+  - "Account Extra 비트마스크"
+
+english_aliases:
+  - "account extra bitmask"
+  - "blacklist bit"
+  - "authorized bit"
+
+related_concepts:
+  - A4.system_contracts.addresses
+  - A11.state_transition.blacklist_check_points
+
+invariants:
+  - "Bit 63 = Blacklisted, bit 62 = Authorized — these are consensus-reachable and must not be reused."
+  - "Mutation functions (Set*/Clear*) return a new uint64; they do not mutate the receiver. Reassign the result or the change is lost."
+  - "A bit outside AccountExtraValidMask in a stored StateAccount means corruption or an unrecognised flag from a different fork."
+  - "New flags must be guarded by a hardfork rule if they affect block validity, because nodes on the older fork will not honour the bit."
+
+pitfalls:
+  - "Calling SetBlacklisted(extra) without reassigning the return value is a silent no-op."
+  - "Reusing bit 61 or below without checking AccountExtraValidMask membership leads to flags that other code paths ignore."
+  - "Forgetting to add the new flag to AccountExtraValidMask means subsequent validity checks reject accounts that carry it."
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "17. Account Extra 비트마스크"
+
+risk_level: medium
+source_of_truth: code
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

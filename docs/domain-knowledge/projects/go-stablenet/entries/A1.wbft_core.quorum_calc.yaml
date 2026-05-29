@@ -1,0 +1,75 @@
+id: A1.wbft_core.quorum_calc
+subsystem: A1
+knowledge_type: B3
+title: "WBFT quorum size calculation"
+
+summary: |
+  WBFT requires QuorumSize = ceil(N - F) where N is the validator set
+  size and F = (N-1)/3 evaluated in float64. The quorum is the minimum
+  count of Prepare or Commit messages needed before the consensus core
+  advances state. State advancement in handlePrepareMsg uses the
+  expression WBFTPrepares.Size() >= valSet.QuorumSize().
+
+code_anchors:
+  - file: consensus/wbft/validator/default.go
+    symbol: "defaultSet.F"
+    line: 222
+    reason: "F = (N-1)/3 as float64 — integer cast would lose precision"
+  - file: consensus/wbft/validator/default.go
+    symbol: "defaultSet.QuorumSize"
+    line: 226
+    reason: "QuorumSize = ceil(N - F) using math.Ceil over float64"
+  - file: consensus/wbft/core/prepare.go
+    symbol: "Core.handlePrepareMsg"
+    line: 121
+    reason: "threshold check that gates StatePrepared transition"
+  - file: consensus/wbft/types.go
+    symbol: "ValidatorSet"
+    reason: "interface declaration; F() returns float64 (not int)"
+
+code_keywords:
+  - QuorumSize
+  - "F()"
+  - math.Ceil
+  - WBFTPrepares
+  - StatePrepared
+  - defaultSet
+  - ValidatorSet
+
+korean_aliases:
+  - "쿼럼"
+  - "쿼럼 크기"
+  - "쿼럼 미달"
+  - "최소 동의 수"
+
+english_aliases:
+  - "consensus threshold"
+  - "minimum agreement"
+  - "voting quorum"
+
+related_concepts:
+  - A1.wbft_core.preprepare
+  - A1.wbft_core.commit
+  - A3.validator_set.f_function
+
+invariants:
+  - "ValidatorSet.F() returns float64. Casting to int before division loses precision and produces a wrong QuorumSize for some N."
+  - "QuorumSize is always >= 1, including N = 1 (ceil(1 - 0) = 1)."
+  - "Prepare/Commit state transitions compare with >= QuorumSize, not >."
+
+pitfalls:
+  - "Using int(F()) instead of float64 produces off-by-one errors. For N = 4, F = 1.0 and QuorumSize = ceil(3.0) = 3; truncating F to int 1 still works, but for larger sets the rounding behaviour diverges."
+  - "Forgetting that QuorumSize covers both Prepare and Commit independently — each phase needs its own quorum."
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "13. WBFT 합의 엔진 내부 구조"
+    subsection: "쿼럼 계산"
+
+risk_level: low
+source_of_truth: "code+docs"
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

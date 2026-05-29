@@ -1,0 +1,88 @@
+id: A11.state_transition.blacklist_check_points
+subsystem: A11
+knowledge_type: B3
+title: "Blacklist check points along the state transition path"
+
+summary: |
+  When rules.IsAnzeon is active, a transaction can be rejected for
+  blacklist reasons at four distinct points before its state changes
+  persist. Three live in core/state_transition.go TransitionDb (Sender,
+  Recipient, FeePayer) and one lives in core/vm/evm.go Call (zero
+  address / native precompile transfer). Adding a new transaction type
+  or a new transfer path requires confirming every one of these gates
+  still fires; missing one creates a route by which a blacklisted
+  account can move value.
+
+code_anchors:
+  - file: core/state_transition.go
+    symbol: "StateTransition.TransitionDb"
+    line: 504
+    reason: "check ①: Sender (msg.From) blacklist — ErrBlacklistedAccount returned"
+  - file: core/state_transition.go
+    symbol: "StateTransition.TransitionDb"
+    line: 509
+    reason: "check ②: Recipient (msg.To) blacklist — contract creation exempt because msg.To == nil"
+  - file: core/state_transition.go
+    symbol: "StateTransition.TransitionDb"
+    line: 577
+    reason: "check ③: FeePayer blacklist — only when st.msg.FeePayer != nil and rules.IsAnzeon"
+  - file: core/vm/evm.go
+    symbol: "EVM.Call"
+    line: 212
+    reason: "check ④: zero-address transfer block (ErrZeroAddressTransfer) and precompile transfer block (ErrValueTransferToPrecompile)"
+  - file: core/vm/evm.go
+    symbol: "EVM.Call"
+    line: 481
+    reason: "additional caller blacklist guard inside EVM.Call when Anzeon is active"
+
+code_keywords:
+  - TransitionDb
+  - IsBlacklisted
+  - ErrBlacklistedAccount
+  - ErrZeroAddressTransfer
+  - ErrValueTransferToPrecompile
+  - rules.IsAnzeon
+  - FeePayer
+  - "msg.From"
+  - "msg.To"
+
+korean_aliases:
+  - "블랙리스트 검증"
+  - "블랙리스트 차단"
+  - "블랙리스트 4 포인트"
+  - "트랜잭션 거부 지점"
+
+english_aliases:
+  - "blacklist enforcement"
+  - "transaction rejection points"
+  - "value transfer guard"
+
+related_concepts:
+  - A5.account_extra.bit_layout
+  - A6.fee_delegation.signing_model
+  - A11.tx_types.taxonomy
+
+invariants:
+  - "Every blacklist check is gated by rules.IsAnzeon — pre-Anzeon nodes do not apply these guards."
+  - "msg.To == nil indicates contract creation; the Recipient (②) check intentionally skips this case."
+  - "FeePayer (③) check fires only when st.msg.FeePayer is non-nil, i.e. for fee delegation transactions; it must run before any balance debit from the FeePayer."
+  - "Zero-address (④) and precompile-transfer guards run inside EVM.Call, so they catch CALL/CALLCODE/DELEGATECALL transfers that did not go through TransitionDb."
+
+pitfalls:
+  - "Adding a new transaction type that introduces an alternative balance-debit path without re-running checks ①~③ — funds can move from a blacklisted account."
+  - "Adding a new transfer opcode handler that bypasses EVM.Call (or that calls a lower-level routine) — check ④ is missed and zero-address / precompile transfers leak through."
+  - "Reading 'contract creation exempt from check ②' as 'contract creation exempt from all blacklist checks' — Sender (①) still applies to the contract creator."
+  - "Wiring FeePayer (③) check after the FeePayer balance debit instead of before — the debit happens even when the FeePayer is blacklisted, leaving inconsistent state on a rejected tx."
+
+existing_doc_ref:
+  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+    section: "10. 보안 제약사항 & 블랙리스트 실행 흐름"
+    subsection: "블랙리스트 검증 포인트 (수정 시 반드시 확인)"
+
+risk_level: low
+source_of_truth: "code+docs"
+status: needs_verification
+priority: P0
+
+last_verified_at: null
+verified_by: null

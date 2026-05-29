@@ -1,0 +1,173 @@
+# JSON-Schema-shaped (YAML-encoded) validation rules for every entry
+# under projects/<id>/entries/*.yaml. Project-agnostic. The schema is
+# also a single source of truth for tooling — a validator script can
+# read this file directly.
+#
+# Cross-reference checks (subsystem must exist, related_concepts must
+# resolve, code_anchors.file must exist on disk) are handled separately
+# by a project-aware validator because they need the project context.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://0xmhha.io/cks/domain-knowledge/entry.schema.v1.yaml"
+title: "Domain Knowledge Entry"
+type: object
+
+required:
+  - id
+  - subsystem
+  - knowledge_type
+  - title
+  - summary
+  - status
+  - priority
+
+additionalProperties: false
+
+properties:
+
+  id:
+    type: string
+    # subsystem.topic.subtopic — at least two segments, lowercase
+    # ASCII letters, digits, underscore.
+    pattern: "^[A-Z][0-9]+\\.[a-z0-9_]+(\\.[a-z0-9_]+)+$"
+
+  subsystem:
+    type: string
+    # Validated against project's subsystems.yaml by the project-aware
+    # validator. Schema only enforces shape.
+    pattern: "^[A-Z][0-9]+$"
+
+  knowledge_type:
+    type: string
+    enum: [B1, B2, B3, B4, B5, B6, B7]
+
+  title:
+    type: string
+    minLength: 4
+    maxLength: 120
+
+  summary:
+    type: string
+    minLength: 10
+
+  status:
+    type: string
+    enum: [needs_author, draft, needs_verification, verified]
+
+  priority:
+    type: string
+    enum: [P0, P1, P2]
+
+  code_anchors:
+    type: array
+    items:
+      type: object
+      required: [file]
+      additionalProperties: false
+      properties:
+        file:    { type: string, minLength: 1 }
+        symbol:  { type: string }
+        line:    { type: integer, minimum: 1 }
+        reason:  { type: string }
+
+  code_keywords:
+    type: array
+    items: { type: string, minLength: 1 }
+
+  korean_aliases:
+    type: array
+    items: { type: string, minLength: 1 }
+
+  english_aliases:
+    type: array
+    items: { type: string, minLength: 1 }
+
+  related_concepts:
+    type: array
+    items:
+      type: string
+      pattern: "^[A-Z][0-9]+\\.[a-z0-9_]+(\\.[a-z0-9_]+)+$"
+
+  existing_doc_ref:
+    type: array
+    items:
+      type: object
+      required: [file]
+      additionalProperties: false
+      properties:
+        file:       { type: string, minLength: 1 }
+        section:    { type: string }
+        subsection: { type: string }
+
+  invariants:
+    type: array
+    items: { type: string, minLength: 1 }
+
+  pitfalls:
+    type: array
+    items: { type: string, minLength: 1 }
+
+  procedure_steps:
+    type: array
+    items: { type: string, minLength: 1 }
+
+  constants:
+    type: array
+    items:
+      type: object
+      required: [name, value]
+      additionalProperties: false
+      properties:
+        name:        { type: string, minLength: 1 }
+        value:       {}                        # any scalar
+        unit:        { type: string }
+        source_file: { type: string }
+
+  risk_level:
+    type: string
+    enum: [low, medium, high]
+
+  source_of_truth:
+    type: string
+    enum: [code, docs, paper, domain_expert, multiple, "code+docs"]
+
+  last_verified_at:
+    type:
+      - string
+      - "null"
+    # YYYY-MM-DD
+    pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+
+  verified_by:
+    type:
+      - string
+      - "null"
+
+# Conditional requirements: status-driven completeness.
+allOf:
+  # verified entries must have at least one code anchor, a verified-by
+  # field, and a last_verified_at date.
+  - if:
+      properties:
+        status: { const: verified }
+    then:
+      required: [code_anchors, last_verified_at, verified_by]
+      properties:
+        code_anchors:
+          minItems: 1
+        last_verified_at:
+          type: string
+        verified_by:
+          type: string
+          minLength: 1
+
+  # needs_verification requires at least one code anchor (so a verifier
+  # has something to check).
+  - if:
+      properties:
+        status: { const: needs_verification }
+    then:
+      required: [code_anchors]
+      properties:
+        code_anchors:
+          minItems: 1
