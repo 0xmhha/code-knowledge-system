@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agent-mcp contract (C1) — cks.* tool surface",
+  "description": "Single source of truth for the agent-facing MCP tool surface (00 §3 C1). cks owns the cks.* tools enumerated below; jira.* (6 tools) and chainbench.* are owned by their own repos' conformance tests and are intentionally NOT listed here. cks's internal/mcp/schema_golden_test.go asserts that the cks.* tools it actually registers == exactly the names below (no drift, no extras). NOTE: this is a vendored fixture; per the 03-plan CORRECTION, coding-agent (05) is the sole author of the canonical coding-agent/contract/agent-mcp.schema.json — when that lands, replace this copy and add a CI diff-check.",
+  "tools": {
+    "cks.context.get_for_task": {
+      "description": "Compose a budgeted evidence pack for a development task (the primary planning entrypoint): runs the intent → stage1 (semantic) → stage2 (keyword/graph) → stage3 → budget → sanitize pipeline.",
+      "input": { "properties": { "task": { "type": "string" }, "max_citations": { "type": "number" }, "budget_tokens": { "type": "number" } }, "required": ["task"] }
+    },
+    "cks.context.semantic_search": {
+      "description": "Vector (meaning) search over the indexed corpus. Hits carry source=ckv.",
+      "input": { "properties": { "query": { "type": "string" }, "k": { "type": "number" } }, "required": ["query"] }
+    },
+    "cks.context.search_text": {
+      "description": "BM25 keyword (exactness) search over the indexed corpus. Hits carry source=ckg.",
+      "input": { "properties": { "query": { "type": "string" }, "k": { "type": "number" } }, "required": ["query"] }
+    },
+    "cks.context.find_symbol": {
+      "description": "Resolve a symbol name to its definition citation(s).",
+      "input": { "properties": { "name": { "type": "string" }, "kinds": { "type": "array" } }, "required": ["name"] }
+    },
+    "cks.context.find_callers": {
+      "description": "List the callers of a symbol (reverse call edges).",
+      "input": { "properties": { "symbol": { "type": "string" } }, "required": ["symbol"] }
+    },
+    "cks.context.find_callees": {
+      "description": "List the callees of a symbol (forward call edges).",
+      "input": { "properties": { "symbol": { "type": "string" } }, "required": ["symbol"] }
+    },
+    "cks.context.get_subgraph": {
+      "description": "Return all nodes/edges within depth hops of a symbol, all edge types.",
+      "input": { "properties": { "qname": { "type": "string" }, "depth": { "type": "number" }, "max_total": { "type": "number" } }, "required": ["qname"] }
+    },
+    "cks.context.impact_analysis": {
+      "description": "Reverse-dependency closure of a symbol, grouped by coupling category (callers/interface/type_users/distributed/concurrent/other).",
+      "input": { "properties": { "symbol": { "type": "string" }, "depth": { "type": "number" }, "max_total": { "type": "number" } }, "required": ["symbol"] }
+    },
+    "cks.context.concurrency_impact": {
+      "description": "Concurrency blast radius of a symbol: goroutines/channels/locks it spawns/sends-to/acquires and modules reached over concurrency edges, both directions.",
+      "input": { "properties": { "symbol": { "type": "string" }, "depth": { "type": "number" }, "max_total": { "type": "number" } }, "required": ["symbol"] }
+    },
+    "cks.context.change_history": {
+      "description": "PR refs (provenance) and/or BM25-ranked hunk evidence for a symbol or intent.",
+      "input": { "properties": { "intent": { "type": "string" }, "symbol": { "type": "string" }, "k": { "type": "number" }, "max_count": { "type": "number" } } }
+    },
+    "cks.ops.health": {
+      "description": "Backend reachability + version pins. Reports degraded when ckv (embedder) is unavailable.",
+      "input": { "properties": {} }
+    },
+    "cks.ops.freshness": {
+      "description": "Index-vs-HEAD staleness: indexed head, current head, changed files.",
+      "input": { "properties": {} }
+    },
+    "cks.ops.index": {
+      "description": "Refresh the ckv + ckg indexes (maintenance op; shells out to the indexer CLIs). mode=incremental|full.",
+      "input": { "properties": { "mode": { "type": "string" }, "since_commit": { "type": "string" } } }
+    }
+  }
+}

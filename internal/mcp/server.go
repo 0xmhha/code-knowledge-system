@@ -1,12 +1,12 @@
 // Package mcp exposes the cks composer pipeline as an MCP (Model Context
 // Protocol) server over stdio.
 //
-// Phase C.5 (slim) registers two tools:
-//
-//   - cks.context.get_for_task : run the composer over a vibe prompt and
-//     return a stamped, sanitized EvidencePack.
-//   - cks.ops.health           : aggregate ckg/ckv backend reachability
-//     into an ok/degraded/down rollup.
+// Register wires the 13 agent-facing cks.* tools (the C1 surface): the
+// context tools (get_for_task, semantic_search, search_text, find_symbol,
+// find_callers, find_callees, get_subgraph, impact_analysis,
+// concurrency_impact, change_history) and the ops tools (health, freshness,
+// index). The exact registered set is pinned against the SSoT fixture by
+// schema_golden_test.go (M2.a).
 //
 // The package is intentionally thin: Register attaches handlers to an
 // already-constructed *server.MCPServer so callers retain control over

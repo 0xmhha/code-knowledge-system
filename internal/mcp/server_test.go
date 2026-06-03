@@ -103,7 +103,7 @@ func hit(file string, start, end int, score float64, src contract.HitSource) con
 
 // --- Register: tool registration + nil-dep rejection ---
 
-func TestRegister_RegistersBothTools(t *testing.T) {
+func TestRegister_RegistersAllTools(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, nil)
 	srv := mcpserver.NewMCPServer("cks-test", "0.0.1")
