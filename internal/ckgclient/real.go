@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xmhha/code-knowledge-graph/pkg/concurrency"
 	"github.com/0xmhha/code-knowledge-graph/pkg/evidence"
 	"github.com/0xmhha/code-knowledge-graph/pkg/impact"
 	"github.com/0xmhha/code-knowledge-graph/pkg/store"
@@ -62,6 +63,7 @@ type storeReader interface {
 	ImpactCompute(seedQname, seedFile string, depth int, includeBlobs bool) (map[string]any, error)
 	EvidenceBuildPack(intent, seedQname string, k int) (*evidence.Pack, error)
 	GetNodePRs(nodeID string, cutoff time.Time) ([]store.PRRef, error)
+	ConcurrencyAnalyze(symbol string, depth, maxTotal int) (concurrency.Result, error)
 	Close() error
 }
 
@@ -99,6 +101,9 @@ func (a *realStoreReader) EvidenceBuildPack(intent, seedQname string, k int) (*e
 }
 func (a *realStoreReader) GetNodePRs(nodeID string, cutoff time.Time) ([]store.PRRef, error) {
 	return a.r.GetNodePRs(nodeID, cutoff)
+}
+func (a *realStoreReader) ConcurrencyAnalyze(symbol string, depth, maxTotal int) (concurrency.Result, error) {
+	return concurrency.Analyze(a.r, symbol, concurrency.Options{Depth: depth, MaxTotal: maxTotal})
 }
 func (a *realStoreReader) NodesByFilePath(path string) ([]types.Node, error) {
 	return a.r.NodesByFilePath(path)
@@ -555,6 +560,46 @@ func (r *Real) GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts)
 		})
 	}
 	return citations, neighbors, nil
+}
+
+// ConcurrencyImpact computes the seed symbol's concurrency blast radius via
+// ckg's pkg/concurrency.Analyze (spawns / sends_to / recvs_from /
+// acquires_lock / accessed_under_lock edges, both directions) and translates
+// concurrency.Module → contract.ConcurrencyModule. Depth defaults to 3.
+func (r *Real) ConcurrencyImpact(ctx context.Context, symbol string, opts ConcurrencyOpts) (contract.ConcurrencyResult, error) {
+	if symbol == "" {
+		return contract.ConcurrencyResult{}, errors.New("ckgclient: empty symbol")
+	}
+	depth := opts.Depth
+	if depth <= 0 {
+		depth = 3
+	}
+	res, err := r.s.ConcurrencyAnalyze(symbol, depth, opts.MaxTotal)
+	if err != nil {
+		return contract.ConcurrencyResult{}, fmt.Errorf("ckgclient: concurrency: %w", err)
+	}
+	commit, _ := r.commit()
+	out := contract.ConcurrencyResult{
+		Seed:     res.Seed,
+		Depth:    res.Depth,
+		NotFound: res.NotFound,
+	}
+	for _, m := range res.Modules {
+		end := m.StartLine
+		out.Modules = append(out.Modules, contract.ConcurrencyModule{
+			Citation: contract.Citation{
+				File:       m.FilePath,
+				StartLine:  m.StartLine,
+				EndLine:    end,
+				CommitHash: commit,
+			},
+			Qname:     m.Qname,
+			Name:      m.Name,
+			Kind:      string(m.Type),
+			Direction: m.Direction,
+		})
+	}
+	return out, nil
 }
 
 // Health round-trips a manifest read and reports reachability + the

@@ -42,6 +42,10 @@ type Fake struct {
 	SubgraphNeighbors []contract.Neighbor
 	SubgraphErr       error
 
+	// ConcurrencyResult is returned by ConcurrencyImpact on success.
+	ConcurrencyResult contract.ConcurrencyResult
+	ConcurrencyErr    error
+
 	HealthVal Health
 	HealthErr error
 
@@ -55,20 +59,26 @@ type Fake struct {
 
 // FakeCalls records the methods invoked on a Fake and their arguments.
 type FakeCalls struct {
-	BM25Search      []BM25SearchCall
-	FindSymbol      []FindSymbolCall
-	Neighbors       []NeighborsCall
-	ImpactOfChange  []ImpactOfChangeCall
+	BM25Search        []BM25SearchCall
+	FindSymbol        []FindSymbolCall
+	Neighbors         []NeighborsCall
+	ImpactOfChange    []ImpactOfChangeCall
 	EvidenceForIntent []EvidenceForIntentCall
-	GetNodePRs      []GetNodePRsCall
-	GetSubgraph     []GetSubgraphCall
-	Health          int
-	Close           int
+	GetNodePRs        []GetNodePRsCall
+	GetSubgraph       []GetSubgraphCall
+	ConcurrencyImpact []ConcurrencyImpactCall
+	Health            int
+	Close             int
 }
 
 type ImpactOfChangeCall struct {
 	SeedQname string
 	Opts      ImpactOpts
+}
+
+type ConcurrencyImpactCall struct {
+	Symbol string
+	Opts   ConcurrencyOpts
 }
 
 type EvidenceForIntentCall struct {
@@ -211,6 +221,18 @@ func (f *Fake) GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts)
 		return nil, nil, errors.New("ckgclient: empty qname")
 	}
 	return f.SubgraphCitations, f.SubgraphNeighbors, nil
+}
+
+// ConcurrencyImpact records the call, then returns f.ConcurrencyResult or f.ConcurrencyErr.
+func (f *Fake) ConcurrencyImpact(ctx context.Context, symbol string, opts ConcurrencyOpts) (contract.ConcurrencyResult, error) {
+	f.Calls.ConcurrencyImpact = append(f.Calls.ConcurrencyImpact, ConcurrencyImpactCall{Symbol: symbol, Opts: opts})
+	if f.ConcurrencyErr != nil {
+		return contract.ConcurrencyResult{}, f.ConcurrencyErr
+	}
+	if symbol == "" {
+		return contract.ConcurrencyResult{}, errors.New("ckgclient: empty symbol")
+	}
+	return f.ConcurrencyResult, nil
 }
 
 // Health returns f.HealthVal or f.HealthErr.

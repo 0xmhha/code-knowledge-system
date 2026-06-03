@@ -172,6 +172,33 @@ func (d *Dummy) ImpactOfChange(ctx context.Context, seedQname string, opts Impac
 	return contract.ImpactResult{Seed: seedQname}, nil
 }
 
+// ConcurrencyImpact records a ckg.ConcurrencyImpact instruction and returns
+// an empty result so the pipeline keeps flowing in degraded mode.
+func (d *Dummy) ConcurrencyImpact(ctx context.Context, symbol string, opts ConcurrencyOpts) (contract.ConcurrencyResult, error) {
+	args := map[string]string{
+		"depth":     fmt.Sprintf("%d", opts.Depth),
+		"max_total": fmt.Sprintf("%d", opts.MaxTotal),
+	}
+	directive := fmt.Sprintf(
+		"Use the skills under %s to compute the concurrency blast radius of %q in go-stablenet "+
+			"source at %s — goroutines/channels/locks it spawns, sends to, or acquires, and modules "+
+			"reached over concurrency edges. Respond with a JSON contract.ConcurrencyResult "+
+			"{Seed, Depth, Modules[{Citation, Qname, Name, Kind, Direction}]}.",
+		d.skill(), symbol, d.source(),
+	)
+	d.record(ctx, contract.DummyInstruction{
+		Backend:    "ckg",
+		Operation:  "ConcurrencyImpact",
+		SkillPath:  d.skill(),
+		SourcePath: d.source(),
+		Query:      symbol,
+		Args:       args,
+		Expected:   "contract.ConcurrencyResult",
+		Directive:  directive,
+	})
+	return contract.ConcurrencyResult{Seed: symbol}, nil
+}
+
 // EvidenceForIntent records a ckg.EvidenceForIntent instruction and
 // returns an empty ChangeHistoryResult.
 func (d *Dummy) EvidenceForIntent(ctx context.Context, intent string, opts EvidenceOpts) (contract.ChangeHistoryResult, error) {
