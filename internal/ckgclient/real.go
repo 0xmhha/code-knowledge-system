@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/0xmhha/code-knowledge-graph/pkg/evidence"
+	"github.com/0xmhha/code-knowledge-graph/pkg/impact"
 	"github.com/0xmhha/code-knowledge-graph/pkg/store"
 	"github.com/0xmhha/code-knowledge-graph/pkg/types"
 
@@ -47,11 +50,18 @@ type ManifestSnapshot struct {
 // so mocks don't need to import internal/persist (which they can't).
 type storeReader interface {
 	LoadManifestSnapshot() (ManifestSnapshot, error)
-	SearchFTS(q string, limit int) ([]types.Node, error)
-	FindSymbol(name, lang string, exact bool) ([]types.Node, error)
+	// SearchFTS returns scored hits (G5): the ckg store carries a real,
+	// result-set-normalized Score in [0,1] plus a backend-native RawScore.
+	SearchFTS(q string, limit int) ([]store.SearchHit, error)
+	FindSymbol(name string, exact bool) ([]types.Node, error)
 	NodesByFilePath(path string) ([]types.Node, error)
 	NeighborhoodByQname(qname string, depth int, reverse bool, edgeTypes ...string) ([]types.Node, []types.Edge, error)
 	SubgraphByQname(qname string, depth int) ([]types.Node, []types.Edge, error)
+	// G3 seam: surface ckg's pkg/impact + pkg/evidence + GetNodePRs through
+	// the same store.Reader the adapter already holds, so mocks stay injectable.
+	ImpactCompute(seedQname, seedFile string, depth int, includeBlobs bool) (map[string]any, error)
+	EvidenceBuildPack(intent, seedQname string, k int) (*evidence.Pack, error)
+	GetNodePRs(nodeID string, cutoff time.Time) ([]store.PRRef, error)
 	Close() error
 }
 
@@ -75,11 +85,20 @@ func (a *realStoreReader) LoadManifestSnapshot() (ManifestSnapshot, error) {
 		SrcCommit:      m.SrcCommit,
 	}, nil
 }
-func (a *realStoreReader) SearchFTS(q string, limit int) ([]types.Node, error) {
-	return a.r.SearchFTS(q, limit)
+func (a *realStoreReader) SearchFTS(q string, limit int) ([]store.SearchHit, error) {
+	return a.r.SearchFTS(q, limit, store.SearchFTSOptions{})
 }
-func (a *realStoreReader) FindSymbol(name, lang string, exact bool) ([]types.Node, error) {
-	return a.r.FindSymbol(name, lang, exact)
+func (a *realStoreReader) FindSymbol(name string, exact bool) ([]types.Node, error) {
+	return a.r.FindSymbol(name, exact, store.FindSymbolOptions{})
+}
+func (a *realStoreReader) ImpactCompute(seedQname, seedFile string, depth int, includeBlobs bool) (map[string]any, error) {
+	return impact.Compute(a.r, seedQname, seedFile, impact.Options{Depth: depth, IncludeBlobs: includeBlobs})
+}
+func (a *realStoreReader) EvidenceBuildPack(intent, seedQname string, k int) (*evidence.Pack, error) {
+	return evidence.BuildPack(a.r, evidence.Options{Intent: intent, SeedQname: seedQname, K: k})
+}
+func (a *realStoreReader) GetNodePRs(nodeID string, cutoff time.Time) ([]store.PRRef, error) {
+	return a.r.GetNodePRs(nodeID, cutoff)
 }
 func (a *realStoreReader) NodesByFilePath(path string) ([]types.Node, error) {
 	return a.r.NodesByFilePath(path)
@@ -150,13 +169,12 @@ func newRealWithStore(s storeReader) *Real {
 // per-Citation commit filter has no incremental signal until ckg
 // supports cross-commit search.
 //
-// Score policy: ckg's SearchFTS returns nodes in FTS-rank order but does
-// not return a numeric score. cks Hit.Score is synthesized as
-// `1 - i/(N+1)` (descending in [1/(N+1), 1)) so downstream stages that
-// rely on relative score ordering still get a deterministic gradient.
-// Scores are computed from the original rank (pre-filter), so a
-// surviving Hit at filtered rank 1 keeps its high score even if it
-// was rank 5 in the unfiltered result.
+// Score policy (G5): ckg's SearchFTS returns a real, result-set-normalized
+// Score in [0,1] (descending) on every SearchHit — cks consumes it verbatim
+// rather than synthesizing a rank gradient. NB: a degenerate single-row or
+// all-equal result set has every Score = 1.0 — ckg's min-max maps uniform
+// strength to 1.0 (not 0.0), so "1.0" means "uniform strength," not
+// "perfect match"; downstream stage2 weighting must not over-trust it.
 func (r *Real) BM25Search(ctx context.Context, query string, opts SearchOpts) ([]contract.Hit, error) {
 	if query == "" {
 		return nil, errors.New("ckgclient: empty query")
@@ -174,26 +192,25 @@ func (r *Real) BM25Search(ctx context.Context, query string, opts SearchOpts) ([
 		fetchLimit = limit * FilterOverfetchRatio
 	}
 
-	nodes, err := r.s.SearchFTS(query, fetchLimit)
+	shits, err := r.s.SearchFTS(query, fetchLimit)
 	if err != nil {
 		return nil, fmt.Errorf("ckgclient: SearchFTS: %w", err)
 	}
-	if len(nodes) == 0 {
+	if len(shits) == 0 {
 		return nil, nil
 	}
 
 	commit, _ := r.commit()
-	hits := make([]contract.Hit, 0, len(nodes))
-	n := len(nodes)
+	hits := make([]contract.Hit, 0, len(shits))
 	kept := 0
-	for i, nd := range nodes {
-		if !matchesFilter(nd, opts.Filter) {
+	for i, sh := range shits {
+		if !matchesFilter(sh.Node, opts.Filter) {
 			continue
 		}
 		hits = append(hits, contract.Hit{
-			Citation: nodeToCitation(nd, commit),
+			Citation: nodeToCitation(sh.Node, commit),
 			Rank:     i + 1,
-			Score:    1.0 - float64(i)/float64(n+1),
+			Score:    sh.Score, // real ckg score, already normalized to [0,1]
 			Source:   contract.HitSourceCKG,
 		})
 		kept++
@@ -234,7 +251,7 @@ func (r *Real) FindSymbol(ctx context.Context, name string, opts SymbolOpts) ([]
 	if name == "" {
 		return nil, errors.New("ckgclient: empty symbol name")
 	}
-	nodes, err := r.s.FindSymbol(name, "", false)
+	nodes, err := r.s.FindSymbol(name, false)
 	if err != nil {
 		return nil, fmt.Errorf("ckgclient: FindSymbol: %w", err)
 	}
@@ -327,31 +344,173 @@ func (r *Real) Neighbors(ctx context.Context, src contract.Citation, opts Neighb
 	return out, nil
 }
 
-// ImpactOfChange is not yet wired to ckg's pkg/impact.Compute. Returns
-// an empty result until the real adapter is implemented.
+// ImpactOfChange computes the reverse-dependency closure from seedQname via
+// ckg's pkg/impact.Compute, partitioned by coupling category. impact.Compute
+// needs a seedFile too, which cks doesn't carry at the seam — we resolve it
+// from the qname's definition node (first match) and fall back to qname-only
+// resolution (impact.Compute accepts an empty seedFile).
 func (r *Real) ImpactOfChange(ctx context.Context, seedQname string, opts ImpactOpts) (contract.ImpactResult, error) {
 	if seedQname == "" {
 		return contract.ImpactResult{}, errors.New("ckgclient: empty seed qname")
 	}
-	return contract.ImpactResult{Seed: seedQname}, nil
+	seedFile := r.resolveSeedFile(seedQname)
+	raw, err := r.s.ImpactCompute(seedQname, seedFile, opts.Depth, false)
+	if err != nil {
+		return contract.ImpactResult{}, fmt.Errorf("ckgclient: impact: %w", err)
+	}
+	commit, _ := r.commit()
+	return impactResultFromMap(seedQname, raw, commit, opts.MaxTotal), nil
 }
 
-// EvidenceForIntent is not yet wired to ckg's pkg/evidence.BuildPack.
-// Returns an empty result until the real adapter is implemented.
+// EvidenceForIntent returns BM25-ranked hunk evidence for intent via ckg's
+// pkg/evidence.BuildPack, flattened from per-commit Hits into a single
+// hunk list. PRs are surfaced separately by GetNodePRs.
 func (r *Real) EvidenceForIntent(ctx context.Context, intent string, opts EvidenceOpts) (contract.ChangeHistoryResult, error) {
 	if intent == "" {
 		return contract.ChangeHistoryResult{}, errors.New("ckgclient: empty intent")
 	}
-	return contract.ChangeHistoryResult{Seed: opts.SeedQname}, nil
+	pack, err := r.s.EvidenceBuildPack(intent, opts.SeedQname, opts.K)
+	if err != nil {
+		return contract.ChangeHistoryResult{}, fmt.Errorf("ckgclient: evidence: %w", err)
+	}
+	out := contract.ChangeHistoryResult{Seed: opts.SeedQname}
+	if pack == nil {
+		return out, nil
+	}
+	for _, h := range pack.Hits {
+		for _, hr := range h.Hunks {
+			out.Hunks = append(out.Hunks, contract.HunkEvidence{
+				File:      hr.FilePath,
+				StartLine: hr.StartLine,
+				EndLine:   hr.EndLine,
+				Patch:     hr.PatchText,
+			})
+		}
+	}
+	return out, nil
 }
 
-// GetNodePRs is not yet wired to ckg's store.Reader.GetNodePRs. Returns
-// nil until the real adapter is implemented.
+// GetNodePRs resolves qname to its definition node, then returns the PRs that
+// touched it (ckg store.Reader.GetNodePRs takes a node ID). A zero cutoff
+// means "no time filter"; opts.MaxCount truncates.
 func (r *Real) GetNodePRs(ctx context.Context, qname string, opts PRRefOpts) ([]contract.PRRef, error) {
 	if qname == "" {
 		return nil, errors.New("ckgclient: empty qname")
 	}
-	return nil, nil
+	nodeID := r.resolveNodeID(qname)
+	if nodeID == "" {
+		return nil, nil
+	}
+	prs, err := r.s.GetNodePRs(nodeID, time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("ckgclient: GetNodePRs: %w", err)
+	}
+	out := make([]contract.PRRef, 0, len(prs))
+	for _, p := range prs {
+		if opts.MaxCount > 0 && len(out) >= opts.MaxCount {
+			break
+		}
+		out = append(out, contract.PRRef{
+			Number:   p.Number,
+			Title:    p.Title,
+			Summary:  p.Summary,
+			BaseSHA:  p.BaseSHA,
+			HeadSHA:  p.HeadSHA,
+			MergedAt: p.MergedAtUTC,
+			Repo:     p.Repo,
+		})
+	}
+	return out, nil
+}
+
+// resolveSeedFile returns the FilePath of qname's definition node (exact qname
+// match preferred, else first result, else ""). Used to give impact.Compute
+// its second seed arg.
+func (r *Real) resolveSeedFile(qname string) string {
+	defs, err := r.s.FindSymbol(qname, false)
+	if err != nil || len(defs) == 0 {
+		return ""
+	}
+	for _, d := range defs {
+		if d.QualifiedName == qname && d.FilePath != "" {
+			return d.FilePath
+		}
+	}
+	return defs[0].FilePath
+}
+
+// resolveNodeID returns the node ID of qname's definition (exact qname match
+// preferred, else first result, else ""). Used to bridge qname→nodeID for
+// store.Reader.GetNodePRs.
+func (r *Real) resolveNodeID(qname string) string {
+	defs, err := r.s.FindSymbol(qname, false)
+	if err != nil || len(defs) == 0 {
+		return ""
+	}
+	for _, d := range defs {
+		if d.QualifiedName == qname && d.ID != "" {
+			return d.ID
+		}
+	}
+	return defs[0].ID
+}
+
+// impactGroupOrder pins the ckg group key → cks category mapping in a fixed
+// order so the response is deterministic (Go map iteration is random).
+var impactGroupOrder = []struct {
+	ckgKey string
+	cat    contract.ImpactCategory
+}{
+	{"callers", contract.ImpactCallers},
+	{"interface_impact", contract.ImpactInterface},
+	{"type_users", contract.ImpactTypeUsers},
+	{"distributed", contract.ImpactDistributed},
+	{"concurrent", contract.ImpactConcurrent},
+	{"other_refs", contract.ImpactOther},
+}
+
+// impactResultFromMap translates ckg's impact.Compute map[string]any envelope
+// into a typed contract.ImpactResult. Each per-bucket entry carries "file"
+// (string) + "line" (int = StartLine); end line isn't in the impact entry so
+// EndLine mirrors StartLine. maxTotal caps citations across all groups.
+func impactResultFromMap(seed string, raw map[string]any, commit string, maxTotal int) contract.ImpactResult {
+	out := contract.ImpactResult{Seed: seed}
+	if raw == nil {
+		return out
+	}
+	if nf, _ := raw["not_found"].(bool); nf {
+		return out
+	}
+	impactMap, _ := raw["impact"].(map[string]any)
+	if impactMap == nil {
+		return out
+	}
+	total := 0
+	for _, g := range impactGroupOrder {
+		entries, _ := impactMap[g.ckgKey].([]map[string]any)
+		if len(entries) == 0 {
+			continue
+		}
+		grp := contract.ImpactGroup{Category: g.cat}
+		for _, e := range entries {
+			if maxTotal > 0 && total >= maxTotal {
+				break
+			}
+			file, _ := e["file"].(string)
+			line, _ := e["line"].(int)
+			if file == "" || line <= 0 {
+				continue
+			}
+			grp.Hits = append(grp.Hits, contract.Citation{
+				File: file, StartLine: line, EndLine: line, CommitHash: commit,
+			})
+			total++
+		}
+		if len(grp.Hits) > 0 {
+			out.Groups = append(out.Groups, grp)
+		}
+	}
+	return out
 }
 
 // GetSubgraph delegates to ckg's SubgraphByQname and translates the result.

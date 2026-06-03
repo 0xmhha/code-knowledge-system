@@ -5,7 +5,10 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/0xmhha/code-knowledge-graph/pkg/evidence"
+	"github.com/0xmhha/code-knowledge-graph/pkg/store"
 	"github.com/0xmhha/code-knowledge-graph/pkg/types"
 
 	"github.com/0xmhha/code-knowledge-system/pkg/contract"
@@ -21,7 +24,7 @@ type mockStoreReader struct {
 	manifest    ManifestSnapshot
 	manifestErr error
 
-	searchOut []types.Node
+	searchOut []store.SearchHit
 	searchErr error
 	searchCh  []searchCall
 
@@ -41,6 +44,17 @@ type mockStoreReader struct {
 	pathErr   error
 	pathCh    []string
 
+	// G3 seam canned outputs.
+	impactOut   map[string]any
+	impactErr   error
+	impactCh    []impactCall
+	evidenceOut *evidence.Pack
+	evidenceErr error
+	evidenceCh  []evidenceCall
+	prsOut      []store.PRRef
+	prsErr      error
+	prsCh       []prsCall
+
 	closed   bool
 	closeErr error
 }
@@ -51,7 +65,6 @@ type searchCall struct {
 }
 type symbolCall struct {
 	name  string
-	lang  string
 	exact bool
 }
 type neighCall struct {
@@ -60,6 +73,24 @@ type neighCall struct {
 	rev    bool
 	etypes []string
 }
+type impactCall struct {
+	seedQname, seedFile string
+	depth               int
+	includeBlobs        bool
+}
+type evidenceCall struct {
+	intent, seedQname string
+	k                 int
+}
+type prsCall struct {
+	nodeID string
+	cutoff time.Time
+}
+
+// shit builds a store.SearchHit wrapping n with a normalized Score.
+func shit(n types.Node, score float64) store.SearchHit {
+	return store.SearchHit{Node: n, Score: score, RawScore: score}
+}
 
 func (m *mockStoreReader) LoadManifestSnapshot() (ManifestSnapshot, error) {
 	if m.manifestErr != nil {
@@ -67,13 +98,25 @@ func (m *mockStoreReader) LoadManifestSnapshot() (ManifestSnapshot, error) {
 	}
 	return m.manifest, nil
 }
-func (m *mockStoreReader) SearchFTS(q string, limit int) ([]types.Node, error) {
+func (m *mockStoreReader) SearchFTS(q string, limit int) ([]store.SearchHit, error) {
 	m.searchCh = append(m.searchCh, searchCall{q: q, limit: limit})
 	return m.searchOut, m.searchErr
 }
-func (m *mockStoreReader) FindSymbol(name, lang string, exact bool) ([]types.Node, error) {
-	m.symbolCh = append(m.symbolCh, symbolCall{name: name, lang: lang, exact: exact})
+func (m *mockStoreReader) FindSymbol(name string, exact bool) ([]types.Node, error) {
+	m.symbolCh = append(m.symbolCh, symbolCall{name: name, exact: exact})
 	return m.symbolOut, m.symbolErr
+}
+func (m *mockStoreReader) ImpactCompute(seedQname, seedFile string, depth int, includeBlobs bool) (map[string]any, error) {
+	m.impactCh = append(m.impactCh, impactCall{seedQname: seedQname, seedFile: seedFile, depth: depth, includeBlobs: includeBlobs})
+	return m.impactOut, m.impactErr
+}
+func (m *mockStoreReader) EvidenceBuildPack(intent, seedQname string, k int) (*evidence.Pack, error) {
+	m.evidenceCh = append(m.evidenceCh, evidenceCall{intent: intent, seedQname: seedQname, k: k})
+	return m.evidenceOut, m.evidenceErr
+}
+func (m *mockStoreReader) GetNodePRs(nodeID string, cutoff time.Time) ([]store.PRRef, error) {
+	m.prsCh = append(m.prsCh, prsCall{nodeID: nodeID, cutoff: cutoff})
+	return m.prsOut, m.prsErr
 }
 func (m *mockStoreReader) NeighborhoodByQname(qname string, depth int, reverse bool, edgeTypes ...string) ([]types.Node, []types.Edge, error) {
 	m.neighCh = append(m.neighCh, neighCall{qname: qname, depth: depth, rev: reverse, etypes: edgeTypes})
@@ -117,9 +160,9 @@ func TestReal_BM25Search_TranslatesNodesToHits(t *testing.T) {
 	t.Parallel()
 	m := &mockStoreReader{
 		manifest: ManifestSnapshot{SrcCommit: "abc123"},
-		searchOut: []types.Node{
-			node("nid1", "pkg.A", "a.go", 10, 30, types.NodeFunction, "go"),
-			node("nid2", "pkg.B", "b.go", 5, 25, types.NodeMethod, "go"),
+		searchOut: []store.SearchHit{
+			shit(node("nid1", "pkg.A", "a.go", 10, 30, types.NodeFunction, "go"), 0.9),
+			shit(node("nid2", "pkg.B", "b.go", 5, 25, types.NodeMethod, "go"), 0.5),
 		},
 	}
 	r := newRealWithStore(m)
@@ -146,9 +189,9 @@ func TestReal_BM25Search_TranslatesNodesToHits(t *testing.T) {
 	if h0.Source != contract.HitSourceCKG {
 		t.Errorf("Source = %q, want HitSourceCKG", h0.Source)
 	}
-	// Synthetic score: descending 1 -> 1/N.
-	if !(h0.Score > hits[1].Score) {
-		t.Errorf("scores not descending: %v vs %v", h0.Score, hits[1].Score)
+	// G5: real ckg score passed through verbatim (no 1-i/(n+1) synthesis).
+	if h0.Score != 0.9 || hits[1].Score != 0.5 {
+		t.Errorf("scores = %v,%v want 0.9,0.5 (real ckg Score passthrough)", h0.Score, hits[1].Score)
 	}
 	if h0.Rank != 1 || hits[1].Rank != 2 {
 		t.Errorf("Rank = %d,%d want 1,2", h0.Rank, hits[1].Rank)
@@ -187,11 +230,11 @@ func TestReal_BM25Search_PathGlobPostFilter(t *testing.T) {
 	// so the backend should be hit with K * FilterOverfetchRatio.
 	m := &mockStoreReader{
 		manifest: ManifestSnapshot{SrcCommit: "h"},
-		searchOut: []types.Node{
-			node("n1", "Foo", "a.go", 1, 5, types.NodeFunction, "go"),
-			node("n2", "TestFoo", "a_test.go", 10, 20, types.NodeFunction, "go"),
-			node("n3", "Bar", "b.go", 1, 5, types.NodeFunction, "go"),
-			node("n4", "TestBar", "b_test.go", 10, 20, types.NodeFunction, "go"),
+		searchOut: []store.SearchHit{
+			shit(node("n1", "Foo", "a.go", 1, 5, types.NodeFunction, "go"), 0.9),
+			shit(node("n2", "TestFoo", "a_test.go", 10, 20, types.NodeFunction, "go"), 0.8),
+			shit(node("n3", "Bar", "b.go", 1, 5, types.NodeFunction, "go"), 0.7),
+			shit(node("n4", "TestBar", "b_test.go", 10, 20, types.NodeFunction, "go"), 0.6),
 		},
 	}
 	r := newRealWithStore(m)
@@ -217,9 +260,9 @@ func TestReal_BM25Search_LanguageFilter(t *testing.T) {
 	t.Parallel()
 	m := &mockStoreReader{
 		manifest: ManifestSnapshot{SrcCommit: "h"},
-		searchOut: []types.Node{
-			node("n1", "Foo", "a.go", 1, 5, types.NodeFunction, "go"),
-			node("n2", "Bar", "b.ts", 1, 5, types.NodeFunction, "ts"),
+		searchOut: []store.SearchHit{
+			shit(node("n1", "Foo", "a.go", 1, 5, types.NodeFunction, "go"), 0.9),
+			shit(node("n2", "Bar", "b.ts", 1, 5, types.NodeFunction, "ts"), 0.8),
 		},
 	}
 	r := newRealWithStore(m)
@@ -238,8 +281,8 @@ func TestReal_BM25Search_NoFilterKeepsExactLimit(t *testing.T) {
 	// Without a filter, the backend limit must equal K — no over-fetch.
 	m := &mockStoreReader{
 		manifest: ManifestSnapshot{SrcCommit: "h"},
-		searchOut: []types.Node{
-			node("n1", "A", "a.go", 1, 5, types.NodeFunction, "go"),
+		searchOut: []store.SearchHit{
+			shit(node("n1", "A", "a.go", 1, 5, types.NodeFunction, "go"), 0.9),
 		},
 	}
 	r := newRealWithStore(m)
@@ -313,17 +356,20 @@ func TestReal_FindSymbol_KindsFilterClientSide(t *testing.T) {
 	}
 }
 
-func TestReal_FindSymbol_UsesLanguageFilter(t *testing.T) {
+func TestReal_FindSymbol_ForwardsSuffixMatch(t *testing.T) {
 	t.Parallel()
 	m := &mockStoreReader{manifest: ManifestSnapshot{SrcCommit: "c"}}
 	r := newRealWithStore(m)
 	_, _ = r.FindSymbol(context.Background(), "X", SymbolOpts{})
-	if m.symbolCh[0].lang != "" {
-		t.Errorf("lang = %q, want empty (no filter)", m.symbolCh[0].lang)
+	if len(m.symbolCh) != 1 || m.symbolCh[0].name != "X" {
+		t.Errorf("FindSymbol calls = %v, want one call with name X", m.symbolCh)
 	}
-	// Note: cks SymbolOpts has no Language field today (only Kinds/PathGlob/
-	// CommitHash). Real.FindSymbol passes "" as the ckg language argument
-	// which means "any language". This guards against regression.
+	// cks passes exact=false (suffix match on qualified name) — the new ckg
+	// FindSymbol(name, exact, opts) signature drops the old positional lang
+	// argument (language filtering now lives in FindSymbolOptions, unused here).
+	if m.symbolCh[0].exact {
+		t.Error("exact should be false (suffix match for bare symbol names)")
+	}
 }
 
 // --- Neighbors ---
@@ -476,6 +522,130 @@ func TestReal_Close_IsIdempotent(t *testing.T) {
 	}
 	if !m.closed {
 		t.Error("underlying Close not called")
+	}
+}
+
+// --- G3: ImpactOfChange / EvidenceForIntent / GetNodePRs ---
+
+func TestReal_ImpactOfChange_TranslatesGroups(t *testing.T) {
+	t.Parallel()
+	m := &mockStoreReader{
+		manifest: ManifestSnapshot{SrcCommit: "c0"},
+		// resolveSeedFile resolves the seed qname to its definition file.
+		symbolOut: []types.Node{node("seed", "pkg.Seed", "seed.go", 1, 9, types.NodeFunction, "go")},
+		impactOut: map[string]any{
+			"depth": 2,
+			"impact": map[string]any{
+				"callers": []map[string]any{
+					{"file": "caller.go", "line": 42, "qname": "pkg.Caller"},
+				},
+				"interface_impact": []map[string]any{},
+				"concurrent": []map[string]any{
+					{"file": "worker.go", "line": 10, "qname": "pkg.Worker"},
+				},
+			},
+		},
+	}
+	r := newRealWithStore(m)
+	res, err := r.ImpactOfChange(context.Background(), "pkg.Seed", ImpactOpts{Depth: 2})
+	if err != nil {
+		t.Fatalf("ImpactOfChange: %v", err)
+	}
+	if res.Seed != "pkg.Seed" {
+		t.Errorf("Seed = %q, want pkg.Seed", res.Seed)
+	}
+	// seedFile resolved + forwarded to impact.Compute.
+	if len(m.impactCh) != 1 || m.impactCh[0].seedFile != "seed.go" {
+		t.Errorf("impact seedFile = %q, want seed.go", m.impactCh[0].seedFile)
+	}
+	// Empty group dropped; callers + concurrent kept in deterministic order.
+	if len(res.Groups) != 2 {
+		t.Fatalf("want 2 non-empty groups, got %d: %+v", len(res.Groups), res.Groups)
+	}
+	if res.Groups[0].Category != contract.ImpactCallers || res.Groups[1].Category != contract.ImpactConcurrent {
+		t.Errorf("group order = %v,%v want callers,concurrent", res.Groups[0].Category, res.Groups[1].Category)
+	}
+	c := res.Groups[0].Hits[0]
+	if c.File != "caller.go" || c.StartLine != 42 || c.CommitHash != "c0" {
+		t.Errorf("citation = %+v, want caller.go:42 @c0", c)
+	}
+}
+
+func TestReal_ImpactOfChange_NotFoundReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	m := &mockStoreReader{
+		manifest:  ManifestSnapshot{SrcCommit: "c"},
+		impactOut: map[string]any{"not_found": true, "depth": 1},
+	}
+	r := newRealWithStore(m)
+	res, err := r.ImpactOfChange(context.Background(), "pkg.Missing", ImpactOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Groups) != 0 {
+		t.Errorf("not_found should yield no groups, got %+v", res.Groups)
+	}
+}
+
+func TestReal_EvidenceForIntent_FlattensHunks(t *testing.T) {
+	t.Parallel()
+	m := &mockStoreReader{
+		manifest: ManifestSnapshot{SrcCommit: "c"},
+		evidenceOut: &evidence.Pack{
+			Intent: "fix quorum",
+			Hits: []evidence.Hit{
+				{Hunks: []evidence.HunkRow{
+					{FilePath: "consensus.go", StartLine: 10, EndLine: 20, PatchText: "@@ -10 +10 @@"},
+				}},
+				{Hunks: []evidence.HunkRow{
+					{FilePath: "vote.go", StartLine: 5, EndLine: 8, PatchText: "@@ -5 +5 @@"},
+				}},
+			},
+		},
+	}
+	r := newRealWithStore(m)
+	res, err := r.EvidenceForIntent(context.Background(), "fix quorum", EvidenceOpts{SeedQname: "pkg.S", K: 5})
+	if err != nil {
+		t.Fatalf("EvidenceForIntent: %v", err)
+	}
+	if len(m.evidenceCh) != 1 || m.evidenceCh[0].intent != "fix quorum" || m.evidenceCh[0].k != 5 {
+		t.Errorf("evidence call = %+v, want intent=fix quorum k=5", m.evidenceCh)
+	}
+	if len(res.Hunks) != 2 {
+		t.Fatalf("want 2 flattened hunks, got %d", len(res.Hunks))
+	}
+	if res.Hunks[0].File != "consensus.go" || res.Hunks[0].StartLine != 10 || res.Hunks[0].Patch == "" {
+		t.Errorf("hunk0 = %+v", res.Hunks[0])
+	}
+}
+
+func TestReal_GetNodePRs_ResolvesAndTranslates(t *testing.T) {
+	t.Parallel()
+	when := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	m := &mockStoreReader{
+		manifest:  ManifestSnapshot{SrcCommit: "c"},
+		symbolOut: []types.Node{node("nodeX", "pkg.X", "x.go", 1, 9, types.NodeFunction, "go")},
+		prsOut: []store.PRRef{
+			{Number: 42, Title: "fix X", BaseSHA: "b", HeadSHA: "h", MergedAtUTC: when, Repo: "o/r"},
+			{Number: 7, Title: "older"},
+		},
+	}
+	r := newRealWithStore(m)
+	prs, err := r.GetNodePRs(context.Background(), "pkg.X", PRRefOpts{MaxCount: 1})
+	if err != nil {
+		t.Fatalf("GetNodePRs: %v", err)
+	}
+	// nodeID resolved from FindSymbol then forwarded to GetNodePRs.
+	if len(m.prsCh) != 1 || m.prsCh[0].nodeID != "nodeX" {
+		t.Errorf("GetNodePRs nodeID = %v, want nodeX", m.prsCh)
+	}
+	// MaxCount=1 truncates.
+	if len(prs) != 1 {
+		t.Fatalf("want 1 PR (MaxCount), got %d", len(prs))
+	}
+	p := prs[0]
+	if p.Number != 42 || p.Title != "fix X" || p.Repo != "o/r" || !p.MergedAt.Equal(when) {
+		t.Errorf("PRRef = %+v (MergedAtUTC→MergedAt mapping?)", p)
 	}
 }
 
