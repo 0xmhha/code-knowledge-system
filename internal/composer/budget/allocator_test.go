@@ -105,6 +105,46 @@ func TestAllocate_EmptyInputsReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestAllocate_MaxCitationsCapsSelection(t *testing.T) {
+	t.Parallel()
+	// 5 fittable candidates, generous token budget, but MaxCitations=2 — only
+	// the two highest-scored survive (candidates merge in descending score).
+	seeds := []stage2.ScoredCitation{
+		seed("a.go", 1.0),
+		seed("b.go", 5.0),
+		seed("c.go", 3.0),
+		seed("d.go", 9.0),
+		seed("e.go", 2.0),
+	}
+	fetcher := &FakeFetcher{Bodies: map[string]string{
+		cit("a.go", 1, 10).Key(): bodyN(10),
+		cit("b.go", 1, 10).Key(): bodyN(10),
+		cit("c.go", 1, 10).Key(): bodyN(10),
+		cit("d.go", 1, 10).Key(): bodyN(10),
+		cit("e.go", 1, 10).Key(): bodyN(10),
+	}}
+	a, _ := New(fetcher, WithConfig(Config{MaxTokens: 100000, OverheadReserve: 0.10, MaxCitations: 2}))
+	out, err := a.Allocate(context.Background(), seeds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Selected) != 2 {
+		t.Fatalf("Selected = %d, want 2 (capped by MaxCitations)", len(out.Selected))
+	}
+	// Top two by score: d.go (9), b.go (5).
+	if out.Selected[0].Citation.File != "d.go" || out.Selected[1].Citation.File != "b.go" {
+		t.Errorf("capped selection = %s,%s want d.go,b.go (highest scores)",
+			out.Selected[0].Citation.File, out.Selected[1].Citation.File)
+	}
+}
+
+func TestAllocate_DefaultConfigCapsAtTwelve(t *testing.T) {
+	t.Parallel()
+	if DefaultConfig().MaxCitations != DefaultMaxCitations || DefaultMaxCitations != 12 {
+		t.Errorf("DefaultConfig.MaxCitations = %d, want %d", DefaultConfig().MaxCitations, DefaultMaxCitations)
+	}
+}
+
 func TestAllocate_SeedsAndNeighborsMerged(t *testing.T) {
 	t.Parallel()
 	seeds := []stage2.ScoredCitation{seed("a.go", 10.0)}

@@ -24,6 +24,13 @@ const (
 	// pack metadata (sanitize_report, citations index, integrity_hash).
 	// Bodies share the remaining 90%.
 	DefaultOverheadReserve = 0.10
+
+	// DefaultMaxCitations caps the number of bodies the allocator selects,
+	// independent of the token budget. Dogfooding returned 35-53 citations
+	// per request (precision 2-24%), flooding the agent; capping the default
+	// keeps packs focused. The agent overrides via the budget/depth knobs.
+	// 0 means "no cap" (token budget is the only gate).
+	DefaultMaxCitations = 12
 )
 
 // Config tunes the allocator's budget and reserve.
@@ -35,6 +42,10 @@ type Config struct {
 	// OverheadReserve is the fraction of MaxTokens NOT available for
 	// bodies (range 0..1). Defaults to 0.10 — bodies get 90% of MaxTokens.
 	OverheadReserve float64
+
+	// MaxCitations caps the number of selected bodies regardless of the
+	// token budget (0 = no cap). Defaults to DefaultMaxCitations.
+	MaxCitations int
 }
 
 // DefaultConfig returns the Phase-0 tuning baseline.
@@ -42,6 +53,7 @@ func DefaultConfig() Config {
 	return Config{
 		MaxTokens:       DefaultMaxTokens,
 		OverheadReserve: DefaultOverheadReserve,
+		MaxCitations:    DefaultMaxCitations,
 	}
 }
 
@@ -184,6 +196,15 @@ func (a *Allocator) Allocate(ctx context.Context, seeds []stage2.ScoredCitation,
 			Sources:       c.Sources,
 		})
 		used += tokens
+
+		// Citation cap: stop once we've selected MaxCitations bodies, even
+		// if the token budget has room. Candidates are merged in descending
+		// score order, so the cap keeps the strongest hits. Remaining
+		// candidates are simply not processed (a hard ceiling on selection,
+		// distinct from the budget/fetch skips tracked in out.Skipped).
+		if a.config.MaxCitations > 0 && len(out.Selected) >= a.config.MaxCitations {
+			break
+		}
 	}
 
 	out.UsedTokens = used
