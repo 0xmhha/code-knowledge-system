@@ -26,6 +26,13 @@ type Dummy struct {
 	// SourcePath is the absolute path to the go-stablenet source tree.
 	// Defaults to DefaultSourcePath when empty.
 	SourcePath string
+
+	// Degraded marks this Dummy as a fallback for an UNAVAILABLE real ckv
+	// (e.g. Ollama down). When set, Health reports Reachable=false so the
+	// cks.ops.health rollup yields "degraded" (S5) instead of falsely "ok".
+	// DegradedReason is surfaced in the health StatsHash for operators.
+	Degraded       bool
+	DegradedReason string
 }
 
 // DefaultSkillPath is the on-disk skill directory used when a Dummy is
@@ -40,6 +47,20 @@ const DefaultSourcePath = "/Users/wm-it-22-00661/Work/github/stable-net/go-stabl
 // NewDummy returns a Dummy with the default skill + source paths.
 func NewDummy() *Dummy {
 	return &Dummy{SkillPath: DefaultSkillPath, SourcePath: DefaultSourcePath}
+}
+
+// NewDegradedDummy returns a Dummy that additionally reports the ckv backend
+// as unreachable via Health, so cks.ops.health rolls up to "degraded" (S5).
+// Used when a real ckv index is configured but the embedder (Ollama) is
+// unavailable: the pipeline still flows via recorded instructions, but the
+// operator sees the degraded signal instead of a false "ok".
+func NewDegradedDummy(reason string) *Dummy {
+	return &Dummy{
+		SkillPath:      DefaultSkillPath,
+		SourcePath:     DefaultSourcePath,
+		Degraded:       true,
+		DegradedReason: reason,
+	}
 }
 
 // Compile-time assertion that Dummy satisfies Client.
@@ -120,6 +141,14 @@ func (d *Dummy) Freshness(ctx context.Context) (FreshnessReport, error) {
 // health checks are part of the CKS bootstrap, not part of the retrieval
 // pipeline the upstream LLM needs to fulfil.
 func (d *Dummy) Health(ctx context.Context) (Health, error) {
+	if d.Degraded {
+		// Report unreachable so aggregateHealthStatus rolls up to "degraded".
+		hash := "degraded"
+		if d.DegradedReason != "" {
+			hash = "degraded: " + d.DegradedReason
+		}
+		return Health{Reachable: false, StatsHash: hash}, nil
+	}
 	return Health{
 		Reachable:   true,
 		StatsHash:   "dummy",

@@ -76,10 +76,20 @@ type CKGConfig struct {
 // spawns `ckv mcp --out=<Path>` as a subprocess. BinaryPath gives the
 // absolute path to that binary; empty means "look up `ckv` on $PATH".
 type CKVConfig struct {
-	Path       string `yaml:"path"`
+	Path string `yaml:"path"`
+	// BinaryPath is retained for the agent-triggered index op (cks.ops.index,
+	// G8 shells `ckv reindex`); it is NOT used on the query path anymore —
+	// G1 imports pkg/ckv in-process, so there is no `ckv mcp` subprocess.
 	BinaryPath string `yaml:"binary_path"`
-	TimeoutMS  int    `yaml:"timeout_ms"`
+	// TimeoutMS is unused by the in-process query path (kept for config
+	// back-compat; the subprocess call timeout it bounded no longer exists).
+	TimeoutMS int `yaml:"timeout_ms"`
+	// EmbedModel is the Ollama model name (e.g. "bge-m3") used to construct
+	// the in-process embedder. Must match the model the index was built with.
 	EmbedModel string `yaml:"embed_model"`
+	// OllamaURL is the Ollama daemon endpoint. Empty resolves to
+	// http://localhost:11434 (and the CKV_OLLAMA_ENDPOINT env override).
+	OllamaURL string `yaml:"ollama_url"`
 }
 
 // ListenConfig controls how cks exposes its surface to callers.
