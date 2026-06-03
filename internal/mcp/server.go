@@ -1,12 +1,12 @@
 // Package mcp exposes the cks composer pipeline as an MCP (Model Context
 // Protocol) server over stdio.
 //
-// Phase C.5 (slim) registers two tools:
-//
-//   - cks.context.get_for_task : run the composer over a vibe prompt and
-//     return a stamped, sanitized EvidencePack.
-//   - cks.ops.health           : aggregate ckg/ckv backend reachability
-//     into an ok/degraded/down rollup.
+// Register wires the 13 agent-facing cks.* tools (the C1 surface): the
+// context tools (get_for_task, semantic_search, search_text, find_symbol,
+// find_callers, find_callees, get_subgraph, impact_analysis,
+// concurrency_impact, change_history) and the ops tools (health, freshness,
+// index). The exact registered set is pinned against the SSoT fixture by
+// schema_golden_test.go (M2.a).
 //
 // The package is intentionally thin: Register attaches handlers to an
 // already-constructed *server.MCPServer so callers retain control over
@@ -52,6 +52,11 @@ type Deps struct {
 	// caller correlate health output with running binary build tags.
 	// Empty string is acceptable; the field is informational, not load-bearing.
 	BuilderVersion string
+
+	// Index configures the cks.ops.index maintenance tool (G8). Zero value
+	// (no binaries) disables it — the tool then tells the agent to run the
+	// indexers manually. Not used by the query path.
+	Index IndexConfig
 }
 
 // Register attaches both tools to s. Returns an error when required Deps
@@ -78,10 +83,12 @@ func Register(s *mcpserver.MCPServer, d Deps) error {
 	registerFindCallees(s, d)
 	registerGetSubgraph(s, d)
 	registerImpactAnalysis(s, d)
+	registerConcurrencyImpact(s, d)
 	registerChangeHistory(s, d)
 	registerSemanticSearch(s, d)
 	registerSearchText(s, d)
 	registerFreshness(s, d)
+	registerOpsIndex(s, d)
 	return nil
 }
 

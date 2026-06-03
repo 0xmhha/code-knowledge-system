@@ -38,6 +38,9 @@ func (r *rerankFake) GetNodePRs(_ context.Context, _ string, _ ckgclient.PRRefOp
 func (r *rerankFake) GetSubgraph(_ context.Context, _ string, _ ckgclient.SubgraphOpts) ([]contract.Citation, []contract.Neighbor, error) {
 	return nil, nil, nil
 }
+func (r *rerankFake) ConcurrencyImpact(_ context.Context, _ string, _ ckgclient.ConcurrencyOpts) (contract.ConcurrencyResult, error) {
+	return contract.ConcurrencyResult{}, nil
+}
 func (r *rerankFake) Health(_ context.Context) (ckgclient.Health, error) {
 	return ckgclient.Health{Reachable: true}, nil
 }
@@ -81,7 +84,7 @@ func TestRerank_DropsZeroScoreKeywords(t *testing.T) {
 	t.Parallel()
 	ckg := &rerankFake{
 		hitsByKW: map[string][]contract.Hit{
-			"sentinel":      nil,                       // no hits at all
+			"sentinel":      nil, // no hits at all
 			"ErrFailClosed": {hitScore(1.0)},
 		},
 	}

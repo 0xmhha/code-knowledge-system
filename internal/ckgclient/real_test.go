@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/code-knowledge-graph/pkg/concurrency"
 	"github.com/0xmhha/code-knowledge-graph/pkg/evidence"
 	"github.com/0xmhha/code-knowledge-graph/pkg/store"
 	"github.com/0xmhha/code-knowledge-graph/pkg/types"
@@ -55,6 +56,10 @@ type mockStoreReader struct {
 	prsErr      error
 	prsCh       []prsCall
 
+	concurrencyOut concurrency.Result
+	concurrencyErr error
+	concurrencyCh  []concurrencyCall
+
 	closed   bool
 	closeErr error
 }
@@ -85,6 +90,10 @@ type evidenceCall struct {
 type prsCall struct {
 	nodeID string
 	cutoff time.Time
+}
+type concurrencyCall struct {
+	symbol          string
+	depth, maxTotal int
 }
 
 // shit builds a store.SearchHit wrapping n with a normalized Score.
@@ -117,6 +126,10 @@ func (m *mockStoreReader) EvidenceBuildPack(intent, seedQname string, k int) (*e
 func (m *mockStoreReader) GetNodePRs(nodeID string, cutoff time.Time) ([]store.PRRef, error) {
 	m.prsCh = append(m.prsCh, prsCall{nodeID: nodeID, cutoff: cutoff})
 	return m.prsOut, m.prsErr
+}
+func (m *mockStoreReader) ConcurrencyAnalyze(symbol string, depth, maxTotal int) (concurrency.Result, error) {
+	m.concurrencyCh = append(m.concurrencyCh, concurrencyCall{symbol: symbol, depth: depth, maxTotal: maxTotal})
+	return m.concurrencyOut, m.concurrencyErr
 }
 func (m *mockStoreReader) NeighborhoodByQname(qname string, depth int, reverse bool, edgeTypes ...string) ([]types.Node, []types.Edge, error) {
 	m.neighCh = append(m.neighCh, neighCall{qname: qname, depth: depth, rev: reverse, etypes: edgeTypes})
@@ -646,6 +659,55 @@ func TestReal_GetNodePRs_ResolvesAndTranslates(t *testing.T) {
 	p := prs[0]
 	if p.Number != 42 || p.Title != "fix X" || p.Repo != "o/r" || !p.MergedAt.Equal(when) {
 		t.Errorf("PRRef = %+v (MergedAtUTC→MergedAt mapping?)", p)
+	}
+}
+
+// --- G7: ConcurrencyImpact ---
+
+func TestReal_ConcurrencyImpact_TranslatesModules(t *testing.T) {
+	t.Parallel()
+	m := &mockStoreReader{
+		manifest: ManifestSnapshot{SrcCommit: "c9"},
+		concurrencyOut: concurrency.Result{
+			Seed:  "wbft.Finalize",
+			Depth: 3,
+			Modules: []concurrency.Module{
+				{ID: "g1", Type: types.NodeFunction, Name: "loop", Qname: "wbft.loop",
+					FilePath: "consensus/wbft/loop.go", StartLine: 88, Direction: "affected_by"},
+				{ID: "m1", Type: types.NodeStruct, Name: "mu", Qname: "wbft.state.mu",
+					FilePath: "consensus/wbft/state.go", StartLine: 12, Direction: "affects"},
+			},
+		},
+	}
+	r := newRealWithStore(m)
+	res, err := r.ConcurrencyImpact(context.Background(), "wbft.Finalize", ConcurrencyOpts{Depth: 0, MaxTotal: 50})
+	if err != nil {
+		t.Fatalf("ConcurrencyImpact: %v", err)
+	}
+	// Depth 0 → default 3 forwarded to the analyzer.
+	if len(m.concurrencyCh) != 1 || m.concurrencyCh[0].depth != 3 || m.concurrencyCh[0].maxTotal != 50 {
+		t.Errorf("analyze call = %+v, want depth=3 maxTotal=50", m.concurrencyCh)
+	}
+	if res.Seed != "wbft.Finalize" || res.Depth != 3 {
+		t.Errorf("result envelope = %+v, want seed=wbft.Finalize depth=3", res)
+	}
+	if len(res.Modules) != 2 {
+		t.Fatalf("want 2 modules, got %d", len(res.Modules))
+	}
+	m0 := res.Modules[0]
+	if m0.Citation.File != "consensus/wbft/loop.go" || m0.Citation.StartLine != 88 || m0.Citation.CommitHash != "c9" {
+		t.Errorf("module0 citation = %+v", m0.Citation)
+	}
+	if m0.Qname != "wbft.loop" || m0.Kind != string(types.NodeFunction) || m0.Direction != "affected_by" {
+		t.Errorf("module0 = %+v", m0)
+	}
+}
+
+func TestReal_ConcurrencyImpact_EmptySymbolErrors(t *testing.T) {
+	t.Parallel()
+	r := newRealWithStore(&mockStoreReader{})
+	if _, err := r.ConcurrencyImpact(context.Background(), "", ConcurrencyOpts{}); err == nil {
+		t.Fatal("expected error for empty symbol")
 	}
 }
 

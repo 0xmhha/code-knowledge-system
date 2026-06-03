@@ -9,15 +9,32 @@ version: 1
 
 backends:
   ckg:
-    # Path to the ckg SQLite store (created by `ckg build`).
+    # Path to the ckg SQLite store (created by `ckg build`). Opened
+    # in-process via ckgclient.NewReal — no subprocess on the query path.
     path: "./data/ckg.db"
+    # Source tree the index was built against (body fetcher + cks.ops.index --src).
+    source_root: "/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest"
+    # ckg binary for the cks.ops.index maintenance tool (shells `ckg build`).
+    # Empty disables the ckg leg of cks.ops.index.
+    binary_path: "ckg"
     timeout_ms: 5000
   ckv:
-    # Path to the ckv vector store.
-    path: "./data/ckv.db"
+    # Path to the ckv vector store dir (vector.db + manifest.json from
+    # `ckv build`). Opened in-process via pkg/ckv (G1) — no `ckv mcp`
+    # subprocess. R1' requires a running Ollama daemon for the embedder; if
+    # it's unreachable cks falls back to degraded mode (Smart Dummy +
+    # cks.ops.health reports "degraded") instead of crashing.
+    path: "./ckv-stablenet"
     timeout_ms: 3000
-    # Embedding model identifier; ckv resolves this to an ONNX file.
-    embed_model: "bge-base-onnx"
+    # Ollama embedding model. Must match the model the index was built with;
+    # bge-m3 is multilingual (Korean+English), 1024-dim.
+    embed_model: "bge-m3"
+    # Ollama daemon endpoint. Empty → http://localhost:11434 (and the
+    # CKV_OLLAMA_ENDPOINT env override).
+    ollama_url: "http://localhost:11434"
+    # ckv binary for the cks.ops.index maintenance tool (shells `ckv reindex`
+    # / `ckv build`). Empty disables the ckv leg of cks.ops.index.
+    binary_path: "ckv"
 
 listen:
   # HTTP listener for the cks REST surface (loopback only in Phase 0/1).

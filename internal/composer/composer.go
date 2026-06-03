@@ -147,6 +147,13 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 	ctx = contract.WithCollector(ctx, collector)
 
 	// 1. Intent classification — degrade to Unknown on error.
+	// Per-stage latency: captured at each stage boundary so §9's validation
+	// spike can attribute cost (only total elapsed was emitted before). The
+	// markers are cheap time.Now() reads on the success path.
+	var tm stageTimings
+	mark := time.Now()
+	next := func(d *time.Duration) { now := time.Now(); *d = now.Sub(mark); mark = now }
+
 	cls, err := c.intent.Classify(ctx, prompt)
 	if err != nil {
 		// Don't return: composer with IntentUnknown still produces a
@@ -154,30 +161,35 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 		cls = intent.Classification{Intent: contract.IntentUnknown}
 	}
 	intentVal := cls.Intent
+	next(&tm.intent)
 
 	// 2. Stage 1 — keyword extraction.
 	s1Out, err := c.stage1.Extract(ctx, prompt, intentVal)
 	if err != nil {
 		return contract.EvidencePack{}, fmt.Errorf("composer: stage1: %w", err)
 	}
+	next(&tm.stage1)
 
 	// 3. Stage 2 — ckg citation search.
 	s2Out, err := c.stage2.Search(ctx, s1Out.Keywords, intentVal)
 	if err != nil {
 		return contract.EvidencePack{}, fmt.Errorf("composer: stage2: %w", err)
 	}
+	next(&tm.stage2)
 
 	// 4. Stage 3 — graph expansion.
 	s3Out, err := c.stage3.Expand(ctx, s2Out.Citations, intentVal)
 	if err != nil {
 		return contract.EvidencePack{}, fmt.Errorf("composer: stage3: %w", err)
 	}
+	next(&tm.stage3)
 
 	// 5. Stage 4 — budget allocation (fetches bodies + greedy fits).
 	s4Out, err := c.budget.Allocate(ctx, s3Out.Seeds, s3Out.Neighbors)
 	if err != nil {
 		return contract.EvidencePack{}, fmt.Errorf("composer: stage4: %w", err)
 	}
+	next(&tm.stage4)
 
 	// 6. Stage 5 — sanitize the selected bodies.
 	sanIn := make([]sanitize.Sanitizable, 0, len(s4Out.Selected))
@@ -191,6 +203,7 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 	if err != nil {
 		return contract.EvidencePack{}, fmt.Errorf("composer: stage5: %w", err)
 	}
+	next(&tm.stage5)
 	if s5Out.FailClosed {
 		return contract.EvidencePack{}, fmt.Errorf("%w: rule=%s", ErrFailClosed, s5Out.FailClosedRule)
 	}
@@ -209,8 +222,15 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 		return contract.EvidencePack{}, fmt.Errorf("composer: stamp integrity: %w", err)
 	}
 
-	c.emitFootprint(ctx, prompt, intentVal, pack, time.Since(start), s4Out, s5Out)
+	c.emitFootprint(ctx, prompt, intentVal, pack, time.Since(start), s4Out, s5Out, tm)
 	return pack, nil
+}
+
+// stageTimings holds the wall-clock duration of each composer stage. Emitted
+// per-stage in the footprint so the §9 validation spike can see where time
+// goes (intent vs. ckg search vs. body fetch vs. sanitize).
+type stageTimings struct {
+	intent, stage1, stage2, stage3, stage4, stage5 time.Duration
 }
 
 // assemblePack builds the final EvidencePack from the per-stage outputs.
@@ -294,6 +314,7 @@ func (c *Composer) emitFootprint(
 	elapsed time.Duration,
 	s4 budget.Stage4Output,
 	s5 sanitize.Stage5Output,
+	tm stageTimings,
 ) {
 	if c.fp == nil {
 		return
@@ -311,6 +332,13 @@ func (c *Composer) emitFootprint(
 		zap.Int("dropped_count", countDropped(s5)),
 		zap.Int("budget_skipped", len(s4.Skipped)),
 		zap.Duration("elapsed", elapsed),
+		// Per-stage breakdown (00 §9 cost attribution).
+		zap.Duration("intent_ms", tm.intent),
+		zap.Duration("stage1_ms", tm.stage1),
+		zap.Duration("stage2_ms", tm.stage2),
+		zap.Duration("stage3_ms", tm.stage3),
+		zap.Duration("stage4_ms", tm.stage4),
+		zap.Duration("stage5_ms", tm.stage5),
 	)
 }
 

@@ -57,6 +57,12 @@ type Client interface {
 	// symbol, traversing all edge types. Used by cks.context.get_subgraph.
 	GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts) ([]contract.Citation, []contract.Neighbor, error)
 
+	// ConcurrencyImpact returns the concurrency blast radius of a symbol —
+	// the goroutines/channels/locks it spawns/sends-to/acquires and the
+	// modules reached over concurrency edges in either direction. Used by
+	// cks.context.concurrency_impact (G7/S1).
+	ConcurrencyImpact(ctx context.Context, symbol string, opts ConcurrencyOpts) (contract.ConcurrencyResult, error)
+
 	// Health reports backend reachability and version pins.
 	//
 	// Callers that need round-trip latency should measure time.Since
@@ -131,6 +137,17 @@ type PRRefOpts struct {
 type SubgraphOpts struct {
 	Depth    int // max traversal depth; zero means 1
 	MaxTotal int // cap on total nodes; zero means no cap
+}
+
+// ConcurrencyOpts shapes a single ConcurrencyImpact call.
+type ConcurrencyOpts struct {
+	// Depth is the max traversal depth over concurrency edges. Zero means
+	// the default 3 — channel reach is one hop deeper than plain calls
+	// (Function→CallSite→channel), so 3 covers the common goroutine→channel
+	// →receiver chain.
+	Depth int
+	// MaxTotal caps the total modules returned. Zero means no cap.
+	MaxTotal int
 }
 
 // Health is the result of a Client.Health() call. Reports backend state
