@@ -67,6 +67,10 @@ type CKGConfig struct {
 	Path       string `yaml:"path"`
 	SourceRoot string `yaml:"source_root"`
 	TimeoutMS  int    `yaml:"timeout_ms"`
+	// BinaryPath is the ckg binary used by the cks.ops.index maintenance tool
+	// (G8 shells `ckg build`); empty disables the ckg leg of that tool. Not
+	// used on the query path (ckg is opened in-process via ckgclient.NewReal).
+	BinaryPath string `yaml:"binary_path"`
 }
 
 // CKVConfig is the ckv client connection profile.

@@ -162,6 +162,15 @@ func run(ctx context.Context, configPath string) error {
 		CKG:            ckg,
 		CKV:            ckv,
 		BuilderVersion: builderVersion,
+		Index: cksmcp.IndexConfig{
+			CKVBinary:   cfg.Backends.CKV.BinaryPath,
+			CKGBinary:   cfg.Backends.CKG.BinaryPath,
+			CKVDataPath: cfg.Backends.CKV.Path,
+			CKGDataPath: cfg.Backends.CKG.Path,
+			SourceRoot:  cfg.Backends.CKG.SourceRoot,
+			EmbedModel:  cfg.Backends.CKV.EmbedModel,
+			OllamaURL:   cfg.Backends.CKV.OllamaURL,
+		},
 	}
 	return cksmcp.Run(ctx, deps)
 }

@@ -52,6 +52,11 @@ type Deps struct {
 	// caller correlate health output with running binary build tags.
 	// Empty string is acceptable; the field is informational, not load-bearing.
 	BuilderVersion string
+
+	// Index configures the cks.ops.index maintenance tool (G8). Zero value
+	// (no binaries) disables it — the tool then tells the agent to run the
+	// indexers manually. Not used by the query path.
+	Index IndexConfig
 }
 
 // Register attaches both tools to s. Returns an error when required Deps
@@ -83,6 +88,7 @@ func Register(s *mcpserver.MCPServer, d Deps) error {
 	registerSemanticSearch(s, d)
 	registerSearchText(s, d)
 	registerFreshness(s, d)
+	registerOpsIndex(s, d)
 	return nil
 }
 
