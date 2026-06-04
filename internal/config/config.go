@@ -71,6 +71,11 @@ type CKGConfig struct {
 	// (G8 shells `ckg build`); empty disables the ckg leg of that tool. Not
 	// used on the query path (ckg is opened in-process via ckgclient.NewReal).
 	BinaryPath string `yaml:"binary_path"`
+	// PolicyFile is the ckg governance policy (the `policies/policy.yaml`
+	// emitted by cks-domain-sync). When set, cks.ops.index passes it to
+	// `ckg build --policy-file` so governed_by edges are rebuilt with the
+	// index; empty omits the flag (no governance enrichment).
+	PolicyFile string `yaml:"policy_file"`
 }
 
 // CKVConfig is the ckv client connection profile.

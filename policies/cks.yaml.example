@@ -17,6 +17,10 @@ backends:
     # ckg binary for the cks.ops.index maintenance tool (shells `ckg build`).
     # Empty disables the ckg leg of cks.ops.index.
     binary_path: "ckg"
+    # ckg governance policy (the policies/policy.yaml emitted by cks-domain-sync).
+    # When set, cks.ops.index passes it to `ckg build --policy-file` so
+    # governed_by edges are rebuilt with the index. Empty omits the flag.
+    policy_file: "./policies/policy.yaml"
     timeout_ms: 5000
   ckv:
     # Path to the ckv vector store dir (vector.db + manifest.json from
