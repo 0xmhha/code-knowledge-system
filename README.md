@@ -7,7 +7,10 @@ token-budgeted, sanitized `EvidencePack` and exposes it through MCP for upper la
 
 ## Status
 
-Pre-α (Phase 0 scaffold).
+R1′ — wired. cks composes ckv (vector/meaning) and ckg (graph/keyword) **in-process**
+and exposes a 13-tool agent-facing MCP surface (`cks.context.*` + `cks.ops.*`) over stdio.
+With no datasets configured it boots in a non-crashing degraded mode (Smart Dummy +
+`cks.ops.health` reports `degraded`).
 
 ## Components
 
@@ -48,12 +51,47 @@ make fmt           # gofmt -s -w .
 make tidy          # go mod tidy
 ```
 
-## Dependencies (planned, not yet wired)
+## Run as an MCP server
 
-- `github.com/0xmhha/code-knowledge-graph` — graph + BM25 backend (Reader API)
-- `github.com/0xmhha/code-knowledge-vector` — vector backend (VectorStore API)
-- `github.com/0xmhha/cli-wrapper` — headless Claude wrapper (eval only)
-- `github.com/mark3labs/mcp-go` — MCP server (Phase C.5)
+```
+make build-bins                                 # -> ./bin/cks-mcp  (CGO required: sqlite-vec)
+cp policies/cks.yaml.example ./cks.yaml          # edit backend paths / source_root / bge-m3 / ollama_url
+./bin/cks-mcp -config ./cks.yaml                 # serves stdio; -config is the only flag
+```
+
+`-config` is optional — omitted, it falls back to `config.Default()` (dummy backends, dev
+mode). Real backends activate when `backends.ckv.path` / `backends.ckg.path` point at built
+ckv/ckg datasets and a live Ollama serves the `embed_model` (bge-m3, 1024-dim).
+
+Register it with a client:
+
+```
+claude mcp add cks -- /abs/path/bin/cks-mcp -config /abs/path/cks.yaml
+```
+
+or in a `.mcp.json`:
+
+```json
+{ "mcpServers": { "cks": { "command": "/abs/path/bin/cks-mcp",
+                           "args": ["-config", "/abs/path/cks.yaml"] } } }
+```
+
+Building the datasets the config points at:
+
+```
+cks-domain-sync …                                # derive ckv/ckg policy views from verified entries
+ckv build --src <go-stablenet> --out <ckv-data> --embedder=ollama --model-name=bge-m3
+ckg build --src <go-stablenet> --out <ckg-data> --policy-file policies/policy.yaml
+```
+
+Once warm, the agent keeps it fresh via `cks.ops.freshness` → `cks.ops.index` (which shells
+the same `ckv`/`ckg` builds, forwarding `--policy-file` when `backends.ckg.policy_file` is set).
+
+## Dependencies (wired)
+
+- `github.com/0xmhha/code-knowledge-graph` — graph + BM25 backend (`pkg/store`, in-process)
+- `github.com/0xmhha/code-knowledge-vector` — vector backend (`pkg/ckv`, in-process; sqlite-vec CGO)
+- `github.com/mark3labs/mcp-go` — MCP server (v0.52.0)
 
 ## Layout (target)
 

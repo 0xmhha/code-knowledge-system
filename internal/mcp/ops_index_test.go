@@ -83,6 +83,33 @@ func TestHandleOpsIndex_IncrementalRunsBothBackends(t *testing.T) {
 	}
 }
 
+func TestHandleOpsIndex_CKGPolicyFileForwarded(t *testing.T) {
+	calls := withStubRunner(t, "")
+	d := Deps{Index: IndexConfig{
+		CKGBinary: "ckg-bin", CKGDataPath: "/d/ckg", SourceRoot: "/src",
+		CKGPolicyFile: "/p/policy.yaml",
+	}}
+	if _, err := handleOpsIndex(context.Background(), d, callToolReq(map[string]any{"mode": "full"})); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join((*calls)[0].args, " ")
+	if !strings.Contains(joined, "build --src /src --out /d/ckg") ||
+		!strings.Contains(joined, "--policy-file /p/policy.yaml") {
+		t.Errorf("ckg build should forward --policy-file: %v", (*calls)[0].args)
+	}
+}
+
+func TestHandleOpsIndex_CKGNoPolicyFileOmitsFlag(t *testing.T) {
+	calls := withStubRunner(t, "")
+	d := Deps{Index: IndexConfig{CKGBinary: "ckg-bin", CKGDataPath: "/d/ckg", SourceRoot: "/src"}}
+	if _, err := handleOpsIndex(context.Background(), d, callToolReq(map[string]any{"mode": "full"})); err != nil {
+		t.Fatal(err)
+	}
+	if joined := strings.Join((*calls)[0].args, " "); strings.Contains(joined, "--policy-file") {
+		t.Errorf("ckg build must omit --policy-file when unset: %v", (*calls)[0].args)
+	}
+}
+
 func TestHandleOpsIndex_FullUsesBuildWithSrc(t *testing.T) {
 	calls := withStubRunner(t, "")
 	d := Deps{Index: IndexConfig{CKVBinary: "ckv-bin", CKVDataPath: "/d/ckv", SourceRoot: "/src", EmbedModel: "bge-m3"}}

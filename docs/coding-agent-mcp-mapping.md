@@ -6,14 +6,16 @@
 
 ## 1. Architecture in one paragraph
 
-The coding-agent never talks to CKV or CKG directly. It opens a single MCP stdio session against `cks-mcp`. `cks-mcp` exposes 11 tools (table below); under the hood, those tools route to `internal/ckvclient` and `internal/ckgclient`, which in turn either spawn real ckv/ckg backends or fall back to a Smart Dummy that returns LLM-actionable instructions instead of fake data. From the coding-agent's point of view there is exactly one MCP server to install.
+The coding-agent never talks to CKV or CKG directly. It opens a single MCP stdio session against `cks-mcp`. `cks-mcp` exposes 13 tools (table below); under the hood, those tools route to `internal/ckvclient` and `internal/ckgclient`, which open the real ckv/ckg backends **in-process** (no subprocess) or fall back to a Smart Dummy that returns LLM-actionable instructions instead of fake data. From the coding-agent's point of view there is exactly one MCP server to install.
 
 ```
-coding-agent  ─stdio MCP─▶  cks-mcp  ─Go interface─▶  ckvclient ─MCP subprocess─▶  ckv
-                                       ─Go interface─▶  ckgclient ─SQLite open──▶  ckg
+coding-agent  ─stdio MCP─▶  cks-mcp  ─Go import─▶  ckvclient ─pkg/ckv (in-process)──▶  ckv
+                                       ─Go import─▶  ckgclient ─pkg/store (in-process)─▶  ckg
 ```
 
-## 2. Live tool catalog (11 tools)
+Beyond the original set, **`cks.context.concurrency_impact`** (goroutine/channel/lock blast radius) and **`cks.ops.index`** (agent-triggered ckv+ckg reindex) are now live. The authoritative list is `internal/mcp/*.go`, pinned against `internal/mcp/testdata/agent-mcp.schema.json` by `internal/mcp/schema_golden_test.go`.
+
+## 2. Live tool catalog (13 tools)
 
 Wire names are the strings the MCP client sends; constants live in `internal/mcp/*.go`.
 
@@ -87,7 +89,7 @@ Mapping notes:
 ckv_index({ mode, project_root, exclude_patterns? })
 ```
 
-**Not exposed via MCP.** Indexing is a separate executable (`ckv build`) the operator runs out-of-band. The MCP surface is read-only for security: any caller that can reach `cks-mcp` should not also be able to rewrite the index. If the coding-agent needs to trigger an index refresh, document it as an operator action, not an MCP call.
+**Now exposed as `cks.ops.index`** (G8/S2). The agent calls `cks.ops.index{mode:"incremental"|"full", since_commit?}` after `cks.ops.freshness` reports staleness; it shells the same `ckv build`/`ckv reindex` + `ckg build` the operator would run out-of-band (an explicit, infrequent maintenance op, not the hot retrieval path). The query surface remains read-only; only this one maintenance tool can refresh the index, and it is disabled unless `backends.{ckv,ckg}.binary_path` are configured.
 
 To check whether the index is stale after an out-of-band edit, use `cks.ops.freshness`.
 
@@ -151,7 +153,7 @@ For the per-PR history side of impact ("what changed near this code recently"), 
 
 ### 3.5 phase4 (CKG): `ckg_index`
 
-Same disposition as `ckv_index`: not exposed via MCP. Operator runs `ckg build`.
+Now folded into `cks.ops.index` (see §3.2): a single tool refreshes both ckv and ckg. The ckg leg shells `ckg build --src --out` (plus `--policy-file` when `backends.ckg.policy_file` is set, rebuilding governed_by edges).
 
 ## 4. Composition example — Planner ANALYSIS step
 
@@ -198,8 +200,8 @@ Step 5 — synthesize into an EvidencePack client-side, **or** replace all four 
 |---|---|
 | Tools named `ckv_*` / `ckg_*` | Tools named `cks.context.*` / `cks.ops.*`. Wire names are dotted; underscores are inside the last segment only. |
 | Single batched `ckg_query` accepts `symbols[]` | Live tools take a single `symbol` (or `name`). Caller fans out. |
-| Indexing exposed as `ckv_index` / `ckg_index` MCP tools | Indexing is an out-of-band `ckv build` / `ckg build` operator action; not on the MCP surface. |
-| `include_concurrency` field on `ckg_query` | Not implemented. Roadmap item; coding-agent should set it to false / omit. |
+| Indexing exposed as `ckv_index` / `ckg_index` MCP tools | One maintenance tool `cks.ops.index{mode,since_commit?}` refreshes both ckv+ckg (shells the builds); the query surface stays read-only. |
+| `include_concurrency` field on `ckg_query` | Replaced by a dedicated tool `cks.context.concurrency_impact{symbol,depth,max_total}` (goroutine/channel/lock blast radius). |
 | `change_type` on `ckg_impact` controls risk weighting server-side | Not implemented. Coding-agent owns the change-type → risk-weight mapping client-side. |
 | `rerank` toggle on `ckv_search` | Reranking lives inside `get_for_task` (RRF over BM25 + FindSymbol lists). `semantic_search` returns raw vector hits. |
 | `top_k` parameter | Renamed `k` everywhere. |

@@ -18,13 +18,14 @@ const ToolNameOpsIndex = "cks.ops.index"
 // (00 §C3, plan G8). Empty binaries disable the tool (it returns an error
 // telling the agent to run the indexers manually).
 type IndexConfig struct {
-	CKVBinary   string // ckv binary path; "" disables ckv reindex
-	CKGBinary   string // ckg binary path; "" disables ckg build
-	CKVDataPath string // ckv --out
-	CKGDataPath string // ckg --out
-	SourceRoot  string // --src for both
-	EmbedModel  string // ckv --model-name (paired with --embedder=ollama)
-	OllamaURL   string // CKV_OLLAMA_ENDPOINT for the ckv subprocess (optional)
+	CKVBinary     string // ckv binary path; "" disables ckv reindex
+	CKGBinary     string // ckg binary path; "" disables ckg build
+	CKVDataPath   string // ckv --out
+	CKGDataPath   string // ckg --out
+	SourceRoot    string // --src for both
+	EmbedModel    string // ckv --model-name (paired with --embedder=ollama)
+	OllamaURL     string // CKV_OLLAMA_ENDPOINT for the ckv subprocess (optional)
+	CKGPolicyFile string // ckg --policy-file (governed_by edges); "" omits the flag
 }
 
 func (c IndexConfig) enabled() bool { return c.CKVBinary != "" || c.CKGBinary != "" }
@@ -107,7 +108,12 @@ func handleOpsIndex(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*mc
 
 	if ic.CKGBinary != "" {
 		// ckg has no incremental path (cold rebuild); --src + --out always.
+		// --policy-file (when configured) rebuilds governed_by edges with the
+		// index so impact_analysis/get_for_task can surface policy nodes.
 		args := []string{"build", "--src", ic.SourceRoot, "--out", ic.CKGDataPath}
+		if ic.CKGPolicyFile != "" {
+			args = append(args, "--policy-file", ic.CKGPolicyFile)
+		}
 		if err := indexRunner(ctx, ic.CKGBinary, args, nil); err != nil {
 			resp.CKG.Error = err.Error()
 		} else {

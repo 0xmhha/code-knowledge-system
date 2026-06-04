@@ -163,13 +163,14 @@ func run(ctx context.Context, configPath string) error {
 		CKV:            ckv,
 		BuilderVersion: builderVersion,
 		Index: cksmcp.IndexConfig{
-			CKVBinary:   cfg.Backends.CKV.BinaryPath,
-			CKGBinary:   cfg.Backends.CKG.BinaryPath,
-			CKVDataPath: cfg.Backends.CKV.Path,
-			CKGDataPath: cfg.Backends.CKG.Path,
-			SourceRoot:  cfg.Backends.CKG.SourceRoot,
-			EmbedModel:  cfg.Backends.CKV.EmbedModel,
-			OllamaURL:   cfg.Backends.CKV.OllamaURL,
+			CKVBinary:     cfg.Backends.CKV.BinaryPath,
+			CKGBinary:     cfg.Backends.CKG.BinaryPath,
+			CKVDataPath:   cfg.Backends.CKV.Path,
+			CKGDataPath:   cfg.Backends.CKG.Path,
+			SourceRoot:    cfg.Backends.CKG.SourceRoot,
+			EmbedModel:    cfg.Backends.CKV.EmbedModel,
+			OllamaURL:     cfg.Backends.CKV.OllamaURL,
+			CKGPolicyFile: cfg.Backends.CKG.PolicyFile,
 		},
 	}
 	return cksmcp.Run(ctx, deps)
