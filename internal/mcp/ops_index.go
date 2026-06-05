@@ -7,6 +7,9 @@ import (
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
+
+	"github.com/0xmhha/code-knowledge-system/internal/domainexport"
+	"github.com/0xmhha/code-knowledge-system/internal/inventory"
 )
 
 const ToolNameOpsIndex = "cks.ops.index"
@@ -26,6 +29,11 @@ type IndexConfig struct {
 	EmbedModel    string // ckv --model-name (paired with --embedder=ollama)
 	OllamaURL     string // CKV_OLLAMA_ENDPOINT for the ckv subprocess (optional)
 	CKGPolicyFile string // ckg --policy-file (governed_by edges); "" omits the flag
+	// Channel ②: DomainProjectDir is the cks domain-knowledge project dir
+	// to export before building; DomainCorpusDir is the export output AND
+	// the ckv --docs root. Both empty disables channel ② (no corpus step).
+	DomainProjectDir string
+	DomainCorpusDir  string
 }
 
 func (c IndexConfig) enabled() bool { return c.CKVBinary != "" || c.CKGBinary != "" }
@@ -93,6 +101,23 @@ func handleOpsIndex(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*mc
 
 	resp := opsIndexResponse{Mode: mode}
 
+	// Channel ②: regenerate the corpus so the ckv build below (--docs)
+	// embeds the latest entries + authoritative docs. Only runs on full
+	// builds — incremental/reindex does not pass --docs to ckv, so the
+	// export is wasted work and can block a cheap reindex. Disabled when
+	// the project dir is unset.
+	if mode == "full" && ic.DomainProjectDir != "" && ic.DomainCorpusDir != "" {
+		proj, err := inventory.LoadProject(ic.DomainProjectDir)
+		if err != nil {
+			resp.CKV.Error = fmt.Sprintf("domain export: load project: %v", err)
+			return mcpgo.NewToolResultStructured(resp, "index refresh FAILED (domain export)"), nil
+		}
+		if _, err := domainexport.Export(proj, ic.DomainCorpusDir); err != nil {
+			resp.CKV.Error = fmt.Sprintf("domain export: %v", err)
+			return mcpgo.NewToolResultStructured(resp, "index refresh FAILED (domain export)"), nil
+		}
+	}
+
 	if ic.CKVBinary != "" {
 		args := ckvIndexArgs(ic, mode, since)
 		var env []string
@@ -141,6 +166,9 @@ func ckvIndexArgs(ic IndexConfig, mode, since string) []string {
 	}
 	if mode == "full" {
 		args := []string{"build", "--src", ic.SourceRoot, "--out", ic.CKVDataPath}
+		if ic.DomainCorpusDir != "" {
+			args = append(args, "--docs", ic.DomainCorpusDir)
+		}
 		return append(args, embed...)
 	}
 	args := []string{"reindex", "--out", ic.CKVDataPath}

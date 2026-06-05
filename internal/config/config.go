@@ -35,6 +35,18 @@ type Config struct {
 	Logging  LoggingConfig  `yaml:"logging"`
 	Sanitize SanitizeConfig `yaml:"sanitize"`
 	Vocab    VocabConfig    `yaml:"vocab"`
+	Domain   DomainConfig   `yaml:"domain"`
+}
+
+// DomainConfig configures channel ② (domain-knowledge embedding). Empty
+// ProjectDir disables it: cks.ops.index then refreshes only code + ckg.
+type DomainConfig struct {
+	// ProjectDir is the cks domain-knowledge project directory exported
+	// before a full ckv build (e.g. docs/domain-knowledge/projects/go-stablenet).
+	ProjectDir string `yaml:"project_dir"`
+	// CorpusDir is the export output and the ckv --docs root
+	// (e.g. generated/domain-corpus/go-stablenet).
+	CorpusDir string `yaml:"corpus_dir"`
 }
 
 // VocabConfig controls the optional vocabulary resolver wired into
@@ -226,6 +238,11 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("config: sanitize.default_action=%q invalid", c.Sanitize.DefaultAction)
 	}
+
+	if (c.Domain.ProjectDir == "") != (c.Domain.CorpusDir == "") {
+		return fmt.Errorf("config: domain.project_dir and domain.corpus_dir must both be set or both empty")
+	}
+
 	return nil
 }
 

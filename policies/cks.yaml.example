@@ -68,3 +68,10 @@ sanitize:
   # unrecognized rule action. Defense in depth against ruleset typos that
   # would otherwise bypass redaction.
   fail_closed_on_unknown_rule: true
+
+# Channel ② (domain-knowledge embedding). Empty project_dir disables it.
+domain:
+  # cks domain-knowledge project to export before a full ckv build.
+  project_dir: "docs/domain-knowledge/projects/go-stablenet"
+  # Export output + ckv --docs root (gitignored; rebuilt each full index).
+  corpus_dir: "generated/domain-corpus/go-stablenet"
