@@ -169,7 +169,10 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config: read %q: %w", path, err)
 	}
-	return LoadBytes(data)
+	// Expand ${VAR}/$VAR so one config file is portable across machines
+	// (e.g. source_root: "${GO_STABLENET_ROOT}"); the per-machine path then
+	// comes from the environment, not a committed/copied absolute path.
+	return LoadBytes([]byte(os.ExpandEnv(string(data))))
 }
 
 // LoadBytes parses raw YAML bytes into a validated Config. Useful for tests

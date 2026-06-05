@@ -2,8 +2,17 @@ id: go-stablenet
 name: "go-stablenet"
 description: "geth fork — WBFT BFT consensus, native stablecoin (WKRC), governance system contracts"
 
-code_root: /Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest
-skill_root: /Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest/.claude
+# Machine-independent. The working-tree path varies per machine, so it is NOT
+# committed here: it is supplied at runtime via env. Resolution order (load.go):
+#   1. $CKS_CODE_ROOT (per-machine override), else
+#   2. ${GO_STABLENET_ROOT} expanded below.
+# Set GO_STABLENET_ROOT (or CKS_CODE_ROOT) to your go-stablenet checkout.
+code_root: ${GO_STABLENET_ROOT}
+skill_root: ${GO_STABLENET_ROOT}/.claude
+
+# Verification baseline (machine-independent, reproducible anywhere): the
+# go-stablenet commit the entries' code_anchors were confirmed against.
+code_commit: 9978930ba   # dev — "WBFT justification forgery/duplicate-vote fix (#84)"
 
 primary_language: go
 secondary_languages:
@@ -30,13 +39,15 @@ indexing:
 authoritative_docs:
   - file: CLAUDE.md
     role: "project overview, unique-code map"
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
-    role: "comprehensive developer guide (21 sections)"
-  - file: .claude/docs/SYSTEM_CONTRACT_FLOW.md
+  - file: .claude/docs/wbft-consensus.md
+    role: "WBFT consensus engine, block-extra format, RPC, istanbul P2P (§13-16)"
+  - file: .claude/docs/stablenet-features.md
+    role: "system contracts, hardfork, blacklist, fee delegation, gas, account extra (§8-12,17-18)"
+  - file: .claude/docs/system-contract-flow.md
     role: "system contract deploy/upgrade architecture"
-  - file: .claude/docs/REVIEW_GUIDE.md
-    role: "code review patterns, unique-file map"
-  - file: .claude/docs/review-test-result-with-ast.md
-    role: "new/upgraded system contract end-to-end checklist"
-  - file: .claude/docs/BUILD_SOURCE_FILES.md
+  - file: .claude/docs/build-source-files.md
     role: "build-participating files (160 packages, 781 Go files)"
+  - file: .claude/docs/review-guide.md
+    role: "code review patterns, unique-file map"
+  - file: .claude/docs/code-convention.md
+    role: "Go/Solidity/commit conventions"

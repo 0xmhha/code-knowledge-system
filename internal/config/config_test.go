@@ -145,6 +145,36 @@ sanitize:
 	_ = c // keep reference to highlight intent
 }
 
+func TestConfig_Load_ExpandsEnv(t *testing.T) {
+	// Not parallel: mutates process env.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cks.yaml")
+	yamlSrc := `
+version: 1
+backends:
+  ckg:
+    source_root: "${TEST_GSN_SR}"
+logging:
+  level: "info"
+  mode: "prod"
+sanitize:
+  rules_path: "./policies/sanitization_rules.yaml"
+  default_action: "drop"
+  fail_closed_on_unknown_rule: true
+`
+	if err := os.WriteFile(path, []byte(yamlSrc), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("TEST_GSN_SR", "/resolved/go-stablenet")
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Backends.CKG.SourceRoot != "/resolved/go-stablenet" {
+		t.Errorf("source_root env not expanded: got %q", got.Backends.CKG.SourceRoot)
+	}
+}
+
 func TestConfig_Load_MissingFile(t *testing.T) {
 	t.Parallel()
 	_, err := Load("/no/such/file.yaml")

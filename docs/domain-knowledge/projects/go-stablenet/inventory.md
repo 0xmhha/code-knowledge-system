@@ -2,7 +2,8 @@
 
 Project: `go-stablenet`
 Schema version: 1
-Code root: `/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest`
+Code root: resolved at runtime from `$CKS_CODE_ROOT` (override) or `$GO_STABLENET_ROOT` — see `project.yaml`; no machine path is committed.
+Verification baseline: go-stablenet `@9978930ba` (dev — WBFT justification fix #84).
 
 ## Status summary
 
