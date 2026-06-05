@@ -52,6 +52,10 @@ type Project struct {
 	// Entries is keyed by entry ID. The iteration order callers want
 	// (sorted by ID) is provided by EntryIDsSorted.
 	Entries map[string]Entry
+
+	// AuthoritativeDocs mirrors project.yaml's authoritative_docs: the
+	// curated docs (relative to CodeRoot) the embedding corpus copies in.
+	AuthoritativeDocs []AuthoritativeDoc
 }
 
 // Subsystem is one record from subsystems.yaml. Code paths are stored
@@ -127,6 +131,15 @@ type DocRef struct {
 	File       string `yaml:"file"`
 	Section    string `yaml:"section,omitempty"`
 	Subsection string `yaml:"subsection,omitempty"`
+}
+
+// AuthoritativeDoc is one entry in project.yaml's authoritative_docs:
+// a curated, human-maintained document (path relative to CodeRoot) that
+// the domain-knowledge corpus embeds wholesale. Role is a short label of
+// what the doc covers.
+type AuthoritativeDoc struct {
+	File string `yaml:"file"`
+	Role string `yaml:"role,omitempty"`
 }
 
 // Constant is one row in the constants list for B7 entries. Value is

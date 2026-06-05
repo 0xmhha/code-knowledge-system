@@ -14,10 +14,11 @@ import (
 // authoritative_docs, etc.) don't break the loader. KnownFields=false
 // is the default for yaml.v3 — no extra wiring needed.
 type projectFile struct {
-	ID            string `yaml:"id"`
-	Name          string `yaml:"name"`
-	CodeRoot      string `yaml:"code_root"`
-	SchemaVersion int    `yaml:"schema_version"`
+	ID                string             `yaml:"id"`
+	Name              string             `yaml:"name"`
+	CodeRoot          string             `yaml:"code_root"`
+	SchemaVersion     int                `yaml:"schema_version"`
+	AuthoritativeDocs []AuthoritativeDoc `yaml:"authoritative_docs"`
 }
 
 // LoadProject reads a project directory and returns its in-memory view.
@@ -72,14 +73,15 @@ func LoadProject(dir string) (*Project, error) {
 	}
 
 	return &Project{
-		Dir:            absDir,
-		ID:             pf.ID,
-		Name:           pf.Name,
-		CodeRoot:       codeRoot,
-		SchemaVersion:  pf.SchemaVersion,
-		Subsystems:     subsystems,
-		SubsystemOrder: order,
-		Entries:        entries,
+		Dir:               absDir,
+		ID:                pf.ID,
+		Name:              pf.Name,
+		CodeRoot:          codeRoot,
+		SchemaVersion:     pf.SchemaVersion,
+		Subsystems:        subsystems,
+		SubsystemOrder:    order,
+		Entries:           entries,
+		AuthoritativeDocs: pf.AuthoritativeDocs,
 	}, nil
 }
 
