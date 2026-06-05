@@ -44,3 +44,6 @@ docs/_generated/
 /.ckv-data/
 /cks-dogfood.yaml
 /logs/
+
+# Generated domain-knowledge embedding corpus (channel ②; rebuilt by cks-domain-export)
+/generated/

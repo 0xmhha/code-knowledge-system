@@ -7,6 +7,28 @@ import (
 	"testing"
 )
 
+func TestCKVIndexArgs_FullIncludesDocs(t *testing.T) {
+	ic := IndexConfig{
+		CKVDataPath:     "./ckv-stablenet",
+		SourceRoot:      "/src",
+		EmbedModel:      "bge-m3",
+		DomainCorpusDir: "generated/domain-corpus/go-stablenet",
+	}
+	args := ckvIndexArgs(ic, "full", "")
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--docs generated/domain-corpus/go-stablenet") {
+		t.Errorf("full build args missing --docs: %v", args)
+	}
+}
+
+func TestCKVIndexArgs_IncrementalOmitsDocs(t *testing.T) {
+	ic := IndexConfig{CKVDataPath: "./ckv-stablenet", DomainCorpusDir: "generated/corpus"}
+	args := ckvIndexArgs(ic, "incremental", "")
+	if strings.Contains(strings.Join(args, " "), "--docs") {
+		t.Errorf("incremental (reindex) must not pass --docs: %v", args)
+	}
+}
+
 type capturedRun struct {
 	name string
 	args []string
