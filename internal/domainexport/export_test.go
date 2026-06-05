@@ -156,3 +156,31 @@ func TestExport_NoCodeRoot(t *testing.T) {
 		t.Errorf("expected one code_root-unset warning, got %v", res.Warnings)
 	}
 }
+
+func TestExport_PrunesStaleEntries(t *testing.T) {
+	out := t.TempDir()
+	// A leftover file from a prior export (e.g. an entry since demoted to draft).
+	staleDir := filepath.Join(out, "entries")
+	if err := os.MkdirAll(staleDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(staleDir, "A9.removed.md")
+	if err := os.WriteFile(stale, []byte("# stale\n**Status:** verified\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := &inventory.Project{
+		Subsystems: map[string]inventory.Subsystem{"A1": {ID: "A1", Name: "Core"}},
+		Entries: map[string]inventory.Entry{
+			"A1.v": {ID: "A1.v", Subsystem: "A1", KnowledgeType: "B1", Title: "V", Status: "verified", Summary: "s"},
+		},
+	}
+	if _, err := Export(p, out); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale entry A9.removed.md should have been swept, stat err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(staleDir, "A1.v.md")); err != nil {
+		t.Errorf("current entry A1.v.md missing after sweep: %v", err)
+	}
+}

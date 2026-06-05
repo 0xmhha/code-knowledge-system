@@ -100,8 +100,17 @@ type Result struct {
 // Output is deterministic (entries in sorted ID order). A missing
 // authoritative doc, or an unset CodeRoot, is warned and skipped rather
 // than fatal — the entry corpus still ships.
+//
+// outDir is swept (removed and recreated) at the start so an entry that
+// drops below the status gate, or a renamed authoritative doc, leaves no
+// stale file behind to be re-embedded with outdated content.
 func Export(p *inventory.Project, outDir string) (Result, error) {
 	var res Result
+	if outDir != "" {
+		if err := os.RemoveAll(outDir); err != nil {
+			return res, fmt.Errorf("domainexport: sweep %s: %w", outDir, err)
+		}
+	}
 	entriesDir := filepath.Join(outDir, "entries")
 	if err := os.MkdirAll(entriesDir, 0o755); err != nil {
 		return res, fmt.Errorf("domainexport: mkdir entries: %w", err)
