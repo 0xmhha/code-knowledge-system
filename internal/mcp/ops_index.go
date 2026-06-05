@@ -102,9 +102,11 @@ func handleOpsIndex(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*mc
 	resp := opsIndexResponse{Mode: mode}
 
 	// Channel ②: regenerate the corpus so the ckv build below (--docs)
-	// embeds the latest entries + authoritative docs. Disabled when the
-	// project dir is unset.
-	if ic.DomainProjectDir != "" && ic.DomainCorpusDir != "" {
+	// embeds the latest entries + authoritative docs. Only runs on full
+	// builds — incremental/reindex does not pass --docs to ckv, so the
+	// export is wasted work and can block a cheap reindex. Disabled when
+	// the project dir is unset.
+	if mode == "full" && ic.DomainProjectDir != "" && ic.DomainCorpusDir != "" {
 		proj, err := inventory.LoadProject(ic.DomainProjectDir)
 		if err != nil {
 			resp.CKV.Error = fmt.Sprintf("domain export: load project: %v", err)

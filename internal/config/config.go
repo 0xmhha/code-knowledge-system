@@ -238,6 +238,11 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("config: sanitize.default_action=%q invalid", c.Sanitize.DefaultAction)
 	}
+
+	if (c.Domain.ProjectDir == "") != (c.Domain.CorpusDir == "") {
+		return fmt.Errorf("config: domain.project_dir and domain.corpus_dir must both be set or both empty")
+	}
+
 	return nil
 }
 

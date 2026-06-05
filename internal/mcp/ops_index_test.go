@@ -7,6 +7,33 @@ import (
 	"testing"
 )
 
+func TestHandleOpsIndex_DomainExportFailureAborts(t *testing.T) {
+	// A non-existent DomainProjectDir causes inventory.LoadProject to fail.
+	// The handler must abort (not continue to ckv/ckg) and surface the
+	// failure in resp.CKV.Error, containing "domain export".
+	withStubRunner(t, "") // no real subprocess should fire
+	d := Deps{Index: IndexConfig{
+		CKVBinary:        "echo",
+		CKGBinary:        "",
+		DomainProjectDir: "/nonexistent/cks-domain-project",
+		DomainCorpusDir:  t.TempDir(),
+	}}
+	res, err := handleOpsIndex(context.Background(), d, callToolReq(map[string]any{"mode": "full"}))
+	if err != nil {
+		t.Fatalf("handler returned transport error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("nil result")
+	}
+	var resp opsIndexResponse
+	if decErr := decodeStructured(res, &resp); decErr != nil {
+		t.Fatalf("decode structured response: %v", decErr)
+	}
+	if !strings.Contains(resp.CKV.Error, "domain export") {
+		t.Errorf("CKV.Error = %q; want substring \"domain export\"", resp.CKV.Error)
+	}
+}
+
 func TestCKVIndexArgs_FullIncludesDocs(t *testing.T) {
 	ic := IndexConfig{
 		CKVDataPath:     "./ckv-stablenet",
