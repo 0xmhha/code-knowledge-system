@@ -10,6 +10,14 @@ summary: |
   advances state. State advancement in handlePrepareMsg uses the
   expression WBFTPrepares.Size() >= valSet.QuorumSize().
 
+  ceil(N - F) is the AUTHORITATIVE quorum; any reimplementation MUST
+  reproduce it exactly. The dangerous refactor is not int-vs-float (see
+  the correctness note below) but swapping the FORMULA: the PBFT-textbook
+  2f+1 or a simple majority N/2+1 DIVERGE from ceil(N - F) for N not of
+  the form 3f+1, and a lower quorum finalizes with too few honest nodes
+  (a safety violation). Examples: N=5 -> ceil=4 but 2f+1=3; N=6 -> ceil=5
+  but 2f+1=3; N=8 -> ceil=6 but 2f+1=5.
+
 code_anchors:
   - file: consensus/wbft/validator/default.go
     symbol: "defaultSet.F"
@@ -52,12 +60,12 @@ related_concepts:
   - A3.validator_set.epoch_transition
 
 invariants:
-  - "ValidatorSet.F() returns float64. Casting to int before division loses precision and produces a wrong QuorumSize for some N."
+  - "QuorumSize is exactly ceil(N - F) with F = (N-1)/3; the live code computes it in float64 via math.Ceil (default.go:226). Any alternative formula must yield the identical value for every N."
   - "QuorumSize is always >= 1, including N = 1 (ceil(1 - 0) = 1)."
   - "Prepare/Commit state transitions compare with >= QuorumSize, not >."
 
 pitfalls:
-  - "Using int(F()) instead of float64 produces off-by-one errors. For N = 4, F = 1.0 and QuorumSize = ceil(3.0) = 3; truncating F to int 1 still works, but for larger sets the rounding behaviour diverges."
+  - "Reimplementing the quorum with a DIFFERENT formula. PBFT-textbook 2f+1 and simple-majority N/2+1 diverge from ceil(N-F) for N != 3f+1, producing a LOWER quorum that finalizes with too few honest nodes (safety violation). N=5: ceil=4, 2f+1=3; N=6: ceil=5, 2f+1=3; N=8: ceil=6, 2f+1=5."
   - "Forgetting that QuorumSize covers both Prepare and Commit independently — each phase needs its own quorum."
 
 existing_doc_ref:
@@ -65,7 +73,7 @@ existing_doc_ref:
     section: "13. WBFT 합의 엔진 내부 구조"
     subsection: "쿼럼 계산"
 
-risk_level: low
+risk_level: high
 source_of_truth: "code+docs"
 status: needs_verification
 priority: P0
