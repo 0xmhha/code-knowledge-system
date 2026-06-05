@@ -62,7 +62,7 @@ pitfalls:
   - "Confusing PrevRound (kept) with Round (stripped); both live in WBFTExtra but play different roles in hashing."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "14. WBFT 블록 헤더 Extra 포맷"
     subsection: "수정 시 주의사항"
 

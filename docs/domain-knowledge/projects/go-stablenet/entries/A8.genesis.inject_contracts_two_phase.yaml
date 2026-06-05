@@ -72,16 +72,14 @@ pitfalls:
   - "Skipping CollectUpgrades wiring for a new hardfork — the overlay never runs and the upgraded contract code is never deployed."
 
 existing_doc_ref:
-  - file: .claude/docs/SYSTEM_CONTRACT_FLOW.md
+  - file: .claude/docs/system-contract-flow.md
     section: "2. Path A — Genesis Initialization (Block 0)"
     subsection: "Phase 1 / Phase 2"
-  - file: .claude/docs/review-test-result-with-ast.md
-    section: "4. 불변식 & 금지 사항"
 
 risk_level: low
 source_of_truth: "code+docs"
-status: needs_verification
+status: verified
 priority: P0
 
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-05"
+verified_by: "domain-curation @code_commit 9978930ba (anchors: core/genesis.go:735,774; systemcontracts/systemcontracts.go:78; params/config.go:1108)"

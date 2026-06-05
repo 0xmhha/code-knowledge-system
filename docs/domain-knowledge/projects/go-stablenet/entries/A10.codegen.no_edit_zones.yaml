@@ -68,10 +68,8 @@ pitfalls:
   - "Editing a gen_*.go file directly instead of updating the source type and rerunning gencodec — the next regen overwrites the edit."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/dev-basics.md
     section: "3. 코드 생성 파일 (수동 편집 금지)"
-  - file: .claude/docs/review-test-result-with-ast.md
-    section: "2. 신규 컨트랙트 추가 체크리스트 (9단계)"
 
 risk_level: low
 source_of_truth: "code+docs"

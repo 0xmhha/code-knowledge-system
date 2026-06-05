@@ -70,7 +70,7 @@ pitfalls:
   - "Bumping rounds without attaching the prepared-block justification when one exists: the cluster can fork by accepting two different blocks at different rounds for the same height."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "13. WBFT 합의 엔진 내부 구조"
 
 risk_level: low

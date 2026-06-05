@@ -68,7 +68,7 @@ related_concepts:
   - A10.codegen.no_edit_zones
 
 existing_doc_ref:
-  - file: .claude/docs/BUILD_SOURCE_FILES.md
+  - file: .claude/docs/build-source-files.md
 
 risk_level: low
 source_of_truth: code

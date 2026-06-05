@@ -74,10 +74,10 @@ pitfalls:
   - "Forgetting to query GetValidatorsForVerifying on a boundary block (using only GetValidators) misses the previous-epoch set needed to verify the seals on that boundary block itself."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "13. WBFT 합의 엔진 내부 구조"
     subsection: "에폭 전환 메커니즘"
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "14. WBFT 블록 헤더 Extra 포맷"
     subsection: "EpochInfo"
 

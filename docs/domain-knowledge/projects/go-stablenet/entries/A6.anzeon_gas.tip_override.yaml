@@ -64,12 +64,12 @@ pitfalls:
   - "Reusing a stale AnzeonTipEnv across a reorg can yield wrong authorisation answers: the consumer must call SetCurrentBlock on each new block before reading GetAnzeonTipCap."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/stablenet-features.md
 
 risk_level: low
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P1
 
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-05"
+verified_by: "domain-curation @code_commit 9978930ba (anchors: eth/gasprice/anzeon.go:31,53,74,104)"

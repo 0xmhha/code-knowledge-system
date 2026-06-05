@@ -63,7 +63,7 @@ related_concepts:
   - A5.account_extra.bit_layout
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/ops-guide.md
 
 risk_level: low
 source_of_truth: code

@@ -83,7 +83,7 @@ constants:
     source_file: eth/quorum_protocol.go
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "16. Istanbul P2P 프로토콜"
 
 risk_level: low

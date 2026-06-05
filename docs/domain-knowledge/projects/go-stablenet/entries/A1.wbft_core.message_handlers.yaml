@@ -62,7 +62,7 @@ pitfalls:
   - "Treating a PREPARE quorum as committable proof: PREPARE quorum only justifies the prepared block inside ROUND-CHANGE messages. Block finalisation requires a COMMIT quorum."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "13. WBFT 합의 엔진 내부 구조"
 
 risk_level: low
