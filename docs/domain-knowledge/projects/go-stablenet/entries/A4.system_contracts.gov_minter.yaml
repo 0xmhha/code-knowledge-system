@@ -68,7 +68,7 @@ related_concepts:
   - A10.codegen.contract_regen_procedure
 
 existing_doc_ref:
-  - file: .claude/docs/SYSTEM_CONTRACT_FLOW.md
+  - file: .claude/docs/system-contract-flow.md
 
 risk_level: low
 source_of_truth: code

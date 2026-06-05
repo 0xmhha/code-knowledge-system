@@ -78,9 +78,9 @@ related_concepts:
   - A8.genesis.inject_contracts_two_phase
 
 existing_doc_ref:
-  - file: .claude/docs/SYSTEM_CONTRACT_FLOW.md
+  - file: .claude/docs/system-contract-flow.md
     section: "2. Path A — Genesis Initialization (Block 0)"
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/ops-guide.md
     section: "20. 제네시스 생성"
 
 risk_level: low

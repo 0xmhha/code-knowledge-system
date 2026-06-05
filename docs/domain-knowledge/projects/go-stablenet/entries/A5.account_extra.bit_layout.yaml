@@ -71,13 +71,13 @@ pitfalls:
   - "Forgetting to add the new flag to AccountExtraValidMask means subsequent validity checks reject accounts that carry it."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/stablenet-features.md
     section: "17. Account Extra 비트마스크"
 
 risk_level: medium
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P0
 
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-05"
+verified_by: "domain-curation @code_commit 9978930ba (anchors: core/types/state_account_extra.go:33,36,45,72,87)"

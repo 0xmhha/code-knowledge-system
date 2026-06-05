@@ -68,12 +68,12 @@ pitfalls:
   - "Assuming mint and burn can be invoked by any contract: they are gated to NativeCoinAdapter, so direct ERC-20-style external calls do not move native supply."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/stablenet-features.md
 
 risk_level: low
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P1
 
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-05"
+verified_by: "domain-curation @code_commit 9978930ba (anchors: core/vm/native_manager.go:199,202,225,259,463)"

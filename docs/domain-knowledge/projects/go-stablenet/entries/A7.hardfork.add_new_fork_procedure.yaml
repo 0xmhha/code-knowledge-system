@@ -81,9 +81,9 @@ pitfalls:
   - "Adding the new switch case at the bottom of ActiveNativeManagers — an older fork above matches first and the new addresses are ignored."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/stablenet-features.md
     section: "9. 하드포크 추가 방법"
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/stablenet-features.md
     section: "18. 시스템 컨트랙트 업그레이드 실행 흐름"
 
 risk_level: low

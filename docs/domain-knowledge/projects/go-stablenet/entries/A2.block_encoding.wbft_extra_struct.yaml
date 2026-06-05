@@ -101,7 +101,7 @@ constants:
     source_file: core/types/istanbul.go
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "14. WBFT 블록 헤더 Extra 포맷"
 
 risk_level: low

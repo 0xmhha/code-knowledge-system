@@ -87,7 +87,7 @@ constants:
     source_file: consensus/wbft/backend/api.go
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "15. WBFT 커스텀 RPC API"
 
 risk_level: low

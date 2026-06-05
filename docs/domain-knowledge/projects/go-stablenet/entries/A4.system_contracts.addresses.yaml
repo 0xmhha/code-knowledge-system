@@ -6,10 +6,12 @@ title: "System contract canonical addresses (Anzeon)"
 summary: |
   Five governance system contracts and two native precompiles are
   deployed at well-known fixed addresses on go-stablenet. Source of
-  truth for the contract addresses is params/config_wbft.go; precompile
-  addresses live alongside native manager registration in
-  core/vm/native_manager.go. These values are referenced everywhere in
-  hardfork wiring, genesis JSON, and ABI tooling.
+  truth for the 0x100x governance addresses is params/config_wbft.go;
+  the 0xB000xx precompile address literals are params/protocol_params.go
+  (NativeCoinManager 0xB00002, AccountManager 0xB00003), which
+  core/vm/native_manager.go references when registering their method
+  tables. These values are referenced everywhere in hardfork wiring,
+  genesis JSON, and ABI tooling.
 
 code_anchors:
   - file: params/config_wbft.go
@@ -27,8 +29,13 @@ code_anchors:
   - file: params/config_wbft.go
     symbol: DefaultGovCouncilAddress
     line: 44
+  - file: params/protocol_params.go
+    symbol: NativeCoinManagerAddress
+    line: 219
+    reason: "0xB00002 address literal (and AccountManagerAddress 0xB00003 at :220)"
   - file: core/vm/native_manager.go
-    reason: "registers NativeCoinManager (0xB00002) and AccountManager (0xB00003)"
+    line: 98
+    reason: "registers the NativeCoinManager (params.NativeCoinManagerAddress) and AccountManager (params.AccountManagerAddress, :103) precompile method tables"
 
 code_keywords:
   - DefaultNativeCoinAdapterAddress
@@ -77,21 +84,21 @@ constants:
   - name: NativeCoinManager
     value: "0xB00002"
     unit: precompile_address
-    source_file: core/vm/native_manager.go
+    source_file: params/protocol_params.go
   - name: AccountManager
     value: "0xB00003"
     unit: precompile_address
-    source_file: core/vm/native_manager.go
+    source_file: params/protocol_params.go
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/stablenet-features.md
     section: "8. 시스템 컨트랙트"
     subsection: "배포 주소 / 네이티브 매니저 주소"
 
 risk_level: low
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P0
 
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-05"
+verified_by: "domain-curation @code_commit 9978930ba (anchors: params/config_wbft.go:32,35,38,41,44; params/protocol_params.go:219,220; core/vm/native_manager.go:98,103)"

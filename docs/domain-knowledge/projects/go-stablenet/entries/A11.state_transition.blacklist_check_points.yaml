@@ -28,12 +28,12 @@ code_anchors:
     reason: "check ③: FeePayer blacklist — only when st.msg.FeePayer != nil and rules.IsAnzeon"
   - file: core/vm/evm.go
     symbol: "EVM.Call"
-    line: 212
-    reason: "check ④: zero-address transfer block (ErrZeroAddressTransfer) and precompile transfer block (ErrValueTransferToPrecompile)"
+    line: 213
+    reason: "check ④: inside the AnzeonEnabled() gate (evm.go:210) — zero-address transfer block (ErrZeroAddressTransfer at :213) and native-manager/precompile transfer block (ErrValueTransferToPrecompile at :217)"
   - file: core/vm/evm.go
     symbol: "EVM.Call"
-    line: 481
-    reason: "additional caller blacklist guard inside EVM.Call when Anzeon is active"
+    line: 480
+    reason: "additional caller blacklist guard inside EVM.Call when rules.IsAnzeon is active"
 
 code_keywords:
   - TransitionDb
@@ -74,14 +74,14 @@ pitfalls:
   - "Wiring FeePayer (③) check after the FeePayer balance debit instead of before — the debit happens even when the FeePayer is blacklisted, leaving inconsistent state on a rejected tx."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/stablenet-features.md
     section: "10. 보안 제약사항 & 블랙리스트 실행 흐름"
     subsection: "블랙리스트 검증 포인트 (수정 시 반드시 확인)"
 
 risk_level: low
 source_of_truth: "code+docs"
-status: needs_verification
+status: verified
 priority: P0
 
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-05"
+verified_by: "domain-curation @code_commit 9978930ba (anchors: core/state_transition.go:504,509,577; core/vm/evm.go:213,217,480)"

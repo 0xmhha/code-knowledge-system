@@ -69,7 +69,7 @@ pitfalls:
   - "Forgetting that QuorumSize covers both Prepare and Commit independently — each phase needs its own quorum."
 
 existing_doc_ref:
-  - file: .claude/docs/CLAUDE_DEV_GUIDE.md
+  - file: .claude/docs/wbft-consensus.md
     section: "13. WBFT 합의 엔진 내부 구조"
     subsection: "쿼럼 계산"
 
