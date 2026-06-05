@@ -13,7 +13,9 @@ backends:
     # in-process via ckgclient.NewReal — no subprocess on the query path.
     path: "./data/ckg.db"
     # Source tree the index was built against (body fetcher + cks.ops.index --src).
-    source_root: "/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest"
+    # Per-machine path — set to your go-stablenet checkout. Prefer the
+    # ${GO_STABLENET_ROOT} env so the same config works across machines.
+    source_root: "${GO_STABLENET_ROOT}"
     # ckg binary for the cks.ops.index maintenance tool (shells `ckg build`).
     # Empty disables the ckg leg of cks.ops.index.
     binary_path: "ckg"

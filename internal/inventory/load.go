@@ -53,12 +53,21 @@ func LoadProject(dir string) (*Project, error) {
 		return nil, err
 	}
 
-	codeRoot := pf.CodeRoot
+	// code_root resolution (machine-independent committed config):
+	//   1. CKS_CODE_ROOT env wins outright — a per-machine override that
+	//      needs no edit to the committed project.yaml.
+	//   2. otherwise expand env vars in project.yaml's code_root, so the
+	//      committed value can be "${GO_STABLENET_ROOT}" instead of a
+	//      machine-specific absolute path (which breaks on every other
+	//      machine). An unset var expands to "" — anchor existence checks
+	//      then skip rather than error (validate.go), a safe degrade.
+	//   3. a non-absolute result is taken relative to the project dir, so
+	//      test fixtures can point at sibling trees.
+	codeRoot := os.Getenv("CKS_CODE_ROOT")
+	if codeRoot == "" {
+		codeRoot = os.ExpandEnv(pf.CodeRoot)
+	}
 	if codeRoot != "" && !filepath.IsAbs(codeRoot) {
-		// project.yaml's code_root is documented as an absolute path
-		// (see go-stablenet's project.yaml). Treat a relative value
-		// as relative to the project directory — that lets test
-		// fixtures use sibling trees without hard-coding /Users paths.
 		codeRoot = filepath.Join(absDir, codeRoot)
 	}
 
