@@ -2,7 +2,6 @@ id: A9.istanbul_p2p.protocol_architecture
 subsystem: A9
 knowledge_type: B1
 title: "istanbul/100 subprotocol architecture: piggy-backed on eth peers"
-
 summary: |
   WBFT consensus messages travel over a dedicated P2P subprotocol
   named istanbul, version 100, registered alongside the standard
@@ -16,7 +15,6 @@ summary: |
   during peer-receive while the eth downloader is synchronising is
   expected and downgraded to debug-level logging — the engine starts
   consuming messages only after sync completes.
-
 code_anchors:
   - file: eth/quorum_protocol.go
     symbol: Istanbul100
@@ -44,7 +42,6 @@ code_anchors:
     reason: "sync-time error path — debug log only, not warn/error"
   - file: consensus/wbft/backend/handler.go
     reason: "HandleMsg implementation that bridges P2P to consensus Core"
-
 code_keywords:
   - Istanbul100
   - quorumConsensusProtocolName
@@ -54,21 +51,17 @@ code_keywords:
   - HandleMsg
   - protocolMaxMsgSize
   - ErrStoppedEngine
-
 korean_aliases:
   - "istanbul 프로토콜"
   - "P2P 합의 프로토콜"
   - "istanbul/100"
   - "합의 메시지 전송"
-
 english_aliases:
   - "istanbul subprotocol"
   - "consensus P2P"
   - "p2p consensus piggyback"
-
 related_concepts:
   - A1.wbft_core.consensus_flow_architecture
-
 constants:
   - name: Istanbul100
     value: 100
@@ -81,15 +74,12 @@ constants:
     value: 22
     unit: messages
     source_file: eth/quorum_protocol.go
-
 existing_doc_ref:
   - file: .claude/docs/wbft-consensus.md
     section: "16. Istanbul P2P 프로토콜"
-
 risk_level: low
 source_of_truth: "code+docs"
-status: needs_verification
+status: verified
 priority: P1
-
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-07"
+verified_by: mhha

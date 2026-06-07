@@ -2,7 +2,6 @@ id: A6.fee_delegation.signing_model
 subsystem: A6
 knowledge_type: B5
 title: "Fee delegation signing model: setSignatureValues writes the FeePayer, not the Sender"
-
 summary: |
   FeeDelegateDynamicFeeTx (tx type 0x16) is a double-signed transaction:
   the Sender signs the inner DynamicFeeTx, then the FeePayer signs the
@@ -13,7 +12,6 @@ summary: |
   returns the FeePayer's signature. Confusing these breaks both
   signature verification paths and trips the blacklist guard for the
   FeePayer in TransitionDb.
-
 code_anchors:
   - file: core/types/tx_fee_delegation.go
     symbol: "FeeDelegateDynamicFeeTx.setSignatureValues"
@@ -29,7 +27,6 @@ code_anchors:
     reason: "returns FeePayer V/R/S directly"
   - file: core/state_transition.go
     reason: "FeePayer blacklist verification point (stablenet-features.md §10 verification ③)"
-
 code_keywords:
   - FeeDelegateDynamicFeeTx
   - setSignatureValues
@@ -40,37 +37,30 @@ code_keywords:
   - FR
   - FS
   - FeePayer
-
 korean_aliases:
   - "수수료 위임"
   - "수수료 위임 서명"
   - "이중 서명 트랜잭션"
   - "Fee Delegation"
-
 english_aliases:
   - "fee delegation transaction"
   - "double signature"
   - "fee payer signature"
-
 related_concepts:
   - A5.account_extra.bit_layout
   - A11.state_transition.blacklist_check_points
-
 pitfalls:
   - "Adding logic to setSignatureValues thinking it covers the Sender signature — Sender's V/R/S lives on the embedded SenderTx and is set by the embedded DynamicFeeTx's setSignatureValues, not the wrapper."
   - "Forgetting to verify both Sender and FeePayer signatures during transaction validation — verifying only Sender allows a forged FeePayer to be inserted."
   - "Computing gas pricing from FeePayer's GasFeeCap/GasTipCap — there is no such field. The FeePayer only signs; gas price comes from SenderTx (the inner DynamicFeeTx)."
   - "Missing the FeePayer blacklist check in TransitionDb (verification ③ in stablenet-features.md §10) — a blacklisted FeePayer can otherwise still pay for a non-blacklisted Sender's transaction."
-
 existing_doc_ref:
   - file: .claude/docs/stablenet-features.md
     section: "11. Fee Delegation 트랜잭션"
     subsection: "수정 시 주의사항"
-
 risk_level: medium
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P0
-
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-07"
+verified_by: mhha

@@ -39,45 +39,45 @@ summary: 'go-stablenet keeps an active "cherry-pick channel" from upstream
 
   satisfaction, dispatch glue) belong in geth files.
 
-  '
+'
 code_anchors:
-- file: .claude/docs/build-source-files.md
-  symbol: StableNet 고유 코드 식별
-  line: 362
-  reason: First StableNet-unique file table — the canonical cherry-pick boundary mapping
-- file: CLAUDE.md
-  line: 29
-  reason: Top-level guidance listing StableNet-unique files (project-wide convention)
+  - file: .claude/docs/build-source-files.md
+    symbol: StableNet 고유 코드 식별
+    line: 362
+    reason: First StableNet-unique file table — the canonical cherry-pick boundary mapping
+  - file: CLAUDE.md
+    line: 29
+    reason: Top-level guidance listing StableNet-unique files (project-wide convention)
 code_keywords:
-- handler_istanbul.go
-- stablenet_genesis
-- cherry-pick
-- upstream
+  - handler_istanbul.go
+  - stablenet_genesis
+  - cherry-pick
+  - upstream
 korean_aliases:
-- 체리픽 가능성
-- upstream 머지
-- StableNet 고유 코드 격리
-- geth 원본 보존
+  - 체리픽 가능성
+  - upstream 머지
+  - StableNet 고유 코드 격리
+  - geth 원본 보존
 english_aliases:
-- cherry-pick channel
-- upstream geth merge
-- isolate StableNet code
-- do not interleave
+  - cherry-pick channel
+  - upstream geth merge
+  - isolate StableNet code
+  - do not interleave
 related_concepts:
-- A10.codegen.no_edit_zones
-- A10.codegen.contract_regen_procedure
+  - A10.codegen.no_edit_zones
+  - A10.codegen.contract_regen_procedure
 procedure_steps:
-- Before editing a geth-origin file, check `.claude/docs/build-source-files.md` — is the file marked 'StableNet 고유'? If not,
-  your StableNet-specific logic belongs in a NEW file.
-- Place StableNet-unique logic in a sibling file named `*_istanbul.go` / `*_stablenet.go` / `tx_fee_delegation.go` etc.
-- Restrict edits to geth-origin files to MINIMAL hook points (interface dispatch, registration).
-- When adding a new StableNet-unique file, update the table in `.claude/docs/build-source-files.md`.
+  - Before editing a geth-origin file, check `.claude/docs/build-source-files.md` — is the file marked 'StableNet 고유'? If not, your StableNet-specific logic belongs in a NEW file.
+  - Place StableNet-unique logic in a sibling file named `*_istanbul.go` / `*_stablenet.go` / `tx_fee_delegation.go` etc.
+  - Restrict edits to geth-origin files to MINIMAL hook points (interface dispatch, registration).
+  - When adding a new StableNet-unique file, update the table in `.claude/docs/build-source-files.md`.
 pitfalls:
-- Inlining StableNet-specific branches into a geth-origin file 'because it's simpler' — creates merge conflicts on the next
-  upstream pick.
-- Renaming or restructuring a geth file because the StableNet diff has grown — same effect.
-- Putting new feature logic in `core/blockchain.go` / `eth/handler.go` instead of in a sibling _istanbul.go file.
+  - Inlining StableNet-specific branches into a geth-origin file 'because it's simpler' — creates merge conflicts on the next upstream pick.
+  - Renaming or restructuring a geth file because the StableNet diff has grown — same effect.
+  - Putting new feature logic in `core/blockchain.go` / `eth/handler.go` instead of in a sibling _istanbul.go file.
 risk_level: high
 source_of_truth: docs
-status: needs_verification
+status: verified
 priority: P0
+last_verified_at: "2026-06-07"
+verified_by: mhha

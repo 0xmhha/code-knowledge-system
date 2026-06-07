@@ -42,47 +42,49 @@ summary: 'The legacy txpool runs a single goroutine — `pool.loop()` (started a
 
   map mutators directly.
 
-  '
+'
 code_anchors:
-- file: core/txpool/legacypool/legacypool.go
-  symbol: LegacyPool.loop
-  line: 378
-  reason: The single serializer goroutine that owns txpool maps
-- file: core/txpool/legacypool/legacypool.go
-  line: 366
-  reason: '`go pool.loop()` — sole owner of txpool mutation'
-- file: core/txpool/legacypool/legacypool.go
-  symbol: queueTxEvent
-  line: 1289
-  reason: 'Correct enqueue path: requests reorg-run to apply the mutation'
+  - file: core/txpool/legacypool/legacypool.go
+    symbol: LegacyPool.loop
+    line: 378
+    reason: The single serializer goroutine that owns txpool maps
+  - file: core/txpool/legacypool/legacypool.go
+    line: 366
+    reason: '`go pool.loop()` — sole owner of txpool mutation'
+  - file: core/txpool/legacypool/legacypool.go
+    symbol: queueTxEvent
+    line: 1289
+    reason: 'Correct enqueue path: requests reorg-run to apply the mutation'
 code_keywords:
-- LegacyPool
-- pool.loop
-- queueTxEvent
-- changesSinceReorg
-- reorg
+  - LegacyPool
+  - pool.loop
+  - queueTxEvent
+  - changesSinceReorg
+  - reorg
 korean_aliases:
-- txpool 직렬화
-- 리오그 루프
-- txpool 동시성
-- 맵 경쟁
+  - txpool 직렬화
+  - 리오그 루프
+  - txpool 동시성
+  - 맵 경쟁
 english_aliases:
-- txpool serialization
-- reorg loop ownership
-- txpool mutation discipline
-- sealer race
+  - txpool serialization
+  - reorg loop ownership
+  - txpool mutation discipline
+  - sealer race
 related_concepts:
-- A11.state_transition.blacklist_check_points
-- A1.concurrency.core_lock_discipline
+  - A11.state_transition.blacklist_check_points
+  - A1.concurrency.core_lock_discipline
 invariants:
-- Txpool maps (pending/queue/all) are mutated ONLY by `pool.loop()`.
-- External producers (RPC, sealer, p2p) enqueue events; they do NOT touch the maps directly.
-- The reorg loop is the serialization boundary — there is no per-map lock to fall back on.
+  - Txpool maps (pending/queue/all) are mutated ONLY by `pool.loop()`.
+  - External producers (RPC, sealer, p2p) enqueue events; they do NOT touch the maps directly.
+  - The reorg loop is the serialization boundary — there is no per-map lock to fall back on.
 pitfalls:
-- Mutating pool.pending / pool.queue from a non-loop goroutine — data race on map iteration.
-- Adding a sealer fast-path that filters pool.all without going through the loop's snapshot mechanism.
-- Assuming a per-map sync.Mutex exists — the design uses the loop as the lock, not per-map mutexes.
+  - Mutating pool.pending / pool.queue from a non-loop goroutine — data race on map iteration.
+  - Adding a sealer fast-path that filters pool.all without going through the loop's snapshot mechanism.
+  - Assuming a per-map sync.Mutex exists — the design uses the loop as the lock, not per-map mutexes.
 risk_level: high
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P0
+last_verified_at: "2026-06-07"
+verified_by: mhha

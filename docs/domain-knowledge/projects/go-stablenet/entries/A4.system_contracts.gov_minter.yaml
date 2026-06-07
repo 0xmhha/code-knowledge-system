@@ -2,7 +2,6 @@ id: A4.system_contracts.gov_minter
 subsystem: A4
 knowledge_type: B1
 title: "GovMinter (0x1003): native coin minting authority with v1/v2 versions"
-
 summary: |
   GovMinter is the system contract at address 0x1003 that holds the
   mint authority for native coin. The MasterMinter (0x1002) approves
@@ -12,7 +11,6 @@ summary: |
   version per chain. Storage tracks the fiat-token reference, mint
   proposals, per-account burn balances, refundable balances, and
   emergency-pause state.
-
 code_anchors:
   - file: systemcontracts/gov_minter.go
     symbol: initializeMinter
@@ -38,7 +36,6 @@ code_anchors:
     reason: "Solidity source for v1 (regenerate artifacts via systemcontracts/compile)"
   - file: systemcontracts/solidity/v2/GovMinter.sol
     reason: "Solidity source for v2"
-
 code_keywords:
   - GovMinter
   - initializeMinter
@@ -48,32 +45,26 @@ code_keywords:
   - GetBurnBalance
   - GetRefundableBalance
   - CONTRACT_GOV_MINTER
-
 korean_aliases:
   - "거브 민터"
   - "민터 컨트랙트"
   - "발행 권한"
   - "민팅 시스템 컨트랙트"
-
 english_aliases:
   - "minter contract"
   - "minting authority"
   - "native coin minter"
   - "0x1003 contract"
-
 related_concepts:
   - A4.system_contracts.addresses
   - A5.native_coin.issuance_burn_flow
   - A8.genesis.inject_contracts_two_phase
   - A10.codegen.contract_regen_procedure
-
 existing_doc_ref:
   - file: .claude/docs/system-contract-flow.md
-
 risk_level: low
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P1
-
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-07"
+verified_by: mhha
