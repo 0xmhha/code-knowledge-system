@@ -83,6 +83,15 @@ after all of the following pass:
 - [ ] `risk_level` matches the alias commonness (a Korean alias like
       "처리" must be `high`; "쿼럼" can be `low`)
 
+> **Tooling**: `cks-promotion-worksheet -project <dir>` emits a
+> markdown worksheet that turns the substantive checklist above into
+> per-entry fillable sections (Q1–Q4 + decision triple). It pre-fills
+> the `Maps to:` byzantine-catalog cross-reference (best-effort
+> heuristic) and a `suggested: <file:line>` hint on each invariant
+> based on `code_anchors[].reason` token overlap. The reviewer fills
+> the actual judgments. APPROVE decisions are promoted by the inline
+> per-entry `cks-entry-verify` command at the bottom of each section.
+
 ### Provenance
 
 - [ ] `last_verified_at` set to today's date
