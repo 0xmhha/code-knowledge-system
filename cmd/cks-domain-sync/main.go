@@ -138,14 +138,20 @@ func deriveViews(entries []inventory.Entry) (ckvFile, ckgFile) {
 		ckv.Categories = append(ckv.Categories, *c)
 	}
 
-	// ckg: one policy per entry; governs = anchor symbols (qnames).
+	// ckg: one policy per entry; governs = anchor symbols qualified with
+	// their Go package prefix so they match ckg's qualified_name format
+	// (ckg stores e.g. "params.DefaultAnzeonConfig", not the bare
+	// "DefaultAnzeonConfig"). Without this prefix the ckg policy loader
+	// drops every governs[] target with "no code node found" and emits
+	// zero governed_by edges. See [[r1-refactor-pending-work]] #16.
 	var ckg ckgFile
 	for _, e := range entries {
 		var governs []string
 		for _, a := range e.CodeAnchors {
-			if a.Symbol != "" {
-				governs = append(governs, a.Symbol)
+			if a.Symbol == "" {
+				continue
 			}
+			governs = append(governs, qualifyGovernsSymbol(a.File, a.Symbol))
 		}
 		ckg.Policies = append(ckg.Policies, ckgPolicy{
 			ID:          e.ID,
@@ -156,6 +162,41 @@ func deriveViews(entries []inventory.Entry) (ckvFile, ckgFile) {
 		})
 	}
 	return ckv, ckg
+}
+
+// qualifyGovernsSymbol prepends the Go package name (derived from the
+// anchor file's directory basename) to symbol so the result matches
+// ckg's qualified_name shape (e.g. "params.DefaultAnzeonConfig",
+// "validator.defaultSet.QuorumSize"). When the symbol already starts
+// with the directory's package name (e.g. an author already wrote
+// "params.DefaultAnzeonConfig") the prefix is not duplicated.
+//
+// This is a directory-segment heuristic — not a full Go package
+// resolver — so it will miss the rare cases where the on-disk
+// directory name differs from the declared `package <name>` directive.
+// For go-stablenet's geth-derived layout the two match almost
+// everywhere; misses surface in the ckg build log as "no code node
+// found" warnings and can be corrected entry-by-entry by writing
+// `symbol: "<real-pkg>.<name>"` explicitly in the entry yaml.
+func qualifyGovernsSymbol(file, symbol string) string {
+	if symbol == "" {
+		return symbol
+	}
+	if file == "" {
+		return symbol
+	}
+	dir := filepath.ToSlash(filepath.Dir(file))
+	if dir == "" || dir == "." || dir == "/" {
+		return symbol
+	}
+	pkg := filepath.Base(dir)
+	if pkg == "." || pkg == "/" || pkg == "" {
+		return symbol
+	}
+	if strings.HasPrefix(symbol, pkg+".") {
+		return symbol
+	}
+	return pkg + "." + symbol
 }
 
 // dirGlob turns a repo-relative file into the policy path glob for its
