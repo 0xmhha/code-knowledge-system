@@ -47,3 +47,5 @@ docs/_generated/
 
 # Generated domain-knowledge embedding corpus (channel ②; rebuilt by cks-domain-export)
 /generated/
+
+.claude/settings.local.json
