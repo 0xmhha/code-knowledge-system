@@ -2,7 +2,6 @@ id: A12.seals.feepayer_sighash
 subsystem: A12
 knowledge_type: B3
 title: "Fee-delegation sigHash — feepayer signs the wrapped, not the inner, tx"
-
 summary: |
   StableNet's FeeDelegateDynamicFeeTx (tx type 0x16) is DOUBLE-signed:
   the sender signs the inner DynamicFee tx, then the feepayer signs a
@@ -23,7 +22,6 @@ summary: |
   malformed tx if the verifier follows the same broken hash. Any
   refactor of fee-delegation signing must preserve the exact
   payload-shape (inner-with-VRS, then FeePayer) byte for byte.
-
 code_anchors:
   - file: core/types/tx_fee_delegation.go
     symbol: FeeDelegateDynamicFeeTx.sigHash
@@ -37,42 +35,37 @@ code_anchors:
     symbol: FeeDelegateDynamicFeeTx.FeePayer
     line: 29
     reason: "FeePayer field — must be the trailing element in the sigHash payload"
-
 code_keywords:
   - FeeDelegateDynamicFeeTx
   - sigHash
   - setSignatureValues
   - FeePayer
   - feePayer
-
 korean_aliases:
   - "수수료 위임 서명"
   - "feepayer 서명"
   - "이중 서명"
   - "위임 sigHash"
-
 english_aliases:
   - "fee delegation sigHash"
   - "double-signed tx"
   - "feepayer signature payload"
   - "wrapped tx hash"
-
 related_concepts:
   - A6.fee_delegation.signing_model
   - A12.seals.bls_seal_scheme
   - A11.state_transition.blacklist_check_points
-
 invariants:
   - "Feepayer sigHash payload = [[inner-tx-fields including sender V/R/S], FeePayer]."
   - "The sender's signature is part of the feepayer's signed payload — feepayer cannot be substituted without invalidating the chain."
   - "FeePayer is the trailing field; its position is part of the consensus hash."
-
 pitfalls:
   - "Hashing only the inner tx (omitting sender V/R/S) — feepayer substitution becomes possible."
   - "Omitting FeePayer from the payload — wrapper signature collides with inner-only tx hash."
   - "Reordering payload fields to 'match' DynamicFeeTx — breaks signature compatibility."
-
 risk_level: high
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P0
+last_verified_at: "2026-06-07"
+verified_by: mhha

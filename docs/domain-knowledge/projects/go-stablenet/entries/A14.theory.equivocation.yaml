@@ -43,48 +43,50 @@ summary: 'EQUIVOCATION is the byzantine behaviour where one validator emits
 
   bound F to bound the damage, not on punishment.
 
-  '
+'
 code_anchors:
-- file: consensus/wbft/core/prepare.go
-  symbol: Core.handlePrepareMsg
-  line: 87
-  reason: Prepare-count threshold check; per-sender dedup happens before this point in the Set
-- file: consensus/wbft/core/handler.go
-  line: 265
-  reason: Signature verification — equivocation detection precondition
-- file: consensus/wbft/core/preprepare.go
-  symbol: Core.handlePreprepareMsg
-  line: 114
-  reason: Justification check; per-sender dedup in JustificationPrepares set
+  - file: consensus/wbft/core/prepare.go
+    symbol: Core.handlePrepareMsg
+    line: 87
+    reason: Prepare-count threshold check; per-sender dedup happens before this point in the Set
+  - file: consensus/wbft/core/handler.go
+    line: 265
+    reason: Signature verification — equivocation detection precondition
+  - file: consensus/wbft/core/preprepare.go
+    symbol: Core.handlePreprepareMsg
+    line: 114
+    reason: Justification check; per-sender dedup in JustificationPrepares set
 code_keywords:
-- equivocation
-- WBFTPrepares
-- WBFTCommits
-- dedup
-- handlePrepareMsg
+  - equivocation
+  - WBFTPrepares
+  - WBFTCommits
+  - dedup
+  - handlePrepareMsg
 korean_aliases:
-- 이중 투표
-- equivocation
-- 비잔틴 메시지
-- 발신자 중복 제거
+  - 이중 투표
+  - equivocation
+  - 비잔틴 메시지
+  - 발신자 중복 제거
 english_aliases:
-- equivocation
-- double voting
-- per-sender deduplication
-- byzantine vote
+  - equivocation
+  - double voting
+  - per-sender deduplication
+  - byzantine vote
 related_concepts:
-- A1.wbft_core.message_handlers
-- A14.theory.3f1_intersection
-- A14.foundations.equal_power
+  - A1.wbft_core.message_handlers
+  - A14.theory.3f1_intersection
+  - A14.foundations.equal_power
 invariants:
-- Vote counts toward quorum are per SENDER, not per MESSAGE — duplicates from the same sender count once.
-- Equivocation is tolerated within the byzantine bound F; there is no slashing under WBFT (PoA with equal power = 1).
-- Signature verification gates message acceptance; unsigned/forged messages are dropped before dedup.
+  - Vote counts toward quorum are per SENDER, not per MESSAGE — duplicates from the same sender count once.
+  - Equivocation is tolerated within the byzantine bound F; there is no slashing under WBFT (PoA with equal power = 1).
+  - Signature verification gates message acceptance; unsigned/forged messages are dropped before dedup.
 pitfalls:
-- Counting messages instead of distinct signers — single byzantine equivocator can stuff quorum.
-- Assuming a slashing mechanism exists — there is none under StableNet's PoA equal-power model.
-- Aggregating validator signatures off-chain (e.g. bridge proofs) without per-sender dedup — same vulnerability re-introduced.
+  - Counting messages instead of distinct signers — single byzantine equivocator can stuff quorum.
+  - Assuming a slashing mechanism exists — there is none under StableNet's PoA equal-power model.
+  - Aggregating validator signatures off-chain (e.g. bridge proofs) without per-sender dedup — same vulnerability re-introduced.
 risk_level: high
 source_of_truth: code+docs
-status: needs_verification
+status: verified
 priority: P0
+last_verified_at: "2026-06-07"
+verified_by: mhha

@@ -28,71 +28,70 @@ summary: 'Node startup with an empty DB takes a Genesis struct (parsed from
 
   bootstrapping a new network.
 
-  '
+'
 code_anchors:
-- file: core/genesis.go
-  symbol: SetupGenesisBlockWithOverride
-  line: 282
-  reason: top-level entry point invoked by node init
-- file: core/genesis.go
-  symbol: validateAnzeonGenesisConfig
-  line: 231
-  reason: stage 1 — schema/shape validation
-- file: core/genesis.go
-  symbol: initializeAnzeonGenesis
-  line: 242
-  reason: stage 2 — initial Extra + InjectContracts
-- file: core/genesis.go
-  symbol: Genesis.ToBlock
-  line: 510
-  reason: stage 3a — Alloc → stateDB, computes state root
-- file: core/genesis.go
-  symbol: Genesis.Commit
-  line: 575
-  reason: stage 3b — flush state trie to disk
-- file: core/genesis.go
-  symbol: InjectContracts
-  line: 735
-  reason: deploys the 5 system contracts + applies any block-0 hardfork overlays
-- file: core/genesis.go
-  symbol: DefaultStableNetMainnetGenesisBlock
-  reason: embedded Mainnet/Testnet genesis builders (also DefaultStableNetTestnetGenesisBlock); consumed by cmd/utils/flags.go
-    to bootstrap a node with the canonical chain
-  line: 617
-- file: cmd/genesis_generator/
-  reason: CLI that generates a fresh network's genesis JSON
+  - file: core/genesis.go
+    symbol: SetupGenesisBlockWithOverride
+    line: 282
+    reason: top-level entry point invoked by node init
+  - file: core/genesis.go
+    symbol: validateAnzeonGenesisConfig
+    line: 231
+    reason: stage 1 — schema/shape validation
+  - file: core/genesis.go
+    symbol: initializeAnzeonGenesis
+    line: 242
+    reason: stage 2 — initial Extra + InjectContracts
+  - file: core/genesis.go
+    symbol: Genesis.ToBlock
+    line: 510
+    reason: stage 3a — Alloc → stateDB, computes state root
+  - file: core/genesis.go
+    symbol: Genesis.Commit
+    line: 575
+    reason: stage 3b — flush state trie to disk
+  - file: core/genesis.go
+    symbol: InjectContracts
+    line: 735
+    reason: deploys the 5 system contracts + applies any block-0 hardfork overlays
+  - file: core/genesis.go
+    symbol: DefaultStableNetMainnetGenesisBlock
+    reason: embedded Mainnet/Testnet genesis builders (also DefaultStableNetTestnetGenesisBlock); consumed by cmd/utils/flags.go to bootstrap a node with the canonical chain
+    line: 617
+  - file: cmd/genesis_generator/
+    reason: CLI that generates a fresh network's genesis JSON
 code_keywords:
-- SetupGenesisBlockWithOverride
-- validateAnzeonGenesisConfig
-- initializeAnzeonGenesis
-- InjectContracts
-- applyUpgradeOverlay
-- CreateInitialExtraData
-- ToBlock
-- Commit
-- CollectUpgrades
-- genesis_generator
+  - SetupGenesisBlockWithOverride
+  - validateAnzeonGenesisConfig
+  - initializeAnzeonGenesis
+  - InjectContracts
+  - applyUpgradeOverlay
+  - CreateInitialExtraData
+  - ToBlock
+  - Commit
+  - CollectUpgrades
+  - genesis_generator
 korean_aliases:
-- 제네시스 부트스트랩
-- 제네시스 블록 생성
-- 노드 초기화 흐름
-- Genesis JSON 적용
+  - 제네시스 부트스트랩
+  - 제네시스 블록 생성
+  - 노드 초기화 흐름
+  - Genesis JSON 적용
 english_aliases:
-- genesis bootstrap
-- node initialization flow
-- first block setup
+  - genesis bootstrap
+  - node initialization flow
+  - first block setup
 related_concepts:
-- A4.system_contracts.addresses
-- A7.hardfork.add_new_fork_procedure
-- A8.genesis.inject_contracts_two_phase
+  - A4.system_contracts.addresses
+  - A7.hardfork.add_new_fork_procedure
+  - A8.genesis.inject_contracts_two_phase
 existing_doc_ref:
-- file: .claude/docs/system-contract-flow.md
-  section: 2. Path A — Genesis Initialization (Block 0)
-- file: .claude/docs/ops-guide.md
-  section: 20. 제네시스 생성
+  - file: .claude/docs/system-contract-flow.md
+    section: 2. Path A — Genesis Initialization (Block 0)
+  - file: .claude/docs/ops-guide.md
+    section: 20. 제네시스 생성
 risk_level: low
 source_of_truth: code+docs
-status: needs_verification
+status: verified
 priority: P0
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-07"
+verified_by: mhha

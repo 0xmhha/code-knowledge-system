@@ -2,7 +2,6 @@ id: A14.foundations.wkrc_not_eth
 subsystem: A14
 knowledge_type: B4
 title: "Native asset is WKRC (KRW stablecoin), not ETH"
-
 summary: |
   The native coin on go-stablenet is **WKRC** — a KRW-pegged
   stablecoin — not ETH. Source of truth: params/config.go genesis
@@ -19,7 +18,6 @@ summary: |
   designs fee/reward/transfer logic against "ETH" assumptions will
   emit code that is silently wrong for regulatory reporting, fee
   accounting, and user-facing balances.
-
 code_anchors:
   - file: params/config.go
     line: 100
@@ -27,41 +25,36 @@ code_anchors:
   - file: core/genesis_mainnet.json
     line: 58
     reason: "Mainnet genesis carries the same WKRC name/symbol pair"
-
 code_keywords:
   - WKRC
   - KRW
   - NativeCoinAdapter
   - NativeCoinManager
   - decimals
-
 korean_aliases:
   - "네이티브 코인"
   - "WKRC 스테이블코인"
   - "KRW 페그"
   - "ETH 아님"
-
 english_aliases:
   - "WKRC native asset"
   - "KRW-pegged stablecoin"
   - "not ETH"
-
 related_concepts:
   - A4.system_contracts.addresses
   - A5.native_coin.issuance_burn_flow
   - A14.foundations.base_fee_redistribution
-
 invariants:
   - "Native asset is WKRC (symbol/name='WKRC', currency='KRW', decimals=18)."
   - "Native supply changes are bank-backed mint/burn through GovMinter + NativeCoinManager, not protocol issuance."
   - "Ethereum 'Ether'/'wei' identifiers in the geth tree are residue; the unit is WKRC-wei."
-
 pitfalls:
   - "Writing fee/reward code that says 'ETH' in comments or identifiers — incorrect for accounting and audit."
   - "Hardcoding ETH-style fee floors / tip defaults instead of consulting WKRC params."
   - "Treating native supply as protocol-issued (e.g. block reward minting)."
-
 risk_level: high
 source_of_truth: code+docs
-status: needs_verification
+status: verified
 priority: P0
+last_verified_at: "2026-06-07"
+verified_by: mhha

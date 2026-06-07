@@ -2,7 +2,6 @@ id: A2.block_encoding.filtered_header_hash
 subsystem: A2
 knowledge_type: B3
 title: "Block hash computation requires WBFTFilteredHeader first"
-
 summary: |
   WBFT block hashing has a non-obvious requirement: before computing a
   block hash you must strip the round number and the PreparedSeal /
@@ -14,7 +13,6 @@ summary: |
   caller-supplied round. Hashing the raw header instead of the filtered
   one produces a hash nobody else can reproduce, breaking signature
   verification and block lookup.
-
 code_anchors:
   - file: core/types/istanbul.go
     symbol: WBFTFilteredHeader
@@ -28,7 +26,6 @@ code_anchors:
     symbol: ExtractWBFTExtra
     line: 251
     reason: "called inside the filter to decode-then-re-encode the Extra"
-
 code_keywords:
   - WBFTFilteredHeader
   - WBFTFilteredHeaderWithRound
@@ -36,40 +33,32 @@ code_keywords:
   - PreparedSeal
   - CommittedSeal
   - Round
-
 korean_aliases:
   - "블록 해시 계산"
   - "WBFTFilteredHeader"
   - "필터링된 헤더"
-
 english_aliases:
   - "block hash computation"
   - "header filtering for hashing"
   - "seal stripping"
-
 related_concepts:
   - A2.block_encoding.wbft_extra_struct
   - A1.wbft_core.consensus_flow_architecture
-
 invariants:
   - "Block hashes are computed over WBFTFilteredHeader, not the raw header."
   - "WBFTFilteredHeader zeros Round and removes PreparedSeal / CommittedSeal, but leaves PrevRound / PrevPreparedSeal / PrevCommittedSeal untouched (those are part of the canonical block)."
   - "IstanbulExtraVanity (32) and IstanbulExtraSeal (96) are fixed — changing them invalidates every existing block."
-
 pitfalls:
   - "Hashing the raw header produces a hash that disagrees with every other node and breaks signature verification."
   - "Forgetting to strip Round means the proposer's hash differs from each follower's once they observe their own round value."
   - "Confusing PrevRound (kept) with Round (stripped); both live in WBFTExtra but play different roles in hashing."
-
 existing_doc_ref:
   - file: .claude/docs/wbft-consensus.md
     section: "14. WBFT 블록 헤더 Extra 포맷"
     subsection: "수정 시 주의사항"
-
 risk_level: low
 source_of_truth: "code+docs"
-status: needs_verification
+status: verified
 priority: P0
-
-last_verified_at: null
-verified_by: null
+last_verified_at: "2026-06-07"
+verified_by: mhha

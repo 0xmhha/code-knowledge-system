@@ -2,7 +2,6 @@ id: A1.concurrency.core_lock_discipline
 subsystem: A1
 knowledge_type: B4
 title: "WBFT Core lock discipline — never read Core.current off currentMutex"
-
 summary: |
   The WBFT Core's `current` round-state pointer is guarded by
   `currentMutex` (consensus/wbft/core/core.go:106 — a sync.RWMutex).
@@ -25,7 +24,6 @@ summary: |
   read of `c.current` (or its sub-fields like Sequence/Round/
   pendingRequest) MUST be inside currentMutex's read region; any
   write MUST be inside the write region.
-
 code_anchors:
   - file: consensus/wbft/core/core.go
     symbol: Core.currentMutex
@@ -41,42 +39,37 @@ code_anchors:
     symbol: priorState
     line: 72
     reason: "priorState carries its own RWMutex — separate from currentMutex, NOT a substitute"
-
 code_keywords:
   - currentMutex
   - Core.current
   - priorState
   - RLock
   - RWMutex
-
 korean_aliases:
   - "동시성"
   - "락 규율"
   - "RWMutex"
   - "current 읽기 락"
-
 english_aliases:
   - "lock discipline"
   - "current round state lock"
   - "RWMutex"
   - "data race"
-
 related_concepts:
   - A1.wbft_core.quorum_calc
   - A1.wbft_core.round_change_protocol
   - A13.sealing.reorg_serialization
-
 invariants:
   - "Every read of c.current (and sub-fields Sequence/Round/pendingRequest) is inside currentMutex.RLock()."
   - "Every write of c.current is inside currentMutex.Lock(); the write region covers the full mutation, not just the pointer swap."
   - "priorState.RWMutex is a separate lock for prior-state snapshots, not a substitute for currentMutex."
-
 pitfalls:
   - "Reading c.current.Sequence() for telemetry without acquiring currentMutex.RLock — data race."
   - "Acquiring priorState's lock instead of currentMutex — wrong lock, same struct family."
   - "Partial write under Lock (e.g. allocating a new state outside Lock, then swapping the pointer inside) — readers may observe a half-initialized state."
-
 risk_level: high
 source_of_truth: code
-status: needs_verification
+status: verified
 priority: P0
+last_verified_at: "2026-06-07"
+verified_by: mhha
