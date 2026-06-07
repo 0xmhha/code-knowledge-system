@@ -1,90 +1,93 @@
 id: A3.validator_set.epoch_transition
 subsystem: A3
 knowledge_type: B3
-title: "Epoch transition: how the next epoch's validator set is selected and pinned"
+title: 'Epoch transition: how the next epoch''s validator set is selected and pinned'
+summary: 'go-stablenet''s validator set is fixed for the duration of an epoch
 
-summary: |
-  go-stablenet's validator set is fixed for the duration of an epoch
   (10 blocks on Mainnet, 140 on Testnet). On the last block of each
+
   epoch, the engine calls buildEpochInfo: it queries GovValidator
+
   (system contract 0x1001) for the new candidate list and validator
-  indices, then writes an EpochInfo into that block's
+
+  indices, then writes an EpochInfo into that block''s
+
   Header.Extra.WBFTExtra.EpochInfo. From the next block onward,
+
   GetValidators returns the new set; intra-epoch blocks omit
+
   EpochInfo. Backend.GetValidatorsForVerifying provides the previous
-  epoch's set in parallel so cross-epoch block verification can match
+
+  epoch''s set in parallel so cross-epoch block verification can match
+
   signers against the correct validator set.
 
+  '
 code_anchors:
-  - file: consensus/wbft/backend/engine.go
-    symbol: "Backend.GetValidators"
-    line: 130
-    reason: "primary validator lookup at a given header"
-  - file: consensus/wbft/backend/engine.go
-    symbol: "Backend.GetValidatorsForVerifying"
-    line: 420
-    reason: "returns (current, previous) sets for cross-epoch boundary verification"
-  - file: core/types/istanbul.go
-    symbol: EpochInfo
-    line: 99
-    reason: "the manifest written into the last block of each epoch"
-  - file: params/config_wbft.go
-    symbol: WBFTConfig.Epoch
-    reason: "epoch length parameter (Mainnet 10, Testnet 140)"
-  - file: systemcontracts/gov_validator.go
-    reason: "GovValidator contract (0x1001) — source of truth for next-epoch candidates"
-
+- file: consensus/wbft/backend/engine.go
+  symbol: Backend.GetValidators
+  line: 130
+  reason: primary validator lookup at a given header
+- file: consensus/wbft/backend/engine.go
+  symbol: Backend.GetValidatorsForVerifying
+  line: 426
+  reason: returns (current, previous) sets for cross-epoch boundary verification
+- file: core/types/istanbul.go
+  symbol: EpochInfo
+  line: 105
+  reason: the manifest written into the last block of each epoch
+- file: params/config_wbft.go
+  symbol: WBFTConfig.Epoch
+  reason: epoch length parameter (Mainnet 10, Testnet 140)
+- file: systemcontracts/gov_validator.go
+  reason: GovValidator contract (0x1001) — source of truth for next-epoch candidates
 code_keywords:
-  - GetValidators
-  - GetValidatorsForVerifying
-  - buildEpochInfo
-  - IsEpochBlockNumber
-  - EpochInfo
-  - Validators
-  - Candidate
-  - BLSPublicKeys
-  - GovValidator
-  - WBFTConfig
-
+- GetValidators
+- GetValidatorsForVerifying
+- buildEpochInfo
+- IsEpochBlockNumber
+- EpochInfo
+- Validators
+- Candidate
+- BLSPublicKeys
+- GovValidator
+- WBFTConfig
 korean_aliases:
-  - "에폭 전환"
-  - "검증자 집합 변경"
-  - "에폭 경계"
-  - "다음 에폭 검증자"
-
+- 에폭 전환
+- 검증자 집합 변경
+- 에폭 경계
+- 다음 에폭 검증자
 english_aliases:
-  - "epoch transition"
-  - "validator set rotation"
-  - "epoch boundary"
-
+- epoch transition
+- validator set rotation
+- epoch boundary
 related_concepts:
-  - A1.wbft_core.consensus_flow_architecture
-  - A2.block_encoding.wbft_extra_struct
-  - A4.system_contracts.addresses
-
+- A1.wbft_core.consensus_flow_architecture
+- A2.block_encoding.wbft_extra_struct
+- A4.system_contracts.addresses
 invariants:
-  - "EpochInfo is non-nil only on the last block of an epoch. Any other block carrying EpochInfo is a protocol violation."
-  - "EpochInfo.Validators contains indices into EpochInfo.Candidates — never addresses. Direct address access requires looking up Candidates[Validators[i]].Addr."
-  - "BLSPublicKeys has the same length as Validators."
-  - "The validator set for block N is determined by the most recent block <= N that carried an EpochInfo; the genesis block seeds the first epoch via WBFTInit."
-
+- EpochInfo is non-nil only on the last block of an epoch. Any other block carrying EpochInfo is a protocol violation.
+- EpochInfo.Validators contains indices into EpochInfo.Candidates — never addresses. Direct address access requires looking
+  up Candidates[Validators[i]].Addr.
+- BLSPublicKeys has the same length as Validators.
+- The validator set for block N is determined by the most recent block <= N that carried an EpochInfo; the genesis block seeds
+  the first epoch via WBFTInit.
 pitfalls:
-  - "Writing EpochInfo on a non-epoch-boundary block breaks header validation on every other node — symptoms are widespread block rejections from peers."
-  - "Treating EpochInfo.Validators as addresses instead of indices retrieves wrong validators and breaks signature verification."
-  - "Forgetting to query GetValidatorsForVerifying on a boundary block (using only GetValidators) misses the previous-epoch set needed to verify the seals on that boundary block itself."
-
+- Writing EpochInfo on a non-epoch-boundary block breaks header validation on every other node — symptoms are widespread block
+  rejections from peers.
+- Treating EpochInfo.Validators as addresses instead of indices retrieves wrong validators and breaks signature verification.
+- Forgetting to query GetValidatorsForVerifying on a boundary block (using only GetValidators) misses the previous-epoch set
+  needed to verify the seals on that boundary block itself.
 existing_doc_ref:
-  - file: .claude/docs/wbft-consensus.md
-    section: "13. WBFT 합의 엔진 내부 구조"
-    subsection: "에폭 전환 메커니즘"
-  - file: .claude/docs/wbft-consensus.md
-    section: "14. WBFT 블록 헤더 Extra 포맷"
-    subsection: "EpochInfo"
-
+- file: .claude/docs/wbft-consensus.md
+  section: 13. WBFT 합의 엔진 내부 구조
+  subsection: 에폭 전환 메커니즘
+- file: .claude/docs/wbft-consensus.md
+  section: 14. WBFT 블록 헤더 Extra 포맷
+  subsection: EpochInfo
 risk_level: low
-source_of_truth: "code+docs"
+source_of_truth: code+docs
 status: needs_verification
 priority: P0
-
 last_verified_at: null
 verified_by: null
