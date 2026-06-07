@@ -1,0 +1,84 @@
+id: A14.foundations.instant_finality_inert_reorg
+subsystem: A14
+knowledge_type: B5
+title: Instant BFT finality — geth reorg / Td code is inert (a trap)
+summary: 'Under WBFT consensus a Commit-quorum block is FINAL the moment it is
+
+  written; there is no probabilistic finality and no honest reorg.
+
+  However, geth''s fork-choice machinery is still present in the tree:
+
+  ForkChoice (core/forkchoice.go) compares TotalDifficulty, BlockChain
+
+  has a forker field (core/blockchain.go:260), and ReorgNeeded is
+
+  called at ~6 call sites (core/blockchain.go:1143, :1459, :1604,
+
+  :1819, :1983, …). Under WBFT, ReorgNeeded effectively never returns
+
+  true on honest input, but the code paths exist and compile.
+
+
+  The trap: an LLM editing block-import, finalization, or
+
+  consensus-glue code may "fix" or extend these reorg/Td paths on the
+
+  assumption that they govern real behaviour. They do not — touching
+
+  them invites correctness drift (e.g. accidentally accepting a
+
+  competing chain on the wrong side of finality). Treat the forker / Td
+
+  code as inert geth residue; do not extend it for StableNet logic. Any
+
+  consensus-related fork-choice change belongs in consensus/wbft/, not
+
+  in core/forkchoice.go.
+
+  '
+code_anchors:
+- file: core/blockchain.go
+  symbol: BlockChain.forker
+  line: 265
+  reason: forker field — present but inert under WBFT instant finality
+- file: core/blockchain.go
+  line: 1459
+  reason: ReorgNeeded call site in writeBlockAndSetHead path
+- file: core/forkchoice.go
+  symbol: ForkChoice.ReorgNeeded
+  line: 77
+  reason: TerminalTotalDifficulty / externTd comparison — Ethereum-PoW heritage
+code_keywords:
+- ForkChoice
+- ReorgNeeded
+- TotalDifficulty
+- TerminalTotalDifficulty
+- writeBlockAndSetHead
+- forker
+korean_aliases:
+- 즉시 최종성
+- 리오그
+- 재구성 불가
+- 리오그 불가
+- Td 비활성
+english_aliases:
+- instant finality
+- inert reorg
+- no probabilistic finality
+- total difficulty inert
+related_concepts:
+- A14.foundations.equal_power
+- A1.wbft_core.quorum_calc
+- A11.state_transition.blacklist_check_points
+invariants:
+- Once a WBFT-Committed block is written, it is final; there is no honest reorg path.
+- ForkChoice / TotalDifficulty code paths are inert geth residue, not StableNet truth.
+- Reorg-related changes that affect consensus belong in consensus/wbft/, not in core/forkchoice.go.
+pitfalls:
+- Extending core/forkchoice.go to influence StableNet block selection.
+- Reading TotalDifficulty as a meaningful chain-quality metric.
+- Adding logic that depends on honest reorg ever happening (e.g. retrying tx inclusion on a different fork).
+risk_level: high
+source_of_truth: code
+status: needs_verification
+priority: P0

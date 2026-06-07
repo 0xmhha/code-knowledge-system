@@ -1,0 +1,69 @@
+id: A14.foundations.base_fee_redistribution
+subsystem: A14
+knowledge_type: B1
+title: "Base fee is redistributed to validators (not burned)"
+
+summary: |
+  Ethereum EIP-1559 BURNS the base fee. go-stablenet does NOT — under
+  WBFT the base fee is REDISTRIBUTED to validators as part of block
+  finalization, because StableNet's economic model treats validators
+  as the operational counterparty rather than burning the native
+  stablecoin (WKRC) supply away. The redistribution happens in the WBFT
+  engine's Finalize path: consensus/wbft/backend/engine.go:174
+  Backend.Finalize delegates to the underlying Engine().Finalize(),
+  which performs the per-validator base-fee crediting (see also A3
+  validator-set + A6 fee-delegation for the tip path).
+
+  The trap: an LLM editing finalization, fee accounting, or block
+  reward code may apply Ethereum's burn assumption — leaving the base
+  fee unaccounted, or worse, calling state.SubBalance against a "burn
+  address." Both break WKRC supply integrity and the validator
+  incentive contract. Any change to fee accounting must preserve the
+  redistribution invariant and be cross-checked against the WBFT
+  Finalize implementation, not against Ethereum EIP-1559 references.
+
+code_anchors:
+  - file: consensus/wbft/backend/engine.go
+    symbol: Backend.Finalize
+    line: 174
+    reason: "Finalize entry point — delegates to Engine().Finalize(); base-fee redistribution lives in that path (StableNet diverges from EIP-1559 burn here)"
+  - file: params/config.go
+    line: 100
+    reason: "WKRC native-coin definition (name/symbol/currency) — base fee is denominated in WKRC, not ETH"
+
+code_keywords:
+  - Finalize
+  - BaseFee
+  - WKRC
+  - Backend
+  - Engine
+
+korean_aliases:
+  - "base fee 분배"
+  - "베이스 피 분배"
+  - "수수료 분배"
+  - "base fee 소각 아님"
+
+english_aliases:
+  - "base fee redistribution"
+  - "validator base fee credit"
+  - "no EIP-1559 burn"
+
+related_concepts:
+  - A14.foundations.wkrc_not_eth
+  - A14.foundations.equal_power
+  - A6.fee_delegation.signing_model
+
+invariants:
+  - "Base fee is redistributed to validators on Finalize; it is NOT burned."
+  - "Total WKRC supply moved by Finalize sums to zero across {fee debit, validator credit} (no burn sink)."
+
+pitfalls:
+  - "Applying EIP-1559 burn semantics ('basefee → 0x0...0') in fee accounting."
+  - "Skipping the base-fee credit path during Finalize refactors."
+  - "Treating base fee as protocol revenue rather than validator payout."
+
+risk_level: high
+source_of_truth: code
+status: needs_verification
+priority: P0
