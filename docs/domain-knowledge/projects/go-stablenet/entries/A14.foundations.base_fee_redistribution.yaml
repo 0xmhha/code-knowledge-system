@@ -8,7 +8,7 @@ summary: |
   finalization, because StableNet's economic model treats validators
   as the operational counterparty rather than burning the native
   stablecoin (WKRC) supply away. The redistribution happens in the WBFT
-  engine's Finalize path: consensus/wbft/backend/engine.go:174
+  engine's Finalize path: consensus/wbft/backend/engine.go:180
   Backend.Finalize delegates to the underlying Engine().Finalize(),
   which performs the per-validator base-fee crediting (see also A3
   validator-set + A6 fee-delegation for the tip path).
