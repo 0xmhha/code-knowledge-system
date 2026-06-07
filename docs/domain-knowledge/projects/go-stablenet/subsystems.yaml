@@ -140,3 +140,42 @@
     - core/types/tx_blob.go
     - core/txpool/
     - core/state_transition.go
+
+- id: A12
+  name: "Cryptographic Primitives & Validator Seals"
+  description: |
+    Signing/hashing/randao primitives shared across consensus and tx
+    paths. BLS96-byte aggregate seals, SealerSet bitpack, randao mixing,
+    secp256k1 signature schemes used by sender/feepayer sigHash. The
+    crypto package owns the primitives; consensus seal layout (A2,
+    core/types/istanbul.go) and fee-delegation signing model (A6,
+    core/types/tx_fee_delegation.go) are referenced via code_anchors
+    rather than re-claimed.
+  code_paths:
+    - crypto/
+
+- id: A13
+  name: "Block Production & Sealing"
+  description: |
+    Local block production, transaction ordering, payload building,
+    and the sealer that finalizes a proposed block. Hosts the
+    sealer-concurrency invariants (reorg-loop serialization, txpool
+    mutation discipline) that the WBFT consensus core (A1) and txpool
+    (A11) cross-reference.
+  code_paths:
+    - miner/
+
+- id: A14
+  name: "Protocol Foundations & Design Philosophy"
+  description: |
+    Concept-anchored knowledge that explains StableNet's design
+    posture rather than a specific file. Houses BFT safety/liveness
+    theory (3f+1 intersection, FLP/partial-synchrony, justification/
+    locking, equivocation), blockchain fundamentals as they apply to
+    StableNet, the Ethereum-divergence catalog (WKRC≠ETH, base-fee
+    redistribution, instant-finality + inert-reorg trap, equal-power
+    PoA), and the cherry-pick principle that isolates StableNet code
+    from upstream geth for cherry-pick-ability. Entries here typically
+    carry illustrative code_anchors (the region the concept governs)
+    rather than owning code_paths.
+  code_paths: []

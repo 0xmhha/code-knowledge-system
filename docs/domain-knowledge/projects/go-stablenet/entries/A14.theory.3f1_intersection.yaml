@@ -1,0 +1,80 @@
+id: A14.theory.3f1_intersection
+subsystem: A14
+knowledge_type: B4
+title: BFT 3f+1 quorum intersection — why ceil(N − F) is the safety floor
+summary: 'Classical BFT (Castro–Liskov PBFT, QBFT) proves SAFETY under up to F
+
+  byzantine nodes only if any two quorums intersect in at least one
+
+  honest node. With N validators and F = floor((N−1)/3), the minimum
+
+  quorum that satisfies the intersection lemma is Q = ceil(N − F).
+
+  WBFT instantiates exactly this Q in defaultSet.QuorumSize
+
+  (consensus/wbft/validator/default.go:226) using F() = (N−1)/3 as
+
+  float64 (:222). Examples that surprise int-only refactors:
+
+  N=5 → Q=4 (not 2f+1=3); N=6 → Q=5 (not 3); N=8 → Q=6 (not 5).
+
+
+  Implication for designs: any code path that "approves" something on
+
+  fewer than Q distinct validators violates the intersection lemma and
+
+  may finalize on an unsafe quorum (a safety violation — two
+
+  conflicting blocks both reach quorum). This applies not only to the
+
+  consensus state machine but to ANY validator-signature aggregation
+
+  added later (e.g. a custom-precompile attestation, a system-contract
+
+  vote count). Use valSet.QuorumSize(), do not hardcode 2f+1.
+
+  '
+code_anchors:
+- file: consensus/wbft/validator/default.go
+  symbol: defaultSet.F
+  line: 226
+  reason: F = (N−1)/3 as float64 — the byzantine bound
+- file: consensus/wbft/validator/default.go
+  symbol: defaultSet.QuorumSize
+  line: 230
+  reason: Q = ceil(N − F) — the intersection-safe quorum
+- file: consensus/wbft/core/prepare.go
+  symbol: Core.handlePrepareMsg
+  line: 87
+  reason: Threshold check using QuorumSize — the StatePrepared gate
+code_keywords:
+- QuorumSize
+- F()
+- intersection
+- ceil
+korean_aliases:
+- BFT 정족수
+- 3f+1 교차
+- 비잔틴 안전성
+- quorum intersection
+english_aliases:
+- BFT quorum intersection
+- 3f+1 lemma
+- byzantine safety bound
+- PBFT quorum
+related_concepts:
+- A1.wbft_core.quorum_calc
+- A14.foundations.equal_power
+- A14.theory.flp_partial_synchrony
+invariants:
+- Any quorum claimed by protocol code must equal valSet.QuorumSize() — never hardcoded 2f+1 or N/2+1.
+- F = floor((N−1)/3); Q = ceil(N − F). The two quantities together encode the safety bound.
+- Validator-signature aggregations added outside the consensus state machine MUST honor the same Q.
+pitfalls:
+- Using PBFT-textbook 2f+1 — diverges from ceil(N−F) for N not of form 3f+1; under-counts the safe quorum.
+- Using simple majority N/2+1 — far too low; trivially unsafe.
+- Treating F as int — loses the (N−1)/3 fractional part that ceil compensates for.
+risk_level: high
+source_of_truth: paper
+status: needs_verification
+priority: P0

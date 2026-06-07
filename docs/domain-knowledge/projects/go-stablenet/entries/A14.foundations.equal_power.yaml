@@ -1,0 +1,78 @@
+id: A14.foundations.equal_power
+subsystem: A14
+knowledge_type: B4
+title: Equal-power validators — every validator has voting power = 1
+summary: 'go-stablenet is PoA with equal-weight validators: every validator''s
+
+  voting power is 1, with no stake field, no weight field, no slashing.
+
+  The defaultValidator struct (consensus/wbft/validator/default.go:32)
+
+  carries only Address + BLSPublicKey — no Power/Weight/Stake field
+
+  exists anywhere in the validator set. Quorum is computed by COUNT
+
+  (ceil(N − F), see A1.wbft_core.quorum_calc), not by stake sum.
+
+
+  Any change that introduces stake-weighted voting, weighted quorum,
+
+  proposer selection biased by stake, or stake-conditioned rewards is
+
+  a STABILITY-VIOLATING bug — even if the test suite passes — because
+
+  it imports Ethereum/WEMIX validator economics that go-stablenet
+
+  explicitly does NOT follow. This trap fires when an LLM extrapolates
+
+  from generic PBFT / PoS literature without checking the validator
+
+  type.
+
+  '
+code_anchors:
+- file: consensus/wbft/validator/default.go
+  symbol: defaultValidator
+  line: 36
+  reason: Validator struct — Address + BLSPublicKey only; no Power/Weight/Stake field
+- file: consensus/wbft/validator/default.go
+  symbol: defaultSet
+  line: 65
+  reason: Validator set struct — list + policy; no stake aggregation
+- file: consensus/wbft/validator/default.go
+  symbol: defaultSet.QuorumSize
+  line: 230
+  reason: Quorum computed by count via ceil(N − F), not by stake
+code_keywords:
+- defaultValidator
+- defaultSet
+- BLSPublicKey
+- QuorumSize
+- ValidatorSet
+korean_aliases:
+- 동일 의결권
+- validator 동등 power
+- PoA 등가 power
+- 스테이크 가중
+- 지분 가중 투표
+english_aliases:
+- equal validator power
+- PoA equal weight
+- no stake weighting
+- validator power 1
+related_concepts:
+- A1.wbft_core.quorum_calc
+- A3.validator_set.epoch_transition
+- A14.foundations.wkrc_not_eth
+invariants:
+- Every active validator has voting power = 1.
+- Quorum is computed as ceil(N − F) over counts, not over stake sums.
+- No validator struct, set struct, or selection routine reads a Power/Weight/Stake field.
+pitfalls:
+- Adding stake-weighted voting or weighted proposer selection — there is no stake to weight.
+- Implementing slashing — there is no slashable stake; misbehavior is handled by governance removal.
+- Extrapolating from Ethereum PoS / WEMIX governance assumptions.
+risk_level: high
+source_of_truth: code
+status: needs_verification
+priority: P0

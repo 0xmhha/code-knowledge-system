@@ -1,0 +1,86 @@
+id: A14.theory.flp_partial_synchrony
+subsystem: A14
+knowledge_type: B4
+title: FLP impossibility — WBFT trades termination for partial synchrony
+summary: 'The FLP result (Fischer–Lynch–Paterson, 1985) proves no deterministic
+
+  consensus algorithm can guarantee both SAFETY and LIVENESS in a
+
+  purely asynchronous system with even one crash. Practical BFT
+
+  algorithms (PBFT, QBFT, WBFT) escape FLP by assuming PARTIAL
+
+  SYNCHRONY: there exists a Global Stabilization Time (GST) after which
+
+  message delays are bounded by a known Δ. WBFT implements this
+
+  assumption via the round-change timer (consensus/wbft/core/core.go:
+
+  110 `roundChangeTimer`, :409 `time.AfterFunc(timeout, ...)`); when a
+
+  round times out before quorum is reached, the protocol advances to
+
+  the next round with the same view-change machinery PBFT/QBFT use.
+
+
+  Implication: LIVENESS is NOT unconditional — it requires GST + a
+
+  correct timeout. Setting RequestTimeout too low can cause perpetual
+
+  round-changes (no round ever finishes before the timer fires);
+
+  setting it too high stalls progress under transient asymmetry. The
+
+  default 1000ms (see A3.timing.wbft_config_defaults) is the
+
+  calibrated value; design changes that touch timer scheduling,
+
+  RequestTimeout, or round-change backoff MUST reason about
+
+  partial-synchrony implications, not just throughput.
+
+  '
+code_anchors:
+- file: consensus/wbft/core/core.go
+  symbol: Core.roundChangeTimer
+  line: 116
+  reason: Round-change timer field — instantiates partial-synchrony assumption
+- file: consensus/wbft/core/core.go
+  line: 409
+  reason: time.AfterFunc(timeout, ...) — the timer that fires the next round
+- file: consensus/wbft/validator/default.go
+  symbol: defaultSet.QuorumSize
+  line: 230
+  reason: Safety floor that holds even when liveness is suspended
+code_keywords:
+- roundChangeTimer
+- RequestTimeout
+- time.AfterFunc
+- timerMu
+korean_aliases:
+- FLP 정리
+- 부분 동기
+- 라운드 체인지 타이머
+- GST
+english_aliases:
+- FLP impossibility
+- partial synchrony
+- GST
+- round-change timer
+related_concepts:
+- A1.wbft_core.round_change_protocol
+- A3.timing.wbft_config_defaults
+- A14.theory.3f1_intersection
+invariants:
+- Safety holds under asynchrony; liveness holds only after Global Stabilization Time + bounded Δ.
+- Round-change timeout is the implementation of the partial-synchrony assumption — its scheduling discipline is consensus-critical.
+- Lowering RequestTimeout below network round-trip + processing latency causes perpetual round-changes (no liveness).
+pitfalls:
+- Tuning RequestTimeout for benchmark throughput without modeling wide-area network latency.
+- Removing or gating the round-change timer in a 'happy path' optimization — safety still holds but liveness can stall indefinitely.
+- Conflating 'asynchronous' (no timing assumption) with 'partial synchrony' (eventual bounded delays) when reading or writing
+  protocol logic.
+risk_level: high
+source_of_truth: paper
+status: needs_verification
+priority: P0

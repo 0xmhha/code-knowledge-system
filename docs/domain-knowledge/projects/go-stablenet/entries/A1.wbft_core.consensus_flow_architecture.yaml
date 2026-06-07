@@ -1,91 +1,95 @@
 id: A1.wbft_core.consensus_flow_architecture
 subsystem: A1
 knowledge_type: B1
-title: "WBFT consensus flow — actors and message sequence per height"
+title: WBFT consensus flow — actors and message sequence per height
+summary: 'The WBFT consensus engine drives one block per height through four
 
-summary: |
-  The WBFT consensus engine drives one block per height through four
   phases inside Core: handleRequest emits a Preprepare from the
+
   current proposer; every validator broadcasts a Prepare in response;
+
   once each validator has seen a Prepare quorum it broadcasts a Commit;
+
   once each validator has seen a Commit quorum the block is finalised
+
   and Core advances to the next height via startNewRound. RoundChange
+
   fires on RequestTimeout and selects a new proposer for the same
+
   height. Backend (consensus/wbft/backend) is the bridge between Core
+
   and the blockchain — it broadcasts/gossips messages, signs with BLS,
+
   fetches Validators, and commits sealed blocks back. Engine
+
   (consensus/wbft/engine) handles header validation, BaseFee
+
   distribution, and epoch construction. The Istanbul/100 P2P
+
   subprotocol (A9) carries the messages between nodes.
 
+  '
 code_anchors:
-  - file: consensus/wbft/core/core.go
-    symbol: "Core.startNewRound"
-    line: 161
-    reason: "entry point for each new round/sequence — orchestrates state transitions"
-  - file: consensus/wbft/core/handler.go
-    reason: "event loop, message routing into handle{Preprepare,Prepare,Commit,RoundChange}Msg"
-  - file: consensus/wbft/core/preprepare.go
-    reason: "Preprepare generation/validation"
-  - file: consensus/wbft/core/prepare.go
-    reason: "Prepare validation + quorum check that drives StatePrepared"
-  - file: consensus/wbft/core/commit.go
-    reason: "Commit validation + quorum check that drives StateCommitted"
-  - file: consensus/wbft/core/roundchange.go
-    reason: "RoundChange protocol on RequestTimeout"
-  - file: consensus/wbft/backend/backend.go
-    reason: "Backend interface implementation — blockchain ↔ Core bridge"
-  - file: consensus/wbft/backend/engine.go
-    reason: "epoch build, validator lookup, BLS signing"
-  - file: consensus/wbft/engine/engine.go
-    reason: "header verification, processFinalize where system-contract upgrades land"
-
+- file: consensus/wbft/core/core.go
+  symbol: Core.startNewRound
+  line: 167
+  reason: entry point for each new round/sequence — orchestrates state transitions
+- file: consensus/wbft/core/handler.go
+  reason: event loop, message routing into handle{Preprepare,Prepare,Commit,RoundChange}Msg
+- file: consensus/wbft/core/preprepare.go
+  reason: Preprepare generation/validation
+- file: consensus/wbft/core/prepare.go
+  reason: Prepare validation + quorum check that drives StatePrepared
+- file: consensus/wbft/core/commit.go
+  reason: Commit validation + quorum check that drives StateCommitted
+- file: consensus/wbft/core/roundchange.go
+  reason: RoundChange protocol on RequestTimeout
+- file: consensus/wbft/backend/backend.go
+  reason: Backend interface implementation — blockchain ↔ Core bridge
+- file: consensus/wbft/backend/engine.go
+  reason: epoch build, validator lookup, BLS signing
+- file: consensus/wbft/engine/engine.go
+  reason: header verification, processFinalize where system-contract upgrades land
 code_keywords:
-  - Core
-  - Backend
-  - startNewRound
-  - handleRequest
-  - handlePreprepareMsg
-  - handlePrepareMsg
-  - handleCommitMsg
-  - handleRoundChangeMsg
-  - sendPreprepareMsg
-  - broadcastPrepare
-  - broadcastCommit
-  - commitWBFT
-  - StateAcceptRequest
-  - StatePreprepared
-  - StatePrepared
-  - StateCommitted
-  - RequestTimeout
-
+- Core
+- Backend
+- startNewRound
+- handleRequest
+- handlePreprepareMsg
+- handlePrepareMsg
+- handleCommitMsg
+- handleRoundChangeMsg
+- sendPreprepareMsg
+- broadcastPrepare
+- broadcastCommit
+- commitWBFT
+- StateAcceptRequest
+- StatePreprepared
+- StatePrepared
+- StateCommitted
+- RequestTimeout
 korean_aliases:
-  - "WBFT 합의 흐름"
-  - "합의 단계"
-  - "합의 메시지 흐름"
-  - "라운드 변경"
-
+- WBFT 합의 흐름
+- 합의 단계
+- 합의 메시지 흐름
+- 라운드 변경
 english_aliases:
-  - "WBFT consensus flow"
-  - "consensus state machine"
-  - "round-change protocol"
-
+- WBFT consensus flow
+- consensus state machine
+- round-change protocol
 related_concepts:
-  - A1.wbft_core.quorum_calc
-  - A2.block_encoding.wbft_extra_struct
-  - A3.validator_set.epoch_transition
-  - A9.istanbul_p2p.protocol_architecture
-
+- A1.wbft_core.quorum_calc
+- A2.block_encoding.wbft_extra_struct
+- A3.validator_set.epoch_transition
+- A9.istanbul_p2p.protocol_architecture
 existing_doc_ref:
-  - file: .claude/docs/wbft-consensus.md
-    section: "13. WBFT 합의 엔진 내부 구조"
-  - file: .claude/docs/review-guide.md
-    section: "유형 4: 합의(WBFT) 관련 질문"
-
+- file: .claude/docs/wbft-consensus.md
+  section: 13. WBFT 합의 엔진 내부 구조
+- file: .claude/docs/review-guide.md
+  section: '유형 4: 합의(WBFT) 관련 질문'
 risk_level: low
-source_of_truth: "code+docs"
+source_of_truth: code+docs
 status: needs_verification
 priority: P0
-
 last_verified_at: null
 verified_by: null

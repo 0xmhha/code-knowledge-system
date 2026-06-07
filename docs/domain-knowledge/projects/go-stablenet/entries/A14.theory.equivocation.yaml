@@ -1,0 +1,90 @@
+id: A14.theory.equivocation
+subsystem: A14
+knowledge_type: B5
+title: Equivocation — byzantine validators may send conflicting messages
+summary: 'EQUIVOCATION is the byzantine behaviour where one validator emits
+
+  two (or more) DIFFERENT messages for the same (Sequence, Round,
+
+  MessageType) — e.g. two different Prepare votes for the same view.
+
+  Honest BFT must tolerate this: a validator''s "vote" is counted at
+
+  most ONCE per view, and the second message either replaces the
+
+  first deterministically or is dropped. WBFT inherits QBFT/PBFT''s
+
+  message-handling discipline in consensus/wbft/core/handler.go
+
+  (signature verification + per-sender deduplication in the message
+
+  set) and in the typed Set structures behind WBFTPrepares /
+
+  WBFTCommits used by handlePrepareMsg (consensus/wbft/core/prepare.go
+
+  :121) and the analogous commit path.
+
+
+  Implication: code that aggregates validator signatures (consensus
+
+  itself, but also any later-added precompile vote / system-contract
+
+  attestation / off-chain bridge proof) MUST deduplicate by sender
+
+  before counting toward quorum. A naive `count := len(messages)`
+
+  lets a single byzantine validator stuff the set and forge quorum.
+
+  The flip side is liveness: when an equivocator is detected, WBFT
+
+  does NOT slash (validators have no stake — see
+
+  A14.foundations.equal_power); the protocol relies on the byzantine
+
+  bound F to bound the damage, not on punishment.
+
+  '
+code_anchors:
+- file: consensus/wbft/core/prepare.go
+  symbol: Core.handlePrepareMsg
+  line: 87
+  reason: Prepare-count threshold check; per-sender dedup happens before this point in the Set
+- file: consensus/wbft/core/handler.go
+  line: 265
+  reason: Signature verification — equivocation detection precondition
+- file: consensus/wbft/core/preprepare.go
+  symbol: Core.handlePreprepareMsg
+  line: 114
+  reason: Justification check; per-sender dedup in JustificationPrepares set
+code_keywords:
+- equivocation
+- WBFTPrepares
+- WBFTCommits
+- dedup
+- handlePrepareMsg
+korean_aliases:
+- 이중 투표
+- equivocation
+- 비잔틴 메시지
+- 발신자 중복 제거
+english_aliases:
+- equivocation
+- double voting
+- per-sender deduplication
+- byzantine vote
+related_concepts:
+- A1.wbft_core.message_handlers
+- A14.theory.3f1_intersection
+- A14.foundations.equal_power
+invariants:
+- Vote counts toward quorum are per SENDER, not per MESSAGE — duplicates from the same sender count once.
+- Equivocation is tolerated within the byzantine bound F; there is no slashing under WBFT (PoA with equal power = 1).
+- Signature verification gates message acceptance; unsigned/forged messages are dropped before dedup.
+pitfalls:
+- Counting messages instead of distinct signers — single byzantine equivocator can stuff quorum.
+- Assuming a slashing mechanism exists — there is none under StableNet's PoA equal-power model.
+- Aggregating validator signatures off-chain (e.g. bridge proofs) without per-sender dedup — same vulnerability re-introduced.
+risk_level: high
+source_of_truth: code+docs
+status: needs_verification
+priority: P0

@@ -23,11 +23,21 @@ const (
 //
 // Hits do not carry the matched code body; that lives in EvidencePack.Bodies
 // keyed by Citation, so a single body can serve many hits.
+//
+// Symbol and CKGNodeID are populated only for HitSourceCKV hits when the
+// underlying ckv chunk carries them. They are the bridge to ckg: composer
+// Stage 1 extracts Symbol (not just the file basename) as a candidate
+// keyword for Stage 2's ckg fan-out, and CKGNodeID lets Stage 2 short-
+// circuit FindSymbol's name resolution by looking up the exact node.
+// Both fields are omitempty for backward compatibility with hits that
+// pre-date the alignment work.
 type Hit struct {
-	Citation Citation  `json:"citation"`
-	Rank     int       `json:"rank"`
-	Score    float64   `json:"score"`
-	Source   HitSource `json:"source,omitempty"`
+	Citation  Citation  `json:"citation"`
+	Rank      int       `json:"rank"`
+	Score     float64   `json:"score"`
+	Source    HitSource `json:"source,omitempty"`
+	Symbol    string    `json:"symbol,omitempty"`
+	CKGNodeID string    `json:"ckg_node_id,omitempty"`
 }
 
 // IsValid reports whether h carries a valid Citation and a sane Rank.

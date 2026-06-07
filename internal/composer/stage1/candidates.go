@@ -58,6 +58,17 @@ func extractKeywords(prompt string, hits []contract.Hit, intent contract.Intent)
 	}
 
 	for _, h := range hits {
+		// Prefer the chunk's actual symbol when ckv populated it
+		// (e.g. "Finalize", "QuorumSize") — this is the only keyword
+		// that can disambiguate same-named identifiers across packages
+		// (eight different `Finalize` methods exist in go-stablenet).
+		// Falls back to the file-basename heuristic for hits without
+		// symbol metadata (older ckv builds, doc/header chunks, ckg-
+		// sourced hits, etc.) so retrieval quality on those is unchanged.
+		if h.Symbol != "" {
+			add(h.Symbol)
+			continue
+		}
 		base := filepath.Base(h.Citation.File)
 		name := strings.TrimSuffix(base, filepath.Ext(base))
 		// Strip Go test suffix so a hit on "foo_test.go" becomes the

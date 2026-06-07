@@ -1,0 +1,78 @@
+id: A12.seals.feepayer_sighash
+subsystem: A12
+knowledge_type: B3
+title: "Fee-delegation sigHash — feepayer signs the wrapped, not the inner, tx"
+
+summary: |
+  StableNet's FeeDelegateDynamicFeeTx (tx type 0x16) is DOUBLE-signed:
+  the sender signs the inner DynamicFee tx, then the feepayer signs a
+  WRAPPER over [[inner-incl-sender-V/R/S], FeePayer]. The feepayer's
+  sigHash is therefore computed by RLP-encoding the inner tx WITH the
+  sender's V/R/S already populated, followed by the FeePayer address —
+  NOT by re-hashing the bare inner tx. See sigHash at
+  core/types/tx_fee_delegation.go:158 (the prefix-list payload at line
+  170-178 explicitly includes the inner tx values then FeePayer);
+  setSignatureValues at :147 places the feepayer signature on the
+  outer struct without touching the sender's signature.
+
+  The trap: a naive sigHash implementation that hashes only the inner
+  payload (omitting V/R/S) or omits the FeePayer trailing field will
+  produce a different digest, accept a valid-looking but unrelated
+  signature, and allow a feepayer to be substituted server-side
+  without the sender's consent. Worse, the chain will still accept the
+  malformed tx if the verifier follows the same broken hash. Any
+  refactor of fee-delegation signing must preserve the exact
+  payload-shape (inner-with-VRS, then FeePayer) byte for byte.
+
+code_anchors:
+  - file: core/types/tx_fee_delegation.go
+    symbol: FeeDelegateDynamicFeeTx.sigHash
+    line: 158
+    reason: "Feepayer sigHash construction — payload is [[inner incl. sender V/R/S], FeePayer]"
+  - file: core/types/tx_fee_delegation.go
+    symbol: FeeDelegateDynamicFeeTx.setSignatureValues
+    line: 147
+    reason: "Feepayer signature setter on the outer struct"
+  - file: core/types/tx_fee_delegation.go
+    symbol: FeeDelegateDynamicFeeTx.FeePayer
+    line: 29
+    reason: "FeePayer field — must be the trailing element in the sigHash payload"
+
+code_keywords:
+  - FeeDelegateDynamicFeeTx
+  - sigHash
+  - setSignatureValues
+  - FeePayer
+  - feePayer
+
+korean_aliases:
+  - "수수료 위임 서명"
+  - "feepayer 서명"
+  - "이중 서명"
+  - "위임 sigHash"
+
+english_aliases:
+  - "fee delegation sigHash"
+  - "double-signed tx"
+  - "feepayer signature payload"
+  - "wrapped tx hash"
+
+related_concepts:
+  - A6.fee_delegation.signing_model
+  - A12.seals.bls_seal_scheme
+  - A11.state_transition.blacklist_check_points
+
+invariants:
+  - "Feepayer sigHash payload = [[inner-tx-fields including sender V/R/S], FeePayer]."
+  - "The sender's signature is part of the feepayer's signed payload — feepayer cannot be substituted without invalidating the chain."
+  - "FeePayer is the trailing field; its position is part of the consensus hash."
+
+pitfalls:
+  - "Hashing only the inner tx (omitting sender V/R/S) — feepayer substitution becomes possible."
+  - "Omitting FeePayer from the payload — wrapper signature collides with inner-only tx hash."
+  - "Reordering payload fields to 'match' DynamicFeeTx — breaks signature compatibility."
+
+risk_level: high
+source_of_truth: code
+status: needs_verification
+priority: P0
