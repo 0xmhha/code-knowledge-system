@@ -1,0 +1,11 @@
+version: 1
+name: ko10-genesis
+description: 한국어 + alias "제네시스 부트스트랩/제네시스 블록 생성" → initializeAnzeonGenesis
+prompt: "제네시스 부트스트랩에서 시스템 컨트랙트 초기화는 어디서 일어나나?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: core/genesis.go
+    start_line: 242
+    end_line: 263

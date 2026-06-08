@@ -1,0 +1,11 @@
+version: 1
+name: ko03-prepare
+description: 한국어 + alias "프리페어/합의 메시지 처리" → handlePrepareMsg
+prompt: "프리페어 합의 메시지 처리는 어디서 검증되나?"
+intent: bug_fix
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/core/prepare.go
+    start_line: 87
+    end_line: 146

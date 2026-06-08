@@ -1,0 +1,11 @@
+version: 1
+name: ko07-blacklist
+description: 한국어 + alias "블랙리스트 검증/블랙리스트 차단" → IsBlacklisted/TransitionDb
+prompt: "블랙리스트 검증은 트랜잭션 실행 중 계정에 대해 어디서 차단하나?"
+intent: security
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: core/state/statedb.go
+    start_line: 311
+    end_line: 318

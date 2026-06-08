@@ -1,0 +1,11 @@
+version: 1
+name: ko01-quorum
+description: 한국어 프롬프트 + glossary alias "쿼럼 크기" → QuorumSize
+prompt: "WBFT에서 쿼럼 크기(최소 동의 수)는 어떻게 계산하나?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/validator/default.go
+    start_line: 226
+    end_line: 229

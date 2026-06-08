@@ -1,0 +1,11 @@
+version: 1
+name: ko04-commit
+description: 한국어 + alias "커밋 메시지" → handleCommitMsg/commitWBFT
+prompt: "커밋 메시지가 쿼럼에 도달하면 블록을 어떻게 확정하나?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/core/commit.go
+    start_line: 137
+    end_line: 179

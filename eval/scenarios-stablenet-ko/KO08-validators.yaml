@@ -1,0 +1,11 @@
+version: 1
+name: ko08-validators
+description: 한국어 + alias "검증자 집합 변경/에폭 전환" → GetValidators
+prompt: "특정 블록 기준으로 검증자 집합 조회는 엔진 어디에서 하나?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/engine/engine.go
+    start_line: 1097
+    end_line: 1117

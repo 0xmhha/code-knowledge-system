@@ -1,0 +1,11 @@
+version: 1
+name: ko02-round-change
+description: 한국어 + alias "라운드 변경/라운드 체인지" → broadcastRoundChange
+prompt: "라운드 변경이 일어나면 어디서 라운드 체인지 메시지를 피어에게 브로드캐스트하나?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/core/roundchange.go
+    start_line: 52
+    end_line: 98
