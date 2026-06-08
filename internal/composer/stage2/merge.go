@@ -48,14 +48,38 @@ type aggregator struct {
 	rrfK         int
 	bmWeight     float64
 	symbolWeight float64
+	ckvWeight    float64
 }
 
-func newAggregator(rrfK int, bmWeight, symbolWeight float64) *aggregator {
+func newAggregator(rrfK int, bmWeight, symbolWeight, ckvWeight float64) *aggregator {
 	return &aggregator{
 		byCitation:   make(map[string]*ScoredCitation),
 		rrfK:         rrfK,
 		bmWeight:     bmWeight,
 		symbolWeight: symbolWeight,
+		ckvWeight:    ckvWeight,
+	}
+}
+
+// addCkvList credits every hit in a ranked ckv semantic-search result
+// list. Unlike the per-keyword BM25/symbol lists, this is a single list
+// (the semantic recall for the whole prompt), so it is added once. rank
+// is 1-based by list position. Empty lists are a no-op.
+//
+// Wiring the ckv hits into the same RRF as ckg restores the semantic
+// signal to the final citation set: Stage 1 already computed these hits
+// (broad embedding recall) but earlier only mined their symbol names for
+// keywords and then discarded the citations. Measured in isolation the
+// ckv list out-recalls keyword BM25 on natural-language prompts, so it
+// carries CkvWeight >= BMWeight by default.
+func (a *aggregator) addCkvList(hits []contract.Hit) {
+	for i, h := range hits {
+		rank := i + 1
+		contribution := a.ckvWeight / float64(a.rrfK+rank)
+		sc := a.entry(h.Citation)
+		sc.Score += contribution
+		sc.Sources = append(sc.Sources,
+			fmt.Sprintf("ckv:semantic@rank=%d(+%.5f)", rank, contribution))
 	}
 }
 

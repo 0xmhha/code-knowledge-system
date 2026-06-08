@@ -43,7 +43,7 @@ const (
 	DefaultRerankPerKW   = 5   // ckg BM25 K per keyword
 	DefaultMaxRounds     = 2   // initial + 1 refinement
 	DefaultMinConfidence = 0.5 // stop iterating above this
-	DefaultMaxKeywords   = 5   // final keyword count cap
+	DefaultMaxKeywords   = 8   // final keyword count cap
 	DefaultAugmentTopN   = 3   // how many top keywords feed back into the augmented query
 )
 

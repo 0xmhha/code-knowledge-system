@@ -87,7 +87,7 @@ func TestSearch_IntentTestAddTriggersSupplementalGlobPass(t *testing.T) {
 		BM25Hits: []contract.Hit{bm25Hit("a.go", 1, 5, 0.9)},
 	}
 	s, _ := New(ckg)
-	_, err := s.Search(context.Background(), []string{"Foo"}, contract.IntentTestAdd)
+	_, err := s.Search(context.Background(), []string{"Foo"}, nil, contract.IntentTestAdd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestSearch_NonTestAddIntentSkipsSupplementalPass(t *testing.T) {
 		contract.IntentFeatureAdd,
 	} {
 		ckg.Calls.Reset()
-		_, _ = s.Search(context.Background(), []string{"Foo"}, intent)
+		_, _ = s.Search(context.Background(), []string{"Foo"}, nil, intent)
 		if got := len(ckg.Calls.BM25Search); got != 1 {
 			t.Errorf("intent=%s: BM25Search calls = %d, want 1", intent, got)
 		}
@@ -141,7 +141,7 @@ func TestSearch_IntentTestAddAggregatesBothPasses(t *testing.T) {
 		BM25Hits: []contract.Hit{bm25Hit("foo_test.go", 10, 20, 0.5)},
 	}
 	s, _ := New(ckg)
-	out, err := s.Search(context.Background(), []string{"Foo"}, contract.IntentTestAdd)
+	out, err := s.Search(context.Background(), []string{"Foo"}, nil, contract.IntentTestAdd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestSearch_IntentTestAddAggregatesBothPasses(t *testing.T) {
 func TestSearch_EmptyKeywordsReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	s, _ := New(&ckgclient.Fake{})
-	out, err := s.Search(context.Background(), nil, contract.IntentBugFix)
+	out, err := s.Search(context.Background(), nil, nil, contract.IntentBugFix)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestSearch_BM25HitsContribute(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	out, err := s.Search(context.Background(), []string{"Login"}, contract.IntentBugFix)
+	out, err := s.Search(context.Background(), []string{"Login"}, nil, contract.IntentBugFix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestSearch_SymbolHitsAddBonus(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	out, err := s.Search(context.Background(), []string{"Login"}, contract.IntentBugFix)
+	out, err := s.Search(context.Background(), []string{"Login"}, nil, contract.IntentBugFix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestSearch_BM25AndSymbolSumOnSameCitation(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	out, _ := s.Search(context.Background(), []string{"Login"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"Login"}, nil, contract.IntentBugFix)
 	if len(out.Citations) != 1 {
 		t.Fatalf("Citations count = %d, want 1 (dedup)", len(out.Citations))
 	}
@@ -248,7 +248,7 @@ func TestSearch_MultipleKeywordsAccumulate(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	out, _ := s.Search(context.Background(), []string{"alpha", "beta"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"alpha", "beta"}, nil, contract.IntentBugFix)
 	if len(out.Citations) != 1 {
 		t.Fatalf("Citations count = %d, want 1", len(out.Citations))
 	}
@@ -278,7 +278,7 @@ func TestSearch_SortsByRankInRRF(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	out, _ := s.Search(context.Background(), []string{"k"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"k"}, nil, contract.IntentBugFix)
 	if len(out.Citations) != 3 {
 		t.Fatalf("Citations count = %d, want 3", len(out.Citations))
 	}
@@ -296,7 +296,7 @@ func TestAggregator_TiesBrokenByFileThenStartLine(t *testing.T) {
 	// hit on its own single-element list. All three end up with the
 	// same total contribution, and the deterministic tiebreaker
 	// (file path, then start line) decides the final order.
-	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight)
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight, DefaultCkvWeight)
 	a.addBM25List("k1", []contract.Hit{bm25Hit("b.go", 30, 40, 5.0)})
 	a.addBM25List("k2", []contract.Hit{bm25Hit("a.go", 1, 10, 5.0)})
 	a.addBM25List("k3", []contract.Hit{bm25Hit("b.go", 1, 10, 5.0)})
@@ -333,7 +333,7 @@ func TestSearch_RespectsMaxCitations(t *testing.T) {
 		SymbolWeight: DefaultSymbolWeight,
 	}))
 
-	out, _ := s.Search(context.Background(), []string{"k"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"k"}, nil, contract.IntentBugFix)
 	if len(out.Citations) != 2 {
 		t.Fatalf("Citations count = %d, want 2 (capped)", len(out.Citations))
 	}
@@ -348,7 +348,7 @@ func TestSearch_FailedKeywordsAndCoverage(t *testing.T) {
 	ckg := &ckgclient.Fake{}
 	s, _ := New(ckg)
 
-	out, _ := s.Search(context.Background(), []string{"a", "b", "c"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"a", "b", "c"}, nil, contract.IntentBugFix)
 	if len(out.FailedKeywords) != 3 {
 		t.Errorf("FailedKeywords = %v, want all 3 failed", out.FailedKeywords)
 	}
@@ -374,7 +374,7 @@ func TestSearch_PartialCoverage(t *testing.T) {
 		BM25Hits: []contract.Hit{bm25Hit("x.go", 1, 1, 1.0)},
 	}
 	s, _ := New(ckg)
-	out, _ := s.Search(context.Background(), []string{"a", "b"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"a", "b"}, nil, contract.IntentBugFix)
 	if out.Coverage != 1.0 {
 		t.Errorf("Coverage = %v, want 1.0", out.Coverage)
 	}
@@ -395,7 +395,7 @@ func TestSearch_BM25ErrorIsTolerated(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	out, _ := s.Search(context.Background(), []string{"k"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"k"}, nil, contract.IntentBugFix)
 	if len(out.FailedKeywords) != 0 {
 		t.Errorf("FailedKeywords = %v, want empty (Symbol succeeded)", out.FailedKeywords)
 	}
@@ -412,7 +412,7 @@ func TestSearch_SymbolErrorIsTolerated(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	out, _ := s.Search(context.Background(), []string{"k"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"k"}, nil, contract.IntentBugFix)
 	if len(out.FailedKeywords) != 0 {
 		t.Errorf("FailedKeywords = %v, want empty (BM25 succeeded)", out.FailedKeywords)
 	}
@@ -430,7 +430,7 @@ func TestSearch_BothErrorsKeywordFails(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	out, _ := s.Search(context.Background(), []string{"k"}, contract.IntentBugFix)
+	out, _ := s.Search(context.Background(), []string{"k"}, nil, contract.IntentBugFix)
 	if len(out.FailedKeywords) != 1 || out.FailedKeywords[0] != "k" {
 		t.Errorf("FailedKeywords = %v, want [k]", out.FailedKeywords)
 	}
@@ -448,7 +448,7 @@ func TestSearch_PassesKindsFromIntent(t *testing.T) {
 	}
 	s, _ := New(ckg)
 
-	_, _ = s.Search(context.Background(), []string{"X"}, contract.IntentArchExplain)
+	_, _ = s.Search(context.Background(), []string{"X"}, nil, contract.IntentArchExplain)
 
 	if len(ckg.Calls.FindSymbol) != 1 {
 		t.Fatalf("FindSymbol called %d times, want 1", len(ckg.Calls.FindSymbol))
@@ -512,7 +512,7 @@ func TestSearch_EmitsFootprintEvent(t *testing.T) {
 	}
 	s, _ := New(ckg, WithFootprint(fp))
 
-	_, _ = s.Search(context.Background(), []string{"Login"}, contract.IntentBugFix)
+	_, _ = s.Search(context.Background(), []string{"Login"}, nil, contract.IntentBugFix)
 	_ = fp.Sync()
 
 	var rec map[string]any
@@ -552,7 +552,7 @@ func TestSearch_FootprintRecordsErrorCounts(t *testing.T) {
 		SymbolErr: errors.New("symbol down"),
 	}
 	s, _ := New(ckg, WithFootprint(fp))
-	_, _ = s.Search(context.Background(), []string{"X"}, contract.IntentBugFix)
+	_, _ = s.Search(context.Background(), []string{"X"}, nil, contract.IntentBugFix)
 	_ = fp.Sync()
 
 	var rec map[string]any
@@ -571,7 +571,7 @@ func TestSearch_FootprintRecordsErrorCounts(t *testing.T) {
 
 func TestAggregator_DedupsByCitationKey(t *testing.T) {
 	t.Parallel()
-	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight)
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight, DefaultCkvWeight)
 	// Three single-element ranked lists, all rank 1, all on the same
 	// citation. RRF total = 2 BM25 contributions + 1 Symbol contribution.
 	a.addBM25List("k1", []contract.Hit{bm25Hit("x.go", 1, 10, 3.0)})
@@ -595,7 +595,7 @@ func TestAggregator_RankAffectsContribution(t *testing.T) {
 	t.Parallel()
 	// A single BM25 list of length 3 should give the head citation
 	// strictly more weight than the tail, regardless of native score.
-	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight)
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight, DefaultCkvWeight)
 	a.addBM25List("k", []contract.Hit{
 		bm25Hit("a.go", 1, 1, 0.1), // rank 1
 		bm25Hit("b.go", 1, 1, 0.9), // rank 2
@@ -620,7 +620,7 @@ func TestAggregator_RankAffectsContribution(t *testing.T) {
 
 func TestAggregator_EmptyResultsNil(t *testing.T) {
 	t.Parallel()
-	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight)
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight, DefaultCkvWeight)
 	if got := a.results(10); got != nil {
 		t.Errorf("results on empty aggregator = %v, want nil", got)
 	}

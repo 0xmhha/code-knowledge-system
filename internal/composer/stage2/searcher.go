@@ -47,6 +47,13 @@ const (
 	// the magnitude blow-up the old SymbolBonus = 5.0 produced under the
 	// raw score-sum aggregator.
 	DefaultSymbolWeight = 1.5
+	// DefaultCkvWeight is the RRF weight applied to the single ckv
+	// semantic-search ranked list. Set above DefaultBMWeight because, on
+	// natural-language prompts, the embedding recall measurably out-locates
+	// keyword BM25 (which mismatches NL words to unrelated identifiers),
+	// while staying at/below DefaultSymbolWeight so an exact symbol name
+	// still wins when both fire on the same citation.
+	DefaultCkvWeight = 1.5
 )
 
 // Config tunes the searcher's call budget and ranking weights.
@@ -65,6 +72,8 @@ type Config struct {
 	// SymbolWeight is the RRF weight applied to FindSymbol ranked lists.
 	// Symbol matches typically outweigh keyword-only overlap.
 	SymbolWeight float64
+	// CkvWeight is the RRF weight applied to the ckv semantic-search list.
+	CkvWeight float64
 }
 
 // DefaultConfig returns the Phase-0 tuning baseline.
@@ -75,6 +84,7 @@ func DefaultConfig() Config {
 		RRFK:         DefaultRRFK,
 		BMWeight:     DefaultBMWeight,
 		SymbolWeight: DefaultSymbolWeight,
+		CkvWeight:    DefaultCkvWeight,
 	}
 }
 
@@ -155,18 +165,28 @@ func New(ckg ckgclient.Client, opts ...Option) (*Searcher, error) {
 //
 // Empty keyword input returns an empty (but non-error) Stage2Output:
 // composer can decide what to do with a Stage 1 that produced nothing.
-func (s *Searcher) Search(ctx context.Context, keywords []string, intent contract.Intent) (Stage2Output, error) {
+func (s *Searcher) Search(ctx context.Context, keywords []string, ckvHits []contract.Hit, intent contract.Intent) (Stage2Output, error) {
 	out := Stage2Output{
 		Symbols: make(map[string][]contract.Citation),
 	}
-	if len(keywords) == 0 {
+	// The ckv semantic list is a retrieval source in its own right, so a
+	// run with no keywords but non-empty ckv hits is still productive.
+	if len(keywords) == 0 && len(ckvHits) == 0 {
 		s.emitFootprint(ctx, intent, keywords, out, 0, 0, "")
 		return out, nil
 	}
 
 	kinds := intentToKinds(intent)
 	pathGlob := intentPathGlob(intent)
-	agg := newAggregator(s.config.RRFK, s.config.BMWeight, s.config.SymbolWeight)
+	agg := newAggregator(s.config.RRFK, s.config.BMWeight, s.config.SymbolWeight, s.config.CkvWeight)
+
+	// Fuse the Stage-1 ckv semantic hits as one ranked list before the
+	// per-keyword ckg lists, so the embedding signal contributes citations
+	// directly instead of only seeding keywords.
+	if len(ckvHits) > 0 {
+		out.Hits = append(out.Hits, ckvHits...)
+		agg.addCkvList(ckvHits)
+	}
 	hitCount := 0
 	bm25Errors := 0
 	symbolErrors := 0
@@ -224,7 +244,9 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, intent contrac
 	}
 
 	out.Citations = agg.results(s.config.MaxCitations)
-	out.Coverage = float64(hitCount) / float64(len(keywords))
+	if len(keywords) > 0 {
+		out.Coverage = float64(hitCount) / float64(len(keywords))
+	}
 
 	s.emitFootprint(ctx, intent, keywords, out, bm25Errors, symbolErrors, pathGlob)
 	return out, nil

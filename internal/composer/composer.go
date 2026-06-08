@@ -171,7 +171,7 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 	next(&tm.stage1)
 
 	// 3. Stage 2 — ckg citation search.
-	s2Out, err := c.stage2.Search(ctx, s1Out.Keywords, intentVal)
+	s2Out, err := c.stage2.Search(ctx, s1Out.Keywords, s1Out.Hits, intentVal)
 	if err != nil {
 		return contract.EvidencePack{}, fmt.Errorf("composer: stage2: %w", err)
 	}
