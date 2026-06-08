@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -135,7 +136,14 @@ func handleOpsIndex(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*mc
 		// ckg has no incremental path (cold rebuild); --src + --out always.
 		// --policy-file (when configured) rebuilds governed_by edges with the
 		// index so impact_analysis/get_for_task can surface policy nodes.
-		args := []string{"build", "--src", ic.SourceRoot, "--out", ic.CKGDataPath}
+		//
+		// ckg build --out wants the output *directory* (it mkdirs <out> and
+		// writes graph.db inside). CKGDataPath is the graph.db file (the query
+		// path opens it directly), so pass its parent dir. --force lets the
+		// refresh overwrite the existing graph.db (ckg has no incremental path,
+		// so ops.index always triggers a cold rebuild).
+		ckgOut := filepath.Dir(ic.CKGDataPath)
+		args := []string{"build", "--src", ic.SourceRoot, "--out", ckgOut, "--force"}
 		if ic.CKGPolicyFile != "" {
 			args = append(args, "--policy-file", ic.CKGPolicyFile)
 		}
@@ -171,7 +179,11 @@ func ckvIndexArgs(ic IndexConfig, mode, since string) []string {
 		}
 		return append(args, embed...)
 	}
-	args := []string{"reindex", "--out", ic.CKVDataPath}
+	// ckv reindex resolves the source tree from --src (default "."), NOT from
+	// the index manifest, and runs git there to diff against the indexed head.
+	// Without --src it defaults to the cks-mcp process cwd (not the repo), which
+	// has no git HEAD. Pass the configured source root explicitly.
+	args := []string{"reindex", "--src", ic.SourceRoot, "--out", ic.CKVDataPath}
 	if since != "" {
 		args = append(args, "--since", since)
 	}

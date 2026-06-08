@@ -101,7 +101,7 @@ func TestHandleOpsIndex_IncrementalRunsBothBackends(t *testing.T) {
 	calls := withStubRunner(t, "")
 	d := Deps{Index: IndexConfig{
 		CKVBinary: "ckv-bin", CKGBinary: "ckg-bin",
-		CKVDataPath: "/d/ckv", CKGDataPath: "/d/ckg",
+		CKVDataPath: "/d/ckv", CKGDataPath: "/d/ckg/graph.db",
 		SourceRoot: "/src", EmbedModel: "bge-m3", OllamaURL: "http://h:1",
 	}}
 	res, err := handleOpsIndex(context.Background(), d,
@@ -120,14 +120,15 @@ func TestHandleOpsIndex_IncrementalRunsBothBackends(t *testing.T) {
 		t.Errorf("first run = %q, want ckv-bin", ckv.name)
 	}
 	joined := strings.Join(ckv.args, " ")
-	if !strings.Contains(joined, "reindex") || !strings.Contains(joined, "--out /d/ckv") ||
+	if !strings.Contains(joined, "reindex") || !strings.Contains(joined, "--src /src") ||
+		!strings.Contains(joined, "--out /d/ckv") ||
 		!strings.Contains(joined, "--since abc123") || !strings.Contains(joined, "--model-name=bge-m3") {
 		t.Errorf("ckv reindex args wrong: %v", ckv.args)
 	}
 	if len(ckv.env) == 0 || !strings.Contains(ckv.env[0], "CKV_OLLAMA_ENDPOINT=http://h:1") {
 		t.Errorf("ckv env missing ollama endpoint: %v", ckv.env)
 	}
-	if ckg.name != "ckg-bin" || !strings.Contains(strings.Join(ckg.args, " "), "build --src /src --out /d/ckg") {
+	if ckg.name != "ckg-bin" || !strings.Contains(strings.Join(ckg.args, " "), "build --src /src --out /d/ckg --force") {
 		t.Errorf("ckg build args wrong: %v", ckg.args)
 	}
 }
@@ -135,14 +136,14 @@ func TestHandleOpsIndex_IncrementalRunsBothBackends(t *testing.T) {
 func TestHandleOpsIndex_CKGPolicyFileForwarded(t *testing.T) {
 	calls := withStubRunner(t, "")
 	d := Deps{Index: IndexConfig{
-		CKGBinary: "ckg-bin", CKGDataPath: "/d/ckg", SourceRoot: "/src",
+		CKGBinary: "ckg-bin", CKGDataPath: "/d/ckg/graph.db", SourceRoot: "/src",
 		CKGPolicyFile: "/p/policy.yaml",
 	}}
 	if _, err := handleOpsIndex(context.Background(), d, callToolReq(map[string]any{"mode": "full"})); err != nil {
 		t.Fatal(err)
 	}
 	joined := strings.Join((*calls)[0].args, " ")
-	if !strings.Contains(joined, "build --src /src --out /d/ckg") ||
+	if !strings.Contains(joined, "build --src /src --out /d/ckg --force") ||
 		!strings.Contains(joined, "--policy-file /p/policy.yaml") {
 		t.Errorf("ckg build should forward --policy-file: %v", (*calls)[0].args)
 	}
