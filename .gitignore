@@ -49,3 +49,10 @@ docs/_generated/
 /generated/
 
 .claude/settings.local.json
+
+# go-stablenet dataset artifacts (large build outputs + machine-specific generated
+# config). Rebuilt by scripts/build-stablenet-dataset.sh / gen-cks-config.sh.
+/data/
+/ckv-stablenet/
+/cks-stablenet.yaml
+/cks.env
