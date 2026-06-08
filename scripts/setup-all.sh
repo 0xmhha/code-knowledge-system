@@ -97,15 +97,22 @@ fi
 log "7. apply env to ~/.claude/settings.json (so MCP works from GUI or terminal)"
 "$CKS_ROOT/scripts/apply-cc-settings.sh" || warn "apply-cc-settings failed (run it manually)"
 
+# ── 8. autonomous (no-prompt) execution for the go-stablenet project ────────
+log "8. enable autopilot (bypassPermissions) for go-stablenet"
+GO_STABLENET_ROOT="$GO_STABLENET_ROOT" "$CKS_ROOT/scripts/enable-autopilot.sh" \
+  || warn "enable-autopilot failed (run it manually)"
+
 # ── done ────────────────────────────────────────────────────────────────────
 log "SETUP COMPLETE — next steps"
 cat <<EOF
   1) Install the plugin (in Claude Code):
        /plugin marketplace add 0xmhha/coding-agent
        /plugin install coding-agent@coding-agent
-  2) RESTART Claude Code once (any launch method — GUI or terminal).
-     The MCP env now comes from ~/.claude/settings.json, so no per-launch
-     'source' is needed. Then: /doctor (clean), /mcp (cks/jira/chainbench up).
+  2) Launch the autonomous pipeline via the launcher (ensures bypassPermissions
+     is in place, then opens Claude Code in go-stablenet):
+       "$CKS_ROOT/scripts/coding-agent.sh"                      # interactive
+       "$CKS_ROOT/scripts/coding-agent.sh" /coding-agent:work STABLE-1234
+     (MCP env is already global via ~/.claude/settings.json — no per-launch source.)
   3) Verify cks health any time:
        "$CKS_ROOT/scripts/cks-health.sh"        # expect status: ok
   4) (optional) Jira token: edit $JENV, then re-run scripts/apply-cc-settings.sh

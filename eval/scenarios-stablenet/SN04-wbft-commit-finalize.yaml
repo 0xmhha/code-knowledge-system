@@ -1,0 +1,13 @@
+version: 1
+name: sn04-wbft-commit-finalize
+description: |
+  Block finalization once a quorum of COMMIT messages is reached:
+  Core.commitWBFT.
+prompt: "What happens when WBFT receives a quorum of commit messages and finalizes the block?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/core/commit.go
+    start_line: 137
+    end_line: 179

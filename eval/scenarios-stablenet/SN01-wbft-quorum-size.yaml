@@ -1,0 +1,13 @@
+version: 1
+name: sn01-wbft-quorum-size
+description: |
+  WBFT supermajority threshold: how many validators must agree before a
+  block can commit. The authoritative answer is defaultSet.QuorumSize.
+prompt: "How does WBFT calculate the supermajority threshold (quorum size) required to commit a block?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/validator/default.go
+    start_line: 226
+    end_line: 229

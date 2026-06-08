@@ -1,0 +1,13 @@
+version: 1
+name: sn10-genesis-syscontract-init
+description: |
+  Genesis-time initialization of the Anzeon/system-contract state:
+  initializeAnzeonGenesis.
+prompt: "What runs during genesis to initialize the stablecoin system contracts?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: core/genesis.go
+    start_line: 242
+    end_line: 263

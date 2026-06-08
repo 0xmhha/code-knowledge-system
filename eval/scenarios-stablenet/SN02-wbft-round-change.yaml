@@ -1,0 +1,13 @@
+version: 1
+name: sn02-wbft-round-change
+description: |
+  WBFT round change: constructing and broadcasting the ROUND-CHANGE
+  message when a round times out. Lives in Core.broadcastRoundChange.
+prompt: "Where does WBFT broadcast a round-change message to peers when the current round times out?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/core/roundchange.go
+    start_line: 52
+    end_line: 98

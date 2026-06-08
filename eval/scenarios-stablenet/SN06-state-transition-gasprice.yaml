@@ -1,0 +1,13 @@
+version: 1
+name: sn06-state-transition-gasprice
+description: |
+  Transaction execution and effective gas price / tip handling lives in
+  StateTransition.TransitionDb.
+prompt: "How is the effective gas price and tip computed while a transaction executes?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: core/state_transition.go
+    start_line: 447
+    end_line: 603

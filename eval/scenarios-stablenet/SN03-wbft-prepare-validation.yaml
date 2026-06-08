@@ -1,0 +1,13 @@
+version: 1
+name: sn03-wbft-prepare-validation
+description: |
+  Validation of an incoming PREPARE message from another validator,
+  handled in Core.handlePrepareMsg.
+prompt: "How is an incoming WBFT PREPARE message from another validator validated?"
+intent: bug_fix
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/core/prepare.go
+    start_line: 87
+    end_line: 146

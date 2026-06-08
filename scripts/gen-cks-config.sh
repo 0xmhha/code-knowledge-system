@@ -68,6 +68,9 @@ sanitize:
 domain:
   project_dir: "$CKS_ROOT/docs/domain-knowledge/projects/go-stablenet"
   corpus_dir: "$CKS_ROOT/generated/domain-corpus/go-stablenet"
+
+vocab:
+  glossary_path: "$CKS_ROOT/docs/domain-knowledge/projects/go-stablenet/glossary.yaml"
 YAML
 
 # ---- cks.env (exports consumed by coding-agent plugin/.mcp.json) ----------

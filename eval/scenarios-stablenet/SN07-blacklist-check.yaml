@@ -1,0 +1,13 @@
+version: 1
+name: sn07-blacklist-check
+description: |
+  Blacklist gating of accounts during state access / tx execution:
+  StateDB.IsBlacklisted.
+prompt: "How do we check whether an account is blacklisted before allowing it to transact?"
+intent: security
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: core/state/statedb.go
+    start_line: 311
+    end_line: 318

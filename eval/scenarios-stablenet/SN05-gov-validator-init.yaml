@@ -1,0 +1,13 @@
+version: 1
+name: sn05-gov-validator-init
+description: |
+  Initialization of the governance validator system contract state,
+  in systemcontracts initializeValidator.
+prompt: "Where is the governance validator system contract initialized with its staking parameters?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: systemcontracts/gov_validator.go
+    start_line: 52
+    end_line: 184

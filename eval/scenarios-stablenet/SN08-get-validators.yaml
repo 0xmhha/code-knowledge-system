@@ -1,0 +1,13 @@
+version: 1
+name: sn08-get-validators
+description: |
+  Retrieving the validator set for a given block in the WBFT engine:
+  Engine.GetValidators.
+prompt: "How does the WBFT engine retrieve the validator set for a given block?"
+intent: arch_explain
+match_mode: overlap
+runs: 1
+expected_citations:
+  - file: consensus/wbft/engine/engine.go
+    start_line: 1097
+    end_line: 1117
