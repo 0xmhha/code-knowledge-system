@@ -25,10 +25,12 @@ const DefaultSearchLimit = 10
 // DefaultSubgraphMaxTotal bounds GetSubgraph's edge set (and, transitively, the
 // incident-node citations) when the caller passes MaxTotal<=0. A depth>1
 // traversal from a hub symbol returns thousands of edges; without a cap the
-// translated response overflows the MCP per-result token budget. 200 keeps a
-// full subgraph response comfortably under that budget while still surfacing
-// the densest neighborhood.
-const DefaultSubgraphMaxTotal = 200
+// translated response overflows the MCP per-result token budget. Measured on
+// the go-stablenet index (processFinalize, depth=2): 80 edges -> ~33 KB, which
+// stays under the ~25k-token per-result inline limit with margin (200 -> 64 KB
+// already tripped it). Callers wanting a wider view pass an explicit MaxTotal
+// and handle the larger payload.
+const DefaultSubgraphMaxTotal = 80
 
 // FilterOverfetchRatio scales the SearchFTS limit when a non-empty
 // SearchOpts.Filter is present. Post-filter discards rows the caller
