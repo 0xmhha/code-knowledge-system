@@ -358,6 +358,10 @@ func (r *Real) ImpactOfChange(ctx context.Context, seedQname string, opts Impact
 	if seedQname == "" {
 		return contract.ImpactResult{}, errors.New("ckgclient: empty seed qname")
 	}
+	// Suffix-resolve a partial seed; impact.Compute requires an exact qname.
+	if resolved := r.resolveQname(seedQname); resolved != "" {
+		seedQname = resolved
+	}
 	seedFile := r.resolveSeedFile(seedQname)
 	raw, err := r.s.ImpactCompute(seedQname, seedFile, opts.Depth, false)
 	if err != nil {
@@ -444,6 +448,29 @@ func (r *Real) resolveSeedFile(qname string) string {
 	return defs[0].FilePath
 }
 
+// resolveQname normalizes a possibly-partial symbol name to a stored
+// fully-qualified name via the suffix-matching FindSymbol (exact qname match
+// preferred, else first result). Returns "" when the name does not resolve, in
+// which case callers pass the original name through unchanged so the downstream
+// exact-match traversal behaves as before.
+//
+// This closes the seed-resolution gap between the find_symbol/find_callers
+// family (which suffix-match) and the graph-traversal family (GetSubgraph,
+// ImpactOfChange, ConcurrencyImpact) whose ckg backends require an exact
+// qualified_name and otherwise return empty silently.
+func (r *Real) resolveQname(name string) string {
+	defs, err := r.s.FindSymbol(name, false)
+	if err != nil || len(defs) == 0 {
+		return ""
+	}
+	for _, d := range defs {
+		if d.QualifiedName == name {
+			return d.QualifiedName
+		}
+	}
+	return defs[0].QualifiedName
+}
+
 // resolveNodeID returns the node ID of qname's definition (exact qname match
 // preferred, else first result, else ""). Used to bridge qname→nodeID for
 // store.Reader.GetNodePRs.
@@ -527,6 +554,11 @@ func (r *Real) GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts)
 	if depth == 0 {
 		depth = 1
 	}
+	// Suffix-resolve a partial seed (e.g. "Engine.Finalize") to its stored
+	// fully-qualified name; SubgraphByQname matches qualified_name exactly.
+	if resolved := r.resolveQname(qname); resolved != "" {
+		qname = resolved
+	}
 	nodes, edges, err := r.s.SubgraphByQname(qname, depth)
 	if err != nil {
 		return nil, nil, fmt.Errorf("ckgclient: SubgraphByQname: %w", err)
@@ -573,6 +605,10 @@ func (r *Real) ConcurrencyImpact(ctx context.Context, symbol string, opts Concur
 	depth := opts.Depth
 	if depth <= 0 {
 		depth = 3
+	}
+	// Suffix-resolve a partial seed; concurrency.Analyze requires an exact qname.
+	if resolved := r.resolveQname(symbol); resolved != "" {
+		symbol = resolved
 	}
 	res, err := r.s.ConcurrencyAnalyze(symbol, depth, opts.MaxTotal)
 	if err != nil {
