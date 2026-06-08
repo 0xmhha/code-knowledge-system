@@ -22,6 +22,14 @@ import (
 // budget for fewer hits.
 const DefaultSearchLimit = 10
 
+// DefaultSubgraphMaxTotal bounds GetSubgraph's edge set (and, transitively, the
+// incident-node citations) when the caller passes MaxTotal<=0. A depth>1
+// traversal from a hub symbol returns thousands of edges; without a cap the
+// translated response overflows the MCP per-result token budget. 200 keeps a
+// full subgraph response comfortably under that budget while still surfacing
+// the densest neighborhood.
+const DefaultSubgraphMaxTotal = 200
+
 // FilterOverfetchRatio scales the SearchFTS limit when a non-empty
 // SearchOpts.Filter is present. Post-filter discards rows the caller
 // did not want, so we pull this many times more rows up front to keep
@@ -564,14 +572,37 @@ func (r *Real) GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts)
 		return nil, nil, fmt.Errorf("ckgclient: SubgraphByQname: %w", err)
 	}
 	commit, _ := r.commit()
+
+	// Bound the response. A depth>1 traversal from a hub node can return
+	// thousands of nodes/edges (hundreds of KB) and overflow the MCP token
+	// budget — the old code emitted *every* node as a citation and only capped
+	// edges, so callers got an unusable payload. Cap the edge set, then emit
+	// only the nodes incident to the kept edges plus the seed, keeping nodes
+	// and edges consistent and bounded. MaxTotal<=0 means "use the default cap"
+	// (a true unbounded subgraph is what caused the overflow).
+	limit := opts.MaxTotal
+	if limit <= 0 {
+		limit = DefaultSubgraphMaxTotal
+	}
+
 	byID := make(map[string]types.Node, len(nodes))
-	citations := make([]contract.Citation, 0, len(nodes))
+	var seedID string
 	for _, n := range nodes {
 		byID[n.ID] = n
-		citations = append(citations, nodeToCitation(n, commit))
+		if seedID == "" && n.QualifiedName == qname {
+			seedID = n.ID
+		}
 	}
-	neighbors := make([]contract.Neighbor, 0, len(edges))
+
+	kept := make(map[string]bool, limit*2)
+	if seedID != "" {
+		kept[seedID] = true
+	}
+	neighbors := make([]contract.Neighbor, 0, limit)
 	for _, e := range edges {
+		if len(neighbors) >= limit {
+			break
+		}
 		rel, ok := relationFromEdgeType(e.Type, false)
 		if !ok {
 			continue
@@ -581,15 +612,23 @@ func (r *Real) GetSubgraph(ctx context.Context, qname string, opts SubgraphOpts)
 		if !srcOK || !dstOK {
 			continue
 		}
-		if opts.MaxTotal > 0 && len(neighbors) >= opts.MaxTotal {
-			break
-		}
 		neighbors = append(neighbors, contract.Neighbor{
 			Source:   nodeToCitation(srcN, commit),
 			Target:   nodeToCitation(dstN, commit),
 			Relation: rel,
 			Distance: 1,
 		})
+		kept[e.Src] = true
+		kept[e.Dst] = true
+	}
+
+	// Emit citations only for kept nodes, iterating the original node slice so
+	// the order stays deterministic.
+	citations := make([]contract.Citation, 0, len(kept))
+	for _, n := range nodes {
+		if kept[n.ID] {
+			citations = append(citations, nodeToCitation(n, commit))
+		}
 	}
 	return citations, neighbors, nil
 }
