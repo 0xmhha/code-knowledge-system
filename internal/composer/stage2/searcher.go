@@ -53,7 +53,7 @@ const (
 	// keyword BM25 (which mismatches NL words to unrelated identifiers),
 	// while staying at/below DefaultSymbolWeight so an exact symbol name
 	// still wins when both fire on the same citation.
-	DefaultCkvWeight = 1.5
+	DefaultCkvWeight = 5.0
 )
 
 // Config tunes the searcher's call budget and ranking weights.
