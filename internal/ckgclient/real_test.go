@@ -29,9 +29,10 @@ type mockStoreReader struct {
 	searchErr error
 	searchCh  []searchCall
 
-	symbolOut []types.Node
-	symbolErr error
-	symbolCh  []symbolCall
+	symbolOut    []types.Node
+	symbolByName map[string][]types.Node // when set, FindSymbol returns by exact name (else symbolOut)
+	symbolErr    error
+	symbolCh     []symbolCall
 
 	neighOut   []types.Node
 	neighEdges []types.Edge
@@ -113,6 +114,9 @@ func (m *mockStoreReader) SearchFTS(q string, limit int) ([]store.SearchHit, err
 }
 func (m *mockStoreReader) FindSymbol(name string, exact bool) ([]types.Node, error) {
 	m.symbolCh = append(m.symbolCh, symbolCall{name: name, exact: exact})
+	if m.symbolByName != nil {
+		return m.symbolByName[name], m.symbolErr
+	}
 	return m.symbolOut, m.symbolErr
 }
 func (m *mockStoreReader) ImpactCompute(seedQname, seedFile string, depth int, includeBlobs bool) (map[string]any, error) {
@@ -382,6 +386,39 @@ func TestReal_FindSymbol_ForwardsSuffixMatch(t *testing.T) {
 	// argument (language filtering now lives in FindSymbolOptions, unused here).
 	if m.symbolCh[0].exact {
 		t.Error("exact should be false (suffix match for bare symbol names)")
+	}
+}
+
+// TestReal_FindSymbol_ResolvesOverqualifiedFQN covers the FQN-resolution fix:
+// ckg stores Go method qnames as "pkgleaf.Type.Method"
+// ("validator.defaultSet.QuorumSize"), so a fully-qualified, dotted name that
+// includes the import path ("consensus.wbft.validator.defaultSet.QuorumSize") —
+// which the MCP tool docs tell users to pass — must still resolve by
+// progressively dropping leading dot-segments.
+func TestReal_FindSymbol_ResolvesOverqualifiedFQN(t *testing.T) {
+	t.Parallel()
+	leaf := node("Q", "validator.defaultSet.QuorumSize", "consensus/wbft/validator/default.go", 226, 229, types.NodeMethod, "go")
+	m := &mockStoreReader{
+		manifest:     ManifestSnapshot{SrcCommit: "c"},
+		symbolByName: map[string][]types.Node{"validator.defaultSet.QuorumSize": {leaf}},
+	}
+	r := newRealWithStore(m)
+	out, err := r.FindSymbol(context.Background(), "consensus.wbft.validator.defaultSet.QuorumSize", SymbolOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 || out[0].File != "consensus/wbft/validator/default.go" {
+		t.Fatalf("over-qualified FQN did not resolve to the leaf symbol: %#v", out)
+	}
+	names := make([]string, len(m.symbolCh))
+	for i, c := range m.symbolCh {
+		names[i] = c.name
+	}
+	if names[0] != "consensus.wbft.validator.defaultSet.QuorumSize" {
+		t.Errorf("first lookup = %q, want the full FQN", names[0])
+	}
+	if names[len(names)-1] != "validator.defaultSet.QuorumSize" {
+		t.Errorf("final lookup = %q, want the resolving leaf form", names[len(names)-1])
 	}
 }
 
