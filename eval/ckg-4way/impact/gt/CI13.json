@@ -1,0 +1,95 @@
+{
+  "id": "CI13",
+  "seed": "consensus/wbft/validator/default.go defaultSet.F",
+  "change": "you change the F() formula (BFT fault-tolerance count = (N-1)/3)",
+  "impact": [
+    {
+      "file": "consensus/wbft/validator/default.go",
+      "symbol": "defaultSet.QuorumSize",
+      "start_line": 226,
+      "end_line": 229,
+      "reach": "direct",
+      "why": "QuorumSize = ceil(N - F()); directly computed from F(). Changing F shifts the quorum threshold for the whole protocol."
+    },
+    {
+      "file": "consensus/wbft/core/roundchange.go",
+      "symbol": "Core.handleRoundChange (F+1 trigger)",
+      "start_line": 161,
+      "end_line": 166,
+      "reach": "direct",
+      "why": "Uses c.valSet.F() directly for the F+1 ROUND-CHANGE early-start rule; the only non-QuorumSize direct caller of F()."
+    },
+    {
+      "file": "consensus/wbft/core/commit.go",
+      "symbol": "Core.handleCommit",
+      "start_line": 90,
+      "end_line": 131,
+      "reach": "1-hop",
+      "why": "Calls QuorumSize() to decide when >= quorum COMMITs are reached to commit the block."
+    },
+    {
+      "file": "consensus/wbft/core/prepare.go",
+      "symbol": "Core.handlePrepare",
+      "start_line": 87,
+      "end_line": 146,
+      "reach": "1-hop",
+      "why": "Calls QuorumSize() to transition to StatePrepared once quorum PREPAREs collected."
+    },
+    {
+      "file": "consensus/wbft/core/preprepare.go",
+      "symbol": "Core.handlePreprepare",
+      "start_line": 114,
+      "end_line": 191,
+      "reach": "1-hop",
+      "why": "Passes QuorumSize() into isJustified() for round-change justification check."
+    },
+    {
+      "file": "consensus/wbft/core/roundchange.go",
+      "symbol": "Core.handleRoundChange (quorum branch + isJustified)",
+      "start_line": 170,
+      "end_line": 197,
+      "reach": "1-hop",
+      "why": "Uses QuorumSize() both for the quorum-of-ROUND-CHANGE proposer trigger and inside isJustified()."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "verifyAggregatedSeal",
+      "start_line": 1338,
+      "end_line": 1369,
+      "reach": "1-hop",
+      "why": "Rejects seals with len(sealers) < QuorumSize(); seal verification threshold depends on F via QuorumSize."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "Engine.verifyHeader prev-seal block (verifyAggregatedSeal callers)",
+      "start_line": 384,
+      "end_line": 411,
+      "reach": "2-hop",
+      "why": "Calls verifyAggregatedSeal for prev prepared/committed seals; transitively gated by QuorumSize."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "Engine.verifyHeader current-seal block (verifyAggregatedSeal callers)",
+      "start_line": 414,
+      "end_line": 449,
+      "reach": "2-hop",
+      "why": "Calls verifyAggregatedSeal for current prepared/committed seals; transitively gated by QuorumSize."
+    },
+    {
+      "file": "consensus/wbft/core/handler.go",
+      "symbol": "Core.deliverMessage",
+      "start_line": 230,
+      "end_line": 248,
+      "reach": "2-hop",
+      "why": "Dispatches to handlePrepare/handleCommit/handleRoundChange/handlePreprepare, all of which gate on QuorumSize/F."
+    }
+  ],
+  "grep_would_miss": [
+    "The bare token 'F' is catastrophically noisy: grep 'F' matches every identifier containing F. Even grep '.F()' is drowned by unrelated *.F() method calls across the geth tree.",
+    "A naive grep on 'F' would MISS the real semantic dependency: QuorumSize() does not mention 'F' as a word boundary a human scans for; the dependency is the expression `valSet.F()` inside QuorumSize at line 228.",
+    "grep on 'F' would DROWN the only two genuine F() call-sites (roundchange.go F+1 logic) among thousands of false hits.",
+    "Transitive impact through QuorumSize (commit/prepare/preprepare/roundchange/verifyAggregatedSeal/verifyHeader) is invisible to any grep on 'F' \u2014 those sites reference QuorumSize, never F.",
+    "The interface contract types.go:240 F() float64 / 242 QuorumSize() int couples the two; grep on 'F' alone would not surface QuorumSize as the load-bearing dependent."
+  ],
+  "notes": "Seed F() at default.go:222 excluded. QuorumSize is the central amplifier: nearly all impact flows F -> QuorumSize -> consensus handlers + seal verification. Only roundchange.go uses F() directly (F+1 rule). Interface decls in types.go (240/242) define the contract but are not 'updated' sites. _test.go (default_test.go) excluded. The correct way to find this is impact_analysis on QuorumSize, not grep on F."
+}

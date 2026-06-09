@@ -1,0 +1,101 @@
+{
+  "id": "CI10",
+  "seed": "core/types/transaction_signing.go:FeePayer (signer, tx) recovery",
+  "change": "you change FeePayer signature recovery",
+  "impact": [
+    {
+      "file": "core/types/transaction_signing.go",
+      "symbol": "feeDelegateSigner.Sender",
+      "start_line": 329,
+      "end_line": 341,
+      "reach": "direct",
+      "why": "The actual recovery: FeePayer() delegates to signer.Sender(); this recovers the fee-payer from RawFeePayerSignatureValues. Core of any recovery change."
+    },
+    {
+      "file": "core/types/transaction_signing.go",
+      "symbol": "feeDelegateSigner.Hash",
+      "start_line": 366,
+      "end_line": 371,
+      "reach": "direct",
+      "why": "Produces the signed digest recoverPlain verifies against; recovery correctness depends on it staying consistent."
+    },
+    {
+      "file": "core/types/transaction_signing.go",
+      "symbol": "feeDelegateSigner.SignatureValues",
+      "start_line": 348,
+      "end_line": 362,
+      "reach": "direct",
+      "why": "Signing counterpart of recovery; the V/R/S encoding it writes must round-trip with the recovery path."
+    },
+    {
+      "file": "core/types/transaction.go",
+      "symbol": "Transaction.RawFeePayerSignatureValues",
+      "start_line": 450,
+      "end_line": 452,
+      "reach": "direct",
+      "why": "Supplies V,R,S consumed by feeDelegateSigner.Sender; the recovery reads exactly these."
+    },
+    {
+      "file": "core/types/tx_fee_delegation.go",
+      "symbol": "FeeDelegateDynamicFeeTx.rawFeePayerSignatureValues/feePayer/sigHash",
+      "start_line": 127,
+      "end_line": 160,
+      "reach": "direct",
+      "why": "The only tx type with real fee-payer signature fields; recovery layout/sigHash defined here. Affected tx type."
+    },
+    {
+      "file": "core/txpool/validation.go",
+      "symbol": "ValidateTransaction (fee-payer path)",
+      "start_line": 134,
+      "end_line": 140,
+      "reach": "direct",
+      "why": "Direct caller: types.FeePayer(NewFeeDelegateSigner, tx) and asserts *tx.FeePayer()==recovered; rejects tx on mismatch. The validation contract."
+    },
+    {
+      "file": "core/txpool/validation.go",
+      "symbol": "ValidateTransactionWithState (fee-payer balance)",
+      "start_line": 277,
+      "end_line": 288,
+      "reach": "transitive",
+      "why": "Uses *tx.FeePayer() for balance/blacklist checks; correctness assumes the recovered/declared fee-payer is valid."
+    },
+    {
+      "file": "internal/ethapi/api.go",
+      "symbol": "fee-payer recovery + RPC field",
+      "start_line": 1928,
+      "end_line": 1947,
+      "reach": "direct",
+      "why": "Direct caller: types.FeePayer(NewFeeDelegateSigner, tx) for RPC validation; also sets result.FeePayer (line 1488)."
+    },
+    {
+      "file": "core/state_transition.go",
+      "symbol": "TransactionToMessage / fee split",
+      "start_line": 194,
+      "end_line": 195,
+      "reach": "transitive",
+      "why": "Copies tx.FeePayer() into msg; downstream gas-fee debit (263-270,575-576,676-677) charges the fee-payer. Consumer of the recovered identity."
+    },
+    {
+      "file": "core/txpool/legacypool/list.go",
+      "symbol": "fee-delegation cost check",
+      "start_line": 376,
+      "end_line": 377,
+      "reach": "transitive",
+      "why": "Reads tx.FeePayer() balance for fee-delegated txs in pool list filtering; depends on a valid fee-payer."
+    },
+    {
+      "file": "accounts/keystore/keystore.go",
+      "symbol": "SignTx fee-delegate path",
+      "start_line": 313,
+      "end_line": 313,
+      "reach": "transitive",
+      "why": "Signs with NewFeeDelegateSigner; signing side must stay consistent with the recovery side."
+    }
+  ],
+  "grep_would_miss": [
+    "feeDelegateSigner.Sender \u2014 the real recovery code; grep for 'FeePayer' does not match 'Sender'. Only found by following FeePayer -> signer.Sender.",
+    "state_transition.go fee debit sites \u2014 they read msg.FeePayer (populated upstream), not the recovery function.",
+    "feeDelegateSigner.Hash \u2014 digest used by recoverPlain; no textual 'FeePayer' reference."
+  ],
+  "notes": "Seed FeePayer (transaction_signing.go:161, the cached wrapper) excluded as definition. rawFeePayerSignatureValues on non-fee-delegate tx types (legacy/dynamic/blob/setcode/access) are stubs returning nil and are NOT genuinely affected \u2014 only FeeDelegateDynamicFeeTx carries real fee-payer signatures. cks edges were empty; set built from ripgrep of types.FeePayer/.FeePayer()/NewFeeDelegateSigner, confirmed by Read."
+}

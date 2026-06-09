@@ -1,0 +1,95 @@
+{
+  "id": "CI15",
+  "seed": "consensus/wbft/config.go CreateInitialEpochInfo",
+  "change": "you change the epoch-info structure at genesis",
+  "impact": [
+    {
+      "file": "consensus/wbft/config.go",
+      "symbol": "CreateInitialExtraData",
+      "start_line": 227,
+      "end_line": 256,
+      "reach": "direct",
+      "why": "Only direct caller; wraps the genesis EpochInfo into WBFTExtra (with GasTip) and RLP-encodes it. Structural change to EpochInfo must be reflected in the extra it builds."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "Engine.buildEpochInfo (genesis branch)",
+      "start_line": 648,
+      "end_line": 662,
+      "reach": "direct",
+      "why": "Calls CreateInitialEpochInfo for header.Number==0. Non-genesis branch builds EpochInfo a different way; both must produce the same structure, so changing genesis shape forces the runtime builder to match."
+    },
+    {
+      "file": "core/genesis.go",
+      "symbol": "setupWBFTGenesisBlock / GenesisBlock ExtraData",
+      "start_line": 242,
+      "end_line": 263,
+      "reach": "1-hop",
+      "why": "Calls CreateInitialExtraData to populate genesis header ExtraData; genesis block bytes change if epoch-info shape changes."
+    },
+    {
+      "file": "core/chain_makers.go",
+      "symbol": "makeWBFTGenesis ExtraData",
+      "start_line": 429,
+      "end_line": 445,
+      "reach": "1-hop",
+      "why": "Test/chain-maker genesis builder calls CreateInitialExtraData; produces headers consumed by the engine, encodes a real genesis contract."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "verifyEpoch",
+      "start_line": 1212,
+      "end_line": 1263,
+      "reach": "1-hop",
+      "why": "Validates header EpochInfo field-by-field (Candidates/Diligence/Validators/BLSPublicKeys) against buildEpochInfo output; any added/changed field needs a matching check or verification breaks."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "writeEpoch",
+      "start_line": 1193,
+      "end_line": 1207,
+      "reach": "1-hop",
+      "why": "Producer that writes EpochInfo into the header extra at epoch blocks via WriteEpochInfo; must emit the same structure as genesis."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "Engine.extractEpochInfo / getEpochInfo / GetEpochInfo",
+      "start_line": 1399,
+      "end_line": 1447,
+      "reach": "1-hop",
+      "why": "Consumers that read EpochInfo back out of headers; downstream of any structural/RLP change to EpochInfo."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "Engine.GetValidators (NewSet from EpochInfo)",
+      "start_line": 1097,
+      "end_line": 1116,
+      "reach": "2-hop",
+      "why": "Builds the ValidatorSet via validator.NewSet(epochInfo.GetValidators(), epochInfo.BLSPublicKeys, ...); validator-set construction depends on EpochInfo fields."
+    },
+    {
+      "file": "core/types/istanbul.go",
+      "symbol": "EpochInfo type + EncodeRLP/DecodeRLP + accessors",
+      "start_line": 99,
+      "end_line": 230,
+      "reach": "direct",
+      "why": "The struct being changed; RLP codec and GetCandidates/GetValidators/FindValidatorByAddress accessors must be updated for any field change."
+    },
+    {
+      "file": "consensus/wbft/backend/api.go",
+      "symbol": "epochForJSON",
+      "start_line": 390,
+      "end_line": 420,
+      "reach": "2-hop",
+      "why": "Serializes EpochInfo to JSON for RPC; new/changed fields need representation here or the API output drifts."
+    }
+  ],
+  "grep_would_miss": [
+    "grep 'CreateInitialEpochInfo' finds only 2 sites (its wrapper + the genesis branch in buildEpochInfo); it misses the entire consumer side that reads EpochInfo back from headers.",
+    "The runtime (non-genesis) producer buildEpochInfo/writeEpoch and the validator verifyEpoch must structurally mirror the genesis shape, but they never name CreateInitialEpochInfo.",
+    "EpochInfo's RLP EncodeRLP/DecodeRLP in core/types/istanbul.go is the real serialization contract; grep on the seed name never reaches it.",
+    "validator-set construction (GetValidators -> validator.NewSet) consumes EpochInfo fields but is invisible from the seed symbol.",
+    "epochForJSON RPC serializer is a semantic dependent reachable only by following the EpochInfo type, not the genesis function name."
+  ],
+  "notes": "Seed CreateInitialEpochInfo (config.go:258-281) excluded. The change is to the EpochInfo structure as produced at genesis, so the true blast radius is the EpochInfo type itself plus every producer (genesis path + runtime writeEpoch/buildEpochInfo) and consumer (verifyEpoch, extract/get EpochInfo, GetValidators, epochForJSON). testutils/genesis.go and engine_test.go are test fixtures, skipped."
+}

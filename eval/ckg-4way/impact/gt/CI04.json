@@ -1,0 +1,77 @@
+{
+  "id": "CI04",
+  "seed": "TransactionToMessage",
+  "change": "Change the set of fields on the produced core.Message (add/remove/rename/repopulate a field); callers consuming the returned Message are affected.",
+  "impact": [
+    {
+      "file": "core/state_processor.go",
+      "symbol": "core.StateProcessor.Process",
+      "start_line": 83,
+      "end_line": 89,
+      "reach": "direct",
+      "why": "msg, _ := TransactionToMessage(...) at l.84 then feeds msg into applyTransaction; consumes the whole Message during block processing."
+    },
+    {
+      "file": "core/state_processor.go",
+      "symbol": "core.ApplyTransaction",
+      "start_line": 167,
+      "end_line": 177,
+      "reach": "direct",
+      "why": "TransactionToMessage at l.168; passes the Message to NewEVMTxContext + applyTransaction."
+    },
+    {
+      "file": "core/state_prefetcher.go",
+      "symbol": "core.statePrefetcher.Prefetch",
+      "start_line": 60,
+      "end_line": 74,
+      "reach": "direct",
+      "why": "TransactionToMessage at l.67; passes Message to precacheTransaction/ApplyMessage for warm-up."
+    },
+    {
+      "file": "eth/state_accessor.go",
+      "symbol": "eth.stateAtTransaction",
+      "start_line": 242,
+      "end_line": 263,
+      "reach": "direct",
+      "why": "TransactionToMessage at l.248; returns msg to caller AND builds NewEVMTxContext(msg)+ApplyMessage. Field changes propagate into trace/debug state replay."
+    },
+    {
+      "file": "eth/tracers/api.go",
+      "symbol": "eth/tracers.API.traceChain/standardTraceBlock/traceTx callers",
+      "start_line": 278,
+      "end_line": 790,
+      "reach": "direct",
+      "why": "Six TransactionToMessage sites (l.278, 544, 622, 669, 705, 790) build the Message consumed by ApplyMessage/tracers; any field-set change alters tracing input."
+    },
+    {
+      "file": "cmd/evm/internal/t8ntool/execution.go",
+      "symbol": "cmd/evm/internal/t8ntool.Prestate.Apply",
+      "start_line": 209,
+      "end_line": 240,
+      "reach": "direct",
+      "why": "TransactionToMessage at l.209; reads msg.From and feeds NewEVMTxContext(msg)+ApplyMessage in the t8n executor."
+    },
+    {
+      "file": "core/evm.go",
+      "symbol": "core.NewEVMTxContext",
+      "start_line": 81,
+      "end_line": 91,
+      "reach": "semantic",
+      "why": "Reads Message.From, GasPrice, BlobHashes, BlobGasFeeCap to build vm.TxContext. If the changed field set touches any of these, EVM tx context is silently affected even though it never names TransactionToMessage."
+    },
+    {
+      "file": "core/state_transition.go",
+      "symbol": "core.StateTransition.preCheck/buyGas/TransitionDb",
+      "start_line": 256,
+      "end_line": 485,
+      "reach": "semantic",
+      "why": "StateTransition reads nearly every Message field (From, FeePayer, GasLimit, GasPrice, GasFeeCap, GasTipCap, Value, BlobGasFeeCap, SkipAccountChecks, Data, AccessList, SetCodeAuthorizations). It is the dominant semantic consumer of the field layout produced by TransactionToMessage, reached via ApplyMessage."
+    }
+  ],
+  "grep_would_miss": [
+    "core.NewEVMTxContext \u2014 consumes Message.From/GasPrice/BlobHashes/BlobGasFeeCap but never references TransactionToMessage; a name-grep would not flag it.",
+    "core.StateTransition (preCheck/buyGas/TransitionDb) \u2014 the heaviest reader of the Message field set, connected only by data-flow through ApplyMessage, invisible to a TransactionToMessage grep.",
+    "the FeePayer / GasTipCap (Anzeon fee-delegation) fields specifically: TransactionToMessage's special-casing of headerGasTip+IsAuthorized (l.166-172,194-196) means downstream gas-accounting in buyGas/gasTipCap logic depends on the produced field values, not the call name."
+  ],
+  "notes": "Direct callers are all the non-test TransactionToMessage sites; semantic dependents are the two code paths that actually read Message fields (NewEVMTxContext, StateTransition). The six tracers/api.go sites are collapsed into one row to avoid inflating the count for one file/behavior. _test.go callers (state_processor_test.go x4, tracers tests x5) excluded. cks find_callers(core.TransactionToMessage) confirmed the same non-test caller set (plus tests); reconciled with ripgrep and Read. Caveat: if a removed/renamed Message field is referenced nowhere, the compiler catches it \u2014 but a semantically *repopulated* field (e.g. GasTipCap under Anzeon) would NOT be caught and is the real risk surfaced by the two semantic entries."
+}

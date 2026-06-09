@@ -1,0 +1,77 @@
+{
+  "id": "CI12",
+  "seed": "systemcontracts/gov_validator.go:initializeValidator + SLOT_VALIDATOR_* constants",
+  "change": "you change a GovValidator storage slot constant",
+  "impact": [
+    {
+      "file": "systemcontracts/gov_validator.go",
+      "symbol": "ValidatorList",
+      "start_line": 203,
+      "end_line": 206,
+      "reach": "direct",
+      "why": "Reads SLOT_VALIDATOR_validators via NewAddressSet; must use the same slot the writer wrote. Read site."
+    },
+    {
+      "file": "systemcontracts/gov_validator.go",
+      "symbol": "GetBLSPublicKey",
+      "start_line": 208,
+      "end_line": 210,
+      "reach": "direct",
+      "why": "Reads CalculateMappingSlot(SLOT_VALIDATOR_validatorToBlsKey, val); slot-constant read site paired with the init writer."
+    },
+    {
+      "file": "systemcontracts/gov_validator.go",
+      "symbol": "GetGasTip",
+      "start_line": 212,
+      "end_line": 215,
+      "reach": "direct",
+      "why": "Reads SLOT_VALIDATOR_gasTip directly; slot-constant read site."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "GetValidators (-> ValidatorList)",
+      "start_line": 611,
+      "end_line": 611,
+      "reach": "transitive",
+      "why": "Validator set derivation reads the validators slot via ValidatorList; wrong slot => empty/garbage validator set => consensus failure."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "BLS pubkey lookup (-> GetBLSPublicKey)",
+      "start_line": 894,
+      "end_line": 894,
+      "reach": "transitive",
+      "why": "Seal verification fetches each validator's BLS key from the validatorToBlsKey slot; slot change breaks seal checks."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "gasTip read (-> GetGasTip)",
+      "start_line": 640,
+      "end_line": 640,
+      "reach": "transitive",
+      "why": "Reads gasTip slot when building WBFTExtra/header; slot change yields wrong tip."
+    },
+    {
+      "file": "miner/worker.go",
+      "symbol": "GetGasTip read",
+      "start_line": 1218,
+      "end_line": 1218,
+      "reach": "transitive",
+      "why": "Miner reads SLOT_VALIDATOR_gasTip via GetGasTip when assembling blocks; depends on the slot constant."
+    },
+    {
+      "file": "systemcontracts/systemcontracts.go",
+      "symbol": "GetSystemContractsTransition (initializeValidator dispatch)",
+      "start_line": 74,
+      "end_line": 88,
+      "reach": "direct",
+      "why": "Invokes initializeValidator (the writer) during genesis/v1 init; the write side that must stay consistent with all readers and the Solidity layout."
+    }
+  ],
+  "grep_would_miss": [
+    "engine.go GetValidators/BLS/gasTip sites and miner/worker.go \u2014 they call the reader helpers (ValidatorList/GetBLSPublicKey/GetGasTip), never reference SLOT_VALIDATOR_* textually. A grep for the slot constant finds zero of them.",
+    "The cross-cutting consensus/miner impact: changing one constant silently desyncs validator-set and seal verification two call hops away from the constant.",
+    "The Solidity contract storage layout (off-repo / not a Go symbol) must change in lockstep \u2014 noted in the file's own CAUTION comment."
+  ],
+  "notes": "All SLOT_VALIDATOR_* textual references live in gov_validator.go: initializeValidator (writer, the seed \u2014 excluded) plus the three reader helpers. Real impact propagates through those readers into consensus engine and miner. blsPop/validatorToOperator/operatorToValidator/blsKeyToValidator slots are written by initializeValidator but have no Go read site in this repo (consumed by the Solidity contract); included implicitly via the writer. cks edges empty; built from ripgrep SLOT_VALIDATOR + reader-caller grep, confirmed by Read."
+}

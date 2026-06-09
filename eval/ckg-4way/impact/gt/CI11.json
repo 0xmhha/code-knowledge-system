@@ -1,0 +1,101 @@
+{
+  "id": "CI11",
+  "seed": "consensus/wbft/core/commit.go:broadcastCommit",
+  "change": "you change the commit message format",
+  "impact": [
+    {
+      "file": "consensus/wbft/messages/commit.go",
+      "symbol": "Commit struct",
+      "start_line": 31,
+      "end_line": 35,
+      "reach": "direct",
+      "why": "The wire type itself: CommonPayload + Digest + CommitSeal. Changing commit format = changing these fields."
+    },
+    {
+      "file": "consensus/wbft/messages/commit.go",
+      "symbol": "NewCommit",
+      "start_line": 37,
+      "end_line": 47,
+      "reach": "direct",
+      "why": "Constructor used by broadcastCommit; field set / arg list changes with the format."
+    },
+    {
+      "file": "consensus/wbft/messages/commit.go",
+      "symbol": "Commit.EncodeRLP",
+      "start_line": 57,
+      "end_line": 61,
+      "reach": "direct",
+      "why": "Encode counterpart: serializes [Sequence,Round,Digest,CommitSeal]+signature; the wire layout."
+    },
+    {
+      "file": "consensus/wbft/messages/commit.go",
+      "symbol": "Commit.DecodeRLP",
+      "start_line": 63,
+      "end_line": 83,
+      "reach": "direct",
+      "why": "Decode counterpart on the receiver: anonymous struct field order must mirror EncodeRLP exactly."
+    },
+    {
+      "file": "consensus/wbft/messages/commit.go",
+      "symbol": "Commit.EncodePayloadForSigning",
+      "start_line": 49,
+      "end_line": 55,
+      "reach": "direct",
+      "why": "Defines the signed-over byte layout; if commit fields change, the signing payload (and thus signature verification) changes."
+    },
+    {
+      "file": "consensus/wbft/core/commit.go",
+      "symbol": "Core.handleCommitMsg",
+      "start_line": 90,
+      "end_line": 131,
+      "reach": "direct",
+      "why": "Receiver/consumer: reads commit.Digest, commit.Round, commit.CommitSeal, commit.Source(); verifies seal and accumulates to quorum. Mirrors broadcastCommit."
+    },
+    {
+      "file": "consensus/wbft/core/commit.go",
+      "symbol": "Core.commitWBFT",
+      "start_line": 137,
+      "end_line": 179,
+      "reach": "direct",
+      "why": "Aggregates each commit's CommitSeal into committedSeals and calls backend.Commit; consumes the commit-message seal field."
+    },
+    {
+      "file": "consensus/wbft/core/handler.go",
+      "symbol": "Core.deliverMessage (CommitCode dispatch)",
+      "start_line": 233,
+      "end_line": 245,
+      "reach": "direct",
+      "why": "Routes CommitCode -> handleCommitMsg with type assertion to *wbfmessage.Commit; the dispatch contract for the commit message."
+    },
+    {
+      "file": "consensus/wbft/core/core.go",
+      "symbol": "verifySeal",
+      "start_line": 469,
+      "end_line": 486,
+      "reach": "direct",
+      "why": "Seal verification invoked by handleCommitMsg on the commit's CommitSeal; if the seal format/round encoding changes, verification must change."
+    },
+    {
+      "file": "consensus/wbft/core/core.go",
+      "symbol": "PrepareSeal",
+      "start_line": 463,
+      "end_line": 467,
+      "reach": "direct",
+      "why": "Builds the seal bytes signed in broadcastCommit (SealTypeCommit) and re-derived in verifySeal; producer/verifier of the commit seal contents."
+    },
+    {
+      "file": "consensus/wbft/core/prepare.go",
+      "symbol": "broadcastCommit caller",
+      "start_line": 140,
+      "end_line": 140,
+      "reach": "transitive",
+      "why": "Sole caller: handlePrepareMsg triggers broadcastCommit on prepare quorum; sequencing context for the commit phase."
+    }
+  ],
+  "grep_would_miss": [
+    "verifySeal/PrepareSeal in core.go \u2014 grep for 'broadcastCommit' or 'Commit' message terms misses the BLS seal contract that the commit message carries.",
+    "deliverMessage CommitCode dispatch \u2014 coupled by the *wbfmessage.Commit type assertion, not by the seed name.",
+    "EncodePayloadForSigning \u2014 the signed-payload layout is a separate contract from the RLP wire layout; both must change together."
+  ],
+  "notes": "Seed broadcastCommit (commit.go:36) excluded as definition. The commit 'format' is two coupled contracts: the RLP wire layout (EncodeRLP/DecodeRLP) and the signed payload (EncodePayloadForSigning + PrepareSeal/SealTypeCommit). handleCommitMsg + commitWBFT are the receive-side counterparts. backend.Commit (consumes committedSeals) is downstream but its signature is seal-list based, not commit-message-format based, so not included. cks edges empty; built from ripgrep + Read."
+}

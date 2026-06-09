@@ -1,0 +1,17 @@
+{
+  "id": "CI07",
+  "seed": "crypto/bls.AggregateSignatures (crypto/bls/bls.go:54)",
+  "change": "you change its signature",
+  "impact": [
+    {
+      "file": "crypto/bls/blst/signature.go",
+      "symbol": "blst.AggregateSignatures",
+      "start_line": 207,
+      "end_line": 222,
+      "reach": "delegate",
+      "why": "The wrapper crypto/bls.AggregateSignatures is a 1-line pass-through to blst.AggregateSignatures. If the wrapper signature changes (param/return types), the backend it forwards to must change in lockstep, and vice-versa; they are a contract pair."
+    }
+  ],
+  "grep_would_miss": [],
+  "notes": "CRITICAL FINDING: crypto/bls.AggregateSignatures has NO production callers. rg for 'bls.AggregateSignatures(' returns zero non-test hits; the only references to the (sibling) blst.AggregateSignatures are in crypto/bls/blst/test/*_test.go. The WBFT seal aggregation and verification paths (consensus/wbft/engine/engine.go aggregateSeal:141, verify:1388; AggregatePublicKeys:1355) use bls.AggregateCompressedSignatures and bls.AggregatePublicKeys \u2014 a DIFFERENT function operating on [][]byte compressed inputs \u2014 NOT AggregateSignatures. So a pure signature change to AggregateSignatures has essentially no production blast radius beyond keeping its blst delegate in sync. The seed itself is excluded. Test callers (blst/test/signature_test.go, bls_benchmark_test.go) excluded as pure _test.go. If the intent was the conceptual 'seal aggregation' function, the real seed should be AggregateCompressedSignatures, whose callers are engine.go:141 (aggregateSeal) and engine.go:1388 (verify path)."
+}

@@ -1,0 +1,400 @@
+# CKG 4-way evaluation dataset — go-stablenet code-comprehension questions.
+# Each question has a verifiable ground-truth location (file + line range) and a
+# reference answer. `seed_symbol` seeds mode β (get_subgraph); `keywords` seed
+# mode α (naive ripgrep). 8 questions are flagged `pilot: true`.
+# Line numbers verified against graph head 9978930ba62380a428f67ad6ff664a6a52e4a547.
+version: 1
+questions:
+  - id: Q01
+    domain: consensus-wbft
+    difficulty: easy
+    pilot: true
+    question: How does WBFT compute the quorum/supermajority threshold from the validator set size?
+    answer_summary: >
+      QuorumSize returns ceil(N - F) where N is the validator count (Size()) and F is
+      (N-1)/3, i.e. the 2/3+1 supermajority needed for Byzantine fault tolerance.
+    seed_symbol: consensus/wbft/validator.defaultSet.QuorumSize
+    keywords: [QuorumSize, supermajority, quorum, validator set]
+    ground_truth:
+      - { file: consensus/wbft/validator/default.go, symbol: defaultSet.QuorumSize, start_line: 226, end_line: 229 }
+      - { file: consensus/wbft/validator/default.go, symbol: defaultSet.F, start_line: 222, end_line: 222 }
+
+  - id: Q02
+    domain: consensus-wbft
+    difficulty: easy
+    question: What are the three phases of WBFT consensus for proposing and finalizing a block?
+    answer_summary: >
+      PRE-PREPARE (proposer broadcasts the proposed block), PREPARE (validators validate
+      and broadcast prepare messages), COMMIT (on a quorum of prepares, validators
+      broadcast commit messages to finalize).
+    seed_symbol: consensus/wbft/core.Core.sendPreprepareMsg
+    keywords: [preprepare, prepare, commit, broadcast]
+    ground_truth:
+      - { file: consensus/wbft/core/preprepare.go, symbol: Core.sendPreprepareMsg, start_line: 41, end_line: 102 }
+      - { file: consensus/wbft/core/prepare.go, symbol: Core.broadcastPrepare, start_line: 35, end_line: 79 }
+      - { file: consensus/wbft/core/commit.go, symbol: Core.broadcastCommit, start_line: 36, end_line: 82 }
+
+  - id: Q03
+    domain: consensus-wbft
+    difficulty: easy
+    question: What is the relationship between F (Byzantine fault tolerance) and validator set size in WBFT?
+    answer_summary: >
+      F() returns float64(Size()-1)/3, so the system tolerates up to floor((N-1)/3)
+      faulty validators.
+    seed_symbol: consensus/wbft/validator.defaultSet.F
+    keywords: [F, faulty, byzantine, validator]
+    ground_truth:
+      - { file: consensus/wbft/validator/default.go, symbol: defaultSet.F, start_line: 222, end_line: 222 }
+
+  - id: Q04
+    domain: consensus-wbft
+    difficulty: medium
+    question: How does WBFT handle round changes when validators fail to reach consensus in the current round?
+    answer_summary: >
+      On round-change timeout a validator broadcasts a ROUND-CHANGE message for the next
+      round with any prepared-block justification; on a quorum of ROUND-CHANGE messages a
+      new proposer is selected and the round increments.
+    seed_symbol: consensus/wbft/core.Core.broadcastRoundChange
+    keywords: [round change, roundchange, broadcastRoundChange, timeout]
+    ground_truth:
+      - { file: consensus/wbft/core/roundchange.go, symbol: Core.broadcastRoundChange, start_line: 52, end_line: 98 }
+      - { file: consensus/wbft/core/roundchange.go, symbol: Core.broadcastNextRoundChange, start_line: 40, end_line: 43 }
+
+  - id: Q05
+    domain: consensus-wbft
+    difficulty: medium
+    question: What is the purpose of justification in WBFT PREPARE and ROUND-CHANGE messages?
+    answer_summary: >
+      Justification carries a quorum of signed messages from prior rounds proving a block
+      was already prepared (or that none was), ensuring safety across round changes and
+      preventing equivocation.
+    seed_symbol: consensus/wbft/core.Core.broadcastRoundChange
+    keywords: [justification, justified, prepared, round change]
+    ground_truth:
+      - { file: consensus/wbft/core/preprepare.go, symbol: Core.sendPreprepareMsg, start_line: 69, end_line: 83 }
+      - { file: consensus/wbft/core/roundchange.go, symbol: Core.broadcastRoundChange, start_line: 78, end_line: 82 }
+
+  - id: Q06
+    domain: consensus-wbft
+    difficulty: hard
+    pilot: true
+    question: How does isJustified() determine if a proposal is properly justified by ROUND-CHANGE and PREPARE messages?
+    answer_summary: >
+      It accepts the proposal if either a quorum of ROUND-CHANGE messages have nil prepared
+      round (no prior block), or a ROUND-CHANGE exists whose prepared block/round is backed
+      by a quorum of PREPARE messages.
+    seed_symbol: consensus/wbft/core.isJustified
+    keywords: [isJustified, justification, round change, prepared]
+    ground_truth:
+      - { file: consensus/wbft/core/justification.go, symbol: isJustified, start_line: 40, end_line: 75 }
+
+  - id: Q07
+    domain: consensus-wbft
+    difficulty: easy
+    question: What proposer selection policies does WBFT support and where are they defined?
+    answer_summary: >
+      Two ProposerPolicy values: RoundRobin (rotate through validators) and Sticky (keep
+      the same proposer across rounds), defined in consensus/wbft/config.go.
+    seed_symbol: consensus/wbft.ProposerPolicy
+    keywords: [ProposerPolicy, RoundRobin, Sticky, proposer]
+    ground_truth:
+      - { file: consensus/wbft/config.go, symbol: ProposerPolicy, start_line: 44, end_line: 48 }
+      - { file: consensus/wbft/config.go, symbol: "const RoundRobin Sticky", start_line: 39, end_line: 42 }
+
+  - id: Q08
+    domain: consensus-wbft
+    difficulty: medium
+    question: How are PREPARE and COMMIT messages sealed in WBFT and what seal types exist?
+    answer_summary: >
+      Messages are sealed by signing header info combined with the round and a seal type;
+      the two seal types SealTypePrepare and SealTypeCommit are signed separately.
+    seed_symbol: consensus/wbft/core.Core.broadcastPrepare
+    keywords: [SealTypePrepare, SealTypeCommit, seal, sign]
+    ground_truth:
+      - { file: consensus/wbft/core/core.go, symbol: "const SealTypePrepare SealTypeCommit", start_line: 41, end_line: 46 }
+      - { file: consensus/wbft/core/prepare.go, symbol: Core.broadcastPrepare, start_line: 46, end_line: 49 }
+
+  - id: Q09
+    domain: governance-validators
+    difficulty: easy
+    question: What are the main governance system contracts in go-stablenet and their default addresses?
+    answer_summary: >
+      GovValidator (validator set / BLS keys), GovCouncil (blacklist / authorized
+      accounts), and GovMasterMinter/GovMinter (minting), with default addresses defined
+      in params/config_wbft.go.
+    seed_symbol: params.DefaultGovValidatorAddress
+    keywords: [GovValidator, GovCouncil, GovMasterMinter, address]
+    ground_truth:
+      - { file: params/config_wbft.go, symbol: "const DefaultGov*Address", start_line: 32, end_line: 46 }
+
+  - id: Q10
+    domain: governance-validators
+    difficulty: medium
+    question: How is the initial validator set initialized into epoch info at genesis?
+    answer_summary: >
+      WBFTInit config (validators + blsPublicKeys) feeds CreateInitialEpochInfo, which
+      builds the epoch info embedded in the genesis header.
+    seed_symbol: consensus/wbft.CreateInitialEpochInfo
+    keywords: [WBFTInit, CreateInitialEpochInfo, validators, blsPublicKeys]
+    ground_truth:
+      - { file: params/config_wbft.go, symbol: WBFTInit, start_line: 50, end_line: 53 }
+      - { file: consensus/wbft/config.go, symbol: CreateInitialEpochInfo, start_line: 258, end_line: 281 }
+
+  - id: Q11
+    domain: governance-validators
+    difficulty: medium
+    pilot: true
+    question: What storage slots does the GovValidator system contract use for validators, BLS keys, and operator mappings?
+    answer_summary: >
+      GovValidator defines SLOT_VALIDATOR_* constants (validators array, BLS keys,
+      validator<->operator mappings, gasTip) used to read/write its contract storage.
+    seed_symbol: systemcontracts.initializeValidator
+    keywords: [SLOT_VALIDATOR, GovValidator, storage slot, operator]
+    ground_truth:
+      - { file: systemcontracts/gov_validator.go, symbol: "const SLOT_VALIDATOR_*", start_line: 30, end_line: 42 }
+
+  - id: Q12
+    domain: governance-validators
+    difficulty: medium
+    question: How do the RoundRobin and Sticky proposer selectors compute the next proposer?
+    answer_summary: >
+      roundRobinProposer picks the validator at (seed+1) % size to rotate; stickyProposer
+      picks (seed) % size to keep the current proposer unless it changed.
+    seed_symbol: consensus/wbft/validator.roundRobinProposer
+    keywords: [roundRobinProposer, stickyProposer, seed, proposer]
+    ground_truth:
+      - { file: consensus/wbft/validator/default.go, symbol: roundRobinProposer, start_line: 158, end_line: 170 }
+      - { file: consensus/wbft/validator/default.go, symbol: stickyProposer, start_line: 172, end_line: 184 }
+
+  - id: Q13
+    domain: state-transition
+    difficulty: hard
+    pilot: true
+    question: At what points in transaction execution are blacklist checks performed for sender, recipient, and fee payer?
+    answer_summary: >
+      TransitionDb checks the sender and (for value transfers) the recipient against the
+      blacklist before EVM execution, and checks the fee payer during fee handling, aborting
+      with a blacklist error if any is blacklisted.
+    seed_symbol: core.StateTransition.TransitionDb
+    keywords: [blacklist, IsBlacklisted, TransitionDb, fee payer]
+    ground_truth:
+      - { file: core/state_transition.go, symbol: StateTransition.TransitionDb, start_line: 501, end_line: 580 }
+
+  - id: Q14
+    domain: blacklist
+    difficulty: easy
+    pilot: true
+    question: How is the blacklist status of an account encoded in the state database?
+    answer_summary: >
+      As a bit flag in StateAccount.Extra: AccountExtraMaskBlacklisted is bit 63
+      (1<<63); IsBlacklisted tests that bit.
+    seed_symbol: core/types.IsBlacklisted
+    keywords: [AccountExtraMaskBlacklisted, IsBlacklisted, Extra, blacklist]
+    ground_truth:
+      - { file: core/types/state_account_extra.go, symbol: "AccountExtraMaskBlacklisted IsBlacklisted", start_line: 31, end_line: 74 }
+
+  - id: Q15
+    domain: blacklist
+    difficulty: hard
+    question: How is GovCouncil contract storage kept in sync with per-account blacklist bits in state?
+    answer_summary: >
+      initializeGovCouncil seeds the council's blacklist AddressSet in contract storage and
+      sets the corresponding alloc.Extra blacklist bits, keeping contract state and account
+      flags consistent at genesis/fork.
+    seed_symbol: systemcontracts.initializeGovCouncil
+    keywords: [initializeGovCouncil, blacklist, AddressSet, Extra]
+    ground_truth:
+      - { file: systemcontracts/gov_council.go, symbol: initializeGovCouncil, start_line: 68, end_line: 146 }
+
+  - id: Q16
+    domain: bls-crypto
+    difficulty: easy
+    pilot: true
+    question: What does the BLS AggregateSignatures function do?
+    answer_summary: >
+      It combines multiple BLS signatures into a single aggregated signature (with a
+      compressed-input variant), shrinking multi-signer proofs.
+    seed_symbol: crypto/bls.AggregateSignatures
+    keywords: [AggregateSignatures, aggregate, BLS, signature]
+    ground_truth:
+      - { file: crypto/bls/bls.go, symbol: "AggregateSignatures AggregateCompressedSignatures", start_line: 54, end_line: 61 }
+
+  - id: Q17
+    domain: bls-crypto
+    difficulty: medium
+    question: How is a BLS key derived from an ECDSA private key in go-stablenet?
+    answer_summary: >
+      DeriveFromECDSA serializes the ECDSA key via crypto.FromECDSA and passes it to
+      GenerateKey, which applies the BLS KDF to produce a deterministic BLS secret key.
+    seed_symbol: crypto/bls.DeriveFromECDSA
+    keywords: [DeriveFromECDSA, GenerateKey, ECDSA, BLS]
+    ground_truth:
+      - { file: crypto/bls/bls.go, symbol: "DeriveFromECDSA GenerateKey", start_line: 85, end_line: 93 }
+
+  - id: Q18
+    domain: system-contracts
+    difficulty: medium
+    question: What is the role of the GovMasterMinter contract relative to GovMinter?
+    answer_summary: >
+      GovMasterMinter controls overall minting policy/permissions and configures minters;
+      GovMinter handles individual minting authorizations under that policy.
+    seed_symbol: systemcontracts.initializeMasterMinter
+    keywords: [GovMasterMinter, GovMinter, minter, minting]
+    ground_truth:
+      - { file: systemcontracts/gov_master_minter.go, symbol: initializeMasterMinter, start_line: 1, end_line: 50 }
+
+  - id: Q19
+    domain: system-contracts
+    difficulty: easy
+    question: How does initializeValidator set up the gas tip parameter in GovValidator?
+    answer_summary: >
+      It takes gasTip from the contract params if present, otherwise params.InitialGasTip,
+      and writes it to the SLOT_VALIDATOR gasTip storage slot.
+    seed_symbol: systemcontracts.initializeValidator
+    keywords: [initializeValidator, gasTip, InitialGasTip, slot]
+    ground_truth:
+      - { file: systemcontracts/gov_validator.go, symbol: initializeValidator, start_line: 64, end_line: 84 }
+
+  - id: Q20
+    domain: genesis
+    difficulty: medium
+    question: What does the WBFT extra-data field of the genesis block encode?
+    answer_summary: >
+      A serialized WBFTExtra holding EpochInfo (validators, candidates, BLS keys,
+      diligence) and the initial gas tip, produced by CreateInitialExtraData.
+    seed_symbol: consensus/wbft.CreateInitialExtraData
+    keywords: [CreateInitialExtraData, WBFTExtra, EpochInfo, extra data]
+    ground_truth:
+      - { file: consensus/wbft/config.go, symbol: CreateInitialExtraData, start_line: 227, end_line: 256 }
+
+  - id: Q21
+    domain: genesis
+    difficulty: hard
+    question: How are multiple system-contract upgrades at the same block merged into one state transition?
+    answer_summary: >
+      GetSystemContractsStateTransition iterates upgrades matching a block number and
+      merges their code/state changes into a single consolidated StateTransition.
+    seed_symbol: consensus/wbft.GetSystemContractsStateTransition
+    keywords: [GetSystemContractsStateTransition, upgrade, StateTransition, merge]
+    ground_truth:
+      - { file: consensus/wbft/config.go, symbol: GetSystemContractsStateTransition, start_line: 202, end_line: 225 }
+
+  - id: Q22
+    domain: txpool
+    difficulty: medium
+    pilot: true
+    question: How does the transaction pool gate transaction types behind fork activation?
+    answer_summary: >
+      ValidateTransaction rejects type-specific txs until their fork is active: DynamicFee
+      needs London, FeeDelegateDynamicFee needs Applepie, Blob needs Cancun, and SetCode
+      needs Anzeon; non-legacy types need Berlin.
+    seed_symbol: core/txpool.ValidateTransaction
+    keywords: [ValidateTransaction, ErrTxTypeNotSupported, London, Applepie, Anzeon]
+    ground_truth:
+      - { file: core/txpool/validation.go, symbol: ValidateTransaction, start_line: 66, end_line: 80 }
+
+  - id: Q23
+    domain: txpool
+    difficulty: medium
+    question: How are fee-payer signatures validated for fee-delegated transactions in the pool?
+    answer_summary: >
+      ValidateTransaction recovers the fee payer from the signature via FeePayer() and
+      checks it equals tx.FeePayer(); a mismatch or recovery failure yields ErrInvalidFeePayer.
+    seed_symbol: core/txpool.ValidateTransaction
+    keywords: [FeePayer, ErrInvalidFeePayer, fee delegated, signature]
+    ground_truth:
+      - { file: core/txpool/validation.go, symbol: ValidateTransaction, start_line: 133, end_line: 142 }
+
+  - id: Q24
+    domain: evm-core
+    difficulty: medium
+    question: What is the authorized-account mechanism and how does it differ from the blacklist?
+    answer_summary: >
+      Authorized accounts (AccountExtraMaskAuthorized, bit 62; IsAuthorized/SetAuthorized)
+      may use a custom gas tip cap; unlike the blacklist which blocks accounts,
+      authorization is an opt-in privilege.
+    seed_symbol: core/types.IsAuthorized
+    keywords: [IsAuthorized, SetAuthorized, AccountExtraMaskAuthorized, gas tip]
+    ground_truth:
+      - { file: core/types/state_account_extra.go, symbol: "IsAuthorized SetAuthorized AccountExtraMaskAuthorized", start_line: 86, end_line: 99 }
+
+  - id: Q25
+    domain: evm-core
+    difficulty: hard
+    pilot: true
+    question: How does transaction-to-message conversion choose the gas tip for authorized accounts?
+    answer_summary: >
+      TransactionToMessage uses tx.GasTipCap() when Anzeon is enabled and the sender is
+      authorized; otherwise it uses the header-provided gas tip, so authorization bypasses
+      the protocol-enforced tip.
+    seed_symbol: core.TransactionToMessage
+    keywords: [TransactionToMessage, authorized, GasTipCap, headerGasTip]
+    ground_truth:
+      - { file: core/state_transition.go, symbol: TransactionToMessage, start_line: 159, end_line: 200 }
+
+  - id: Q26
+    domain: p2p
+    difficulty: hard
+    question: How does WBFT classify an incoming consensus message as past, present, or future?
+    answer_summary: >
+      handleEvents/handleCheckedMsg compares the message view (round, sequence) to the
+      current view: older is past (discarded), matching is handled now, and ahead is future
+      (backlogged).
+    seed_symbol: consensus/wbft/core.Core.handleEvents
+    keywords: [handleEvents, future message, backlog, view]
+    ground_truth:
+      - { file: consensus/wbft/core/handler.go, symbol: Core.handleEvents, start_line: 91, end_line: 100 }
+
+  - id: Q27
+    domain: p2p
+    difficulty: medium
+    question: What role do backlogs play in WBFT message processing?
+    answer_summary: >
+      Backlogs (per-sender priority queues guarded by backlogsMu) hold future-round
+      messages so that when a new round starts they can be replayed instead of lost.
+    seed_symbol: consensus/wbft/core.Core
+    keywords: [backlog, backlogs, future, priority queue]
+    ground_truth:
+      - { file: consensus/wbft/core/core.go, symbol: "Core.backlogs", start_line: 97, end_line: 98 }
+
+  - id: Q28
+    domain: consensus-wbft
+    difficulty: hard
+    question: What extra seal messages are collected after consensus is finalized and why?
+    answer_summary: >
+      PREPARE/COMMIT effective seals from the committed round are accumulated into
+      extraSeals (addEffectiveSealToExtraSeal / ProcessExtraSeal) for inclusion as finality
+      proof in a subsequent header.
+    seed_symbol: consensus/wbft/core.Core.ProcessExtraSeal
+    keywords: [extraSeal, ProcessExtraSeal, effective seal, finality]
+    ground_truth:
+      - { file: consensus/wbft/core/extraseal.go, symbol: "Core.addEffectiveSealToExtraSeal Core.ProcessExtraSeal", start_line: 118, end_line: 153 }
+
+  - id: Q29
+    domain: governance-validators
+    difficulty: easy
+    question: How does validator-set Copy() preserve state and proposer policy?
+    answer_summary: >
+      Copy() builds a new defaultSet with copied validators (addresses + BLS keys) and
+      carries over the same proposer policy and selector.
+    seed_symbol: consensus/wbft/validator.defaultSet.Copy
+    keywords: [Copy, defaultSet, policy, validators]
+    ground_truth:
+      - { file: consensus/wbft/validator/default.go, symbol: defaultSet.Copy, start_line: 211, end_line: 220 }
+
+  - id: Q30
+    domain: state-transition
+    difficulty: medium
+    question: How does IntrinsicGas account for EIP-3860 initcode cost on contract creation?
+    answer_summary: >
+      For Shanghai contract-creation txs (isEIP3860), IntrinsicGas adds InitCodeWordGas per
+      32-byte word of initcode on top of base and per-byte data costs.
+    seed_symbol: core.IntrinsicGas
+    keywords: [IntrinsicGas, EIP3860, InitCodeWordGas, contract creation]
+    ground_truth:
+      - { file: core/state_transition.go, symbol: IntrinsicGas, start_line: 71, end_line: 121 }
+
+coverage:
+  by_domain: { consensus-wbft: 9, governance-validators: 5, state-transition: 3, blacklist: 2, bls-crypto: 2, system-contracts: 3, genesis: 2, txpool: 2, evm-core: 2, p2p: 2 }
+  by_difficulty: { easy: 9, medium: 14, hard: 7 }
+  pilot: [Q01, Q06, Q11, Q13, Q14, Q16, Q22, Q25]

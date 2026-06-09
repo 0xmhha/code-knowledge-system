@@ -1,0 +1,60 @@
+{
+  "id": "CI01",
+  "seed": "QuorumSize",
+  "change": "Change the return semantics of ValidatorSet.QuorumSize() (e.g. ceil(2N/3) -> a different threshold).",
+  "impact": [
+    {
+      "file": "consensus/wbft/validator/default.go",
+      "symbol": "consensus/wbft/validator.defaultSet.QuorumSize",
+      "start_line": 226,
+      "end_line": 229,
+      "reach": "interface-impl",
+      "why": "Sole concrete implementer of the ValidatorSet.QuorumSize interface method; its formula IS the semantics being changed. (Listed because it is the impl, not the interface decl which is the seed.)"
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "consensus/wbft/engine.verifyAggregatedSeal",
+      "start_line": 1338,
+      "end_line": 1343,
+      "reach": "direct",
+      "why": "Rejects a header when len(sealers) < valSet.QuorumSize(); seal-count validity depends directly on the threshold."
+    },
+    {
+      "file": "consensus/wbft/core/roundchange.go",
+      "symbol": "consensus/wbft/core.core.handleRoundChange",
+      "start_line": 146,
+      "end_line": 146,
+      "reach": "direct",
+      "why": "Passes QuorumSize() into roundChangeSet.Add as the quorum threshold for round-change accumulation."
+    },
+    {
+      "file": "consensus/wbft/core/preprepare.go",
+      "symbol": "consensus/wbft/core.core.handlePreprepare",
+      "start_line": 135,
+      "end_line": 135,
+      "reach": "direct",
+      "why": "isJustified over justification round-changes/prepares uses QuorumSize() to accept a pre-prepare."
+    },
+    {
+      "file": "consensus/wbft/core/prepare.go",
+      "symbol": "consensus/wbft/core.core.handlePrepare",
+      "start_line": 121,
+      "end_line": 121,
+      "reach": "direct",
+      "why": "State advances to Prepared only when WBFTPrepares.Size() >= QuorumSize(); core liveness/safety condition."
+    },
+    {
+      "file": "consensus/wbft/core/commit.go",
+      "symbol": "consensus/wbft/core.core.handleCommit",
+      "start_line": 123,
+      "end_line": 125,
+      "reach": "direct",
+      "why": "Block is committed (commitWBFT) only when WBFTCommits.Size() >= QuorumSize(); final commit threshold."
+    }
+  ],
+  "grep_would_miss": [
+    "consensus/wbft.ValidatorSet.QuorumSize (interface declaration \u2014 grep finds the name but does not reveal it is the interface contract dispatched via c.valSet)",
+    "interface-dispatch semantics: every c.valSet.QuorumSize() call resolves through the ValidatorSet interface to defaultSet; a bare grep on QuorumSize surfaces the text but not the implements relationship"
+  ],
+  "notes": "Only one concrete implementer (defaultSet) exists, so interface fan-out is small. cks could NOT resolve the interface-method qualified name (find_symbol returned only the two defs; impact_analysis returned empty groups) \u2014 ground truth here came from ripgrep + Read. Logging-only references at prepare.go:90/117, commit.go:93/120, engine_test.go:807 were inspected: prepare.go:117 and commit.go:120 attach the value to a logger that is then used right beside the real threshold compare, so they are folded into the prepare/commit entries; pure log/debug lines and the test were excluded. F() is a dependency OF QuorumSize, not a dependent, so excluded."
+}

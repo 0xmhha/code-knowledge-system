@@ -1,0 +1,87 @@
+{
+  "id": "CI14",
+  "seed": "consensus/wbft/core/handler.go Core.handleEvents (with checkMessage classification)",
+  "change": "you change how messages are classified (past/present/future in checkMessage)",
+  "impact": [
+    {
+      "file": "consensus/wbft/core/backlog.go",
+      "symbol": "Core.checkMessage",
+      "start_line": 103,
+      "end_line": 180,
+      "reach": "direct",
+      "why": "The classifier itself returns errFutureMessage/errOldMessage/errExtraSealMessage/errInvalidMessage; the routing decisions downstream depend on its exact return-code semantics."
+    },
+    {
+      "file": "consensus/wbft/core/handler.go",
+      "symbol": "Core.handleDecodedMessage",
+      "start_line": 211,
+      "end_line": 227,
+      "reach": "direct",
+      "why": "Calls checkMessage and branches on errFutureMessage -> addToBacklog and errExtraSealMessage -> addToExtraSeal; the seed loop's classification routing lives here."
+    },
+    {
+      "file": "consensus/wbft/core/backlog.go",
+      "symbol": "Core.processBacklog",
+      "start_line": 212,
+      "end_line": 264,
+      "reach": "direct",
+      "why": "Re-runs checkMessage on backlogged messages; treats errFutureMessage as 'still future' (push back) and errExtraSealMessage as deliverable. Reclassification changes drain behavior."
+    },
+    {
+      "file": "consensus/wbft/core/handler.go",
+      "symbol": "Core.handleEncodedMsg",
+      "start_line": 188,
+      "end_line": 209,
+      "reach": "1-hop",
+      "why": "Decode+verify path that feeds handleDecodedMessage; the MessageEvent branch of handleEvents enters here."
+    },
+    {
+      "file": "consensus/wbft/core/handler.go",
+      "symbol": "Core.deliverMessage",
+      "start_line": 230,
+      "end_line": 248,
+      "reach": "1-hop",
+      "why": "Invoked only after checkMessage passes (present message); dispatches to per-type handlers. Classification gates whether this runs."
+    },
+    {
+      "file": "consensus/wbft/core/backlog.go",
+      "symbol": "Core.addToBacklog (storeBacklog)",
+      "start_line": 185,
+      "end_line": 206,
+      "reach": "1-hop",
+      "why": "Future messages are stored here; priority via toNegatePriority. If future-classification rules change, what gets stored changes."
+    },
+    {
+      "file": "consensus/wbft/core/backlog.go",
+      "symbol": "toNegatePriority",
+      "start_line": 266,
+      "end_line": 275,
+      "reach": "2-hop",
+      "why": "Backlog ordering depends on RoundChange-vs-other distinction mirroring checkMessage's RoundChange special-casing; must stay consistent with classification."
+    },
+    {
+      "file": "consensus/wbft/core/core.go",
+      "symbol": "Core.setState",
+      "start_line": 296,
+      "end_line": 309,
+      "reach": "2-hop",
+      "why": "Every state change calls processBacklog(); state-dependent checkMessage branches (StateAcceptRequest/Preprepared/Prepared/Committed) mean reclassification interacts with state transitions here."
+    },
+    {
+      "file": "consensus/wbft/core/handler.go",
+      "symbol": "Core.start (handlerWg/handleEvents launch)",
+      "start_line": 35,
+      "end_line": 47,
+      "reach": "direct",
+      "why": "Starts the handleEvents goroutine and owns the backlog/event lifecycle the seed loop runs in."
+    }
+  ],
+  "grep_would_miss": [
+    "grep 'handleEvents' finds only the loop body and its launcher; it misses checkMessage, the actual classification logic, which is in backlog.go not handler.go.",
+    "The errExtraSealMessage path (a 4th classification beyond past/present/future) is easy to miss \u2014 it routes to addToExtraSeal, not the backlog.",
+    "processBacklog re-invokes checkMessage; grep on 'checkMessage' catches it but grep on 'handleEvents' does not, so the backlog-drain coupling is invisible from the seed name.",
+    "setState -> processBacklog coupling: classification semantics are state-sensitive, but setState never mentions checkMessage or handleEvents.",
+    "toNegatePriority's RoundChange special-case must stay in sync with checkMessage's RoundChange branch \u2014 a semantic dependency with no shared identifier to grep."
+  ],
+  "notes": "Seed handleEvents (handler.go:102-181) excluded as the loop definition, but its routing into handleDecodedMessage is the classification entry point and is included. Real classifier is checkMessage. Backlog trio (addToBacklog/processBacklog/setState) forms the past/future handling. _test.go skipped."
+}
