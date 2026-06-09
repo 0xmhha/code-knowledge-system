@@ -262,11 +262,37 @@ func matchesFilter(n types.Node, f SearchFilter) bool {
 // (e.g. "function" -> "Function", "method" -> "Method").
 //
 // opts.PathGlob and opts.CommitHash are not yet enforced; follow-up.
+// resolveFlexibleNodes resolves a possibly over-qualified dotted symbol name
+// against ckg's qualified-name index, which stores Go symbols in the
+// package-leaf form "pkgleaf.Type.Method" (e.g. "validator.defaultSet.QuorumSize")
+// and never the dotted import path. A caller that follows the MCP tool docs and
+// passes a fully-qualified "consensus.wbft.validator.defaultSet.QuorumSize" would
+// otherwise match nothing (neither exact nor "%."+name suffix). We try the name
+// as given, then progressively drop leading dot-segments until the store resolves
+// it. Bare/exact names hit on the first try, so existing behaviour is unchanged.
+func (r *Real) resolveFlexibleNodes(name string) ([]types.Node, error) {
+	nodes, err := r.s.FindSymbol(name, false)
+	if err != nil || len(nodes) > 0 {
+		return nodes, err
+	}
+	segs := strings.Split(name, ".")
+	for i := 1; i < len(segs); i++ {
+		nodes, err = r.s.FindSymbol(strings.Join(segs[i:], "."), false)
+		if err != nil {
+			return nil, err
+		}
+		if len(nodes) > 0 {
+			return nodes, nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *Real) FindSymbol(ctx context.Context, name string, opts SymbolOpts) ([]contract.Citation, error) {
 	if name == "" {
 		return nil, errors.New("ckgclient: empty symbol name")
 	}
-	nodes, err := r.s.FindSymbol(name, false)
+	nodes, err := r.resolveFlexibleNodes(name)
 	if err != nil {
 		return nil, fmt.Errorf("ckgclient: FindSymbol: %w", err)
 	}
@@ -469,7 +495,7 @@ func (r *Real) resolveSeedFile(qname string) string {
 // ImpactOfChange, ConcurrencyImpact) whose ckg backends require an exact
 // qualified_name and otherwise return empty silently.
 func (r *Real) resolveQname(name string) string {
-	defs, err := r.s.FindSymbol(name, false)
+	defs, err := r.resolveFlexibleNodes(name)
 	if err != nil || len(defs) == 0 {
 		return ""
 	}
@@ -485,7 +511,7 @@ func (r *Real) resolveQname(name string) string {
 // preferred, else first result, else ""). Used to bridge qname→nodeID for
 // store.Reader.GetNodePRs.
 func (r *Real) resolveNodeID(qname string) string {
-	defs, err := r.s.FindSymbol(qname, false)
+	defs, err := r.resolveFlexibleNodes(qname)
 	if err != nil || len(defs) == 0 {
 		return ""
 	}
