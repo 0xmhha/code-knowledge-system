@@ -1,0 +1,43 @@
+{
+  "id": "CI03",
+  "seed": "IntrinsicGas",
+  "change": "Add a parameter to core.IntrinsicGas(...); every call site must pass the new argument.",
+  "impact": [
+    {
+      "file": "core/state_transition.go",
+      "symbol": "core.StateTransition.TransitionDb",
+      "start_line": 477,
+      "end_line": 485,
+      "reach": "direct",
+      "why": "Calls IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai) at l.478 to subtract intrinsic gas; primary consensus-path caller, must supply new arg."
+    },
+    {
+      "file": "core/txpool/validation.go",
+      "symbol": "core/txpool.ValidateTransaction",
+      "start_line": 109,
+      "end_line": 117,
+      "reach": "direct",
+      "why": "core.IntrinsicGas at l.111 to reject txs below the minimum; mempool admission must pass the new parameter."
+    },
+    {
+      "file": "cmd/evm/internal/t8ntool/transaction.go",
+      "symbol": "cmd/evm/internal/t8ntool.Transaction (t9n check)",
+      "start_line": 136,
+      "end_line": 144,
+      "reach": "direct",
+      "why": "core.IntrinsicGas at l.136 computing per-tx intrinsic gas for the t9n tool report; must pass new arg."
+    },
+    {
+      "file": "tests/transaction_test_util.go",
+      "symbol": "tests.TransactionTest.validateTx",
+      "start_line": 58,
+      "end_line": 60,
+      "reach": "direct",
+      "why": "core.IntrinsicGas at l.58 in the consensus transaction-test harness; encodes a real intrinsic-gas contract (not a unit _test.go), so included."
+    }
+  ],
+  "grep_would_miss": [
+    "Nothing material \u2014 IntrinsicGas is a free function always called by its exported name, so a name-grep finds every call site. Indirect ErrIntrinsicGas references (gasestimator.go:197, validation.go:116, error.go, several _test.go) are NOT call sites of IntrinsicGas and are correctly NOT in the impact set."
+  ],
+  "notes": "Adding a parameter is a pure signature/compile break, so impact == exact call sites. Three non-test callers (state_transition, txpool/validation, t8ntool/transaction) plus tests/transaction_test_util.go which is a .go (not _test.go) consensus-test helper encoding the intrinsic-gas rule. Pure _test.go callers (core/bench_test.go:86, state_processor_test.go) were excluded. cks find_callers(core.IntrinsicGas) overflowed the token cap (result saved to disk) but ripgrep gives a complete and verified call-site list, which I confirmed by Read."
+}

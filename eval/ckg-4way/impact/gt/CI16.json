@@ -1,0 +1,54 @@
+{
+  "id": "CI16",
+  "seed": "consensus/wbft/config.go GetSystemContractsStateTransition",
+  "change": "you change how system-contract upgrades merge",
+  "impact": [
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "Engine.processFinalize",
+      "start_line": 929,
+      "end_line": 970,
+      "reach": "direct",
+      "why": "Sole non-test caller. Calls GetSystemContractsStateTransition(e.cfg, header.Number) then applies merged.Codes via SetCode and merged.States via SetState. The merge result is directly written into state here."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "Engine.Finalize",
+      "start_line": 919,
+      "end_line": 921,
+      "reach": "1-hop",
+      "why": "Calls processFinalize with verifyEpoch; the block-import finalize path that applies upgrade merges."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "Engine.FinalizeAndAssemble",
+      "start_line": 1053,
+      "end_line": 1061,
+      "reach": "1-hop",
+      "why": "Calls processFinalize with writeEpoch; the block-production finalize path. Both producer and verifier paths apply the same merge, so they must agree."
+    },
+    {
+      "file": "consensus/wbft/config.go",
+      "symbol": "SystemContractUpgrades iteration / merge loop (within seed but defines contract)",
+      "start_line": 205,
+      "end_line": 222,
+      "reach": "direct",
+      "why": "The merge semantics (block-equality match, append Codes/States, early break on num<block) are the thing changing; consumers above rely on its exact merged-StateTransition shape."
+    },
+    {
+      "file": "systemcontracts",
+      "symbol": "GetSystemContractsTransition",
+      "start_line": 0,
+      "end_line": 0,
+      "reach": "1-hop",
+      "why": "GetSystemContractsStateTransition delegates per-upgrade to systemcontracts.GetSystemContractsTransition(upgrade.SystemContracts, nil); how individual upgrades produce Codes/States feeds the merge. (callee; included as related upgrade-application source.)"
+    }
+  ],
+  "grep_would_miss": [
+    "grep 'GetSystemContractsStateTransition' finds the def + one caller (processFinalize); it misses that processFinalize is reached via BOTH Finalize (verify/import) and FinalizeAndAssemble (produce) \u2014 two distinct consensus paths that must stay consistent.",
+    "The actual state-application sites (state.SetCode over merged.Codes, state.SetState over merged.States) are inside processFinalize and are the real downstream effect of a merge change; grep on the function name surfaces the call but not the application semantics.",
+    "The per-upgrade producer systemcontracts.GetSystemContractsTransition (a callee, Params=nil genesis/code-only path) shapes what gets merged; following only callers misses it.",
+    "The early-break on num<upgrade.Block assumes upgrades are block-ordered \u2014 a merge-logic invariant invisible to a name grep."
+  ],
+  "notes": "Seed GetSystemContractsStateTransition (config.go:202-225) excluded as the definition, though the inner merge loop is the changing contract and is annotated. Only caller is processFinalize, fanning into Finalize + FinalizeAndAssemble. config_test.go and ethconfig/config_test.go callers are tests, skipped. The systemcontracts callee is included as the related upgrade-application site per the question's scope."
+}

@@ -1,0 +1,5 @@
+# Per-question context bundles are regenerable (they duplicate go-stablenet
+# source excerpts) and large; keep them out of the repo. Regenerate via the
+# build workflows described in DESIGN.md.
+bundles/
+impact/bundles/

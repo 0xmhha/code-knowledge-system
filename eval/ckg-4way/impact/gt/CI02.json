@@ -1,0 +1,117 @@
+{
+  "id": "CI02",
+  "seed": "TransitionDb",
+  "change": "Add a new return value to StateTransition.TransitionDb() (signature becomes (*ExecutionResult, <new>, error)).",
+  "impact": [
+    {
+      "file": "core/state_transition.go",
+      "symbol": "core.ApplyMessage",
+      "start_line": 209,
+      "end_line": 211,
+      "reach": "direct",
+      "why": "Sole non-test direct caller: returns NewStateTransition(...).TransitionDb(); must propagate/adapt the new return value. This is the wrapper through which nearly all callers reach TransitionDb."
+    },
+    {
+      "file": "core/state_processor.go",
+      "symbol": "core.applyTransaction",
+      "start_line": 109,
+      "end_line": 161,
+      "reach": "transitive",
+      "why": "Calls ApplyMessage (l.115) and consumes result; receives the propagated new value from TransitionDb."
+    },
+    {
+      "file": "core/state_processor.go",
+      "symbol": "core.StateProcessor.Process",
+      "start_line": 60,
+      "end_line": 107,
+      "reach": "transitive",
+      "why": "Drives applyTransaction per tx; 2-hop transitive caller of TransitionDb via ApplyMessage."
+    },
+    {
+      "file": "core/state_processor.go",
+      "symbol": "core.ApplyTransaction",
+      "start_line": 167,
+      "end_line": 177,
+      "reach": "transitive",
+      "why": "Exported wrapper calling applyTransaction->ApplyMessage; a primary propagation point for the extra return value."
+    },
+    {
+      "file": "core/state_prefetcher.go",
+      "symbol": "core.precacheTransaction",
+      "start_line": 89,
+      "end_line": 95,
+      "reach": "transitive",
+      "why": "Calls ApplyMessage; would need to handle the new return (currently discards result)."
+    },
+    {
+      "file": "eth/gasestimator/gasestimator.go",
+      "symbol": "eth/gasestimator.run",
+      "start_line": 207,
+      "end_line": 235,
+      "reach": "transitive",
+      "why": "core.ApplyMessage at l.227; gas estimation consumes ExecutionResult and must accept the new value."
+    },
+    {
+      "file": "internal/ethapi/api.go",
+      "symbol": "internal/ethapi.doCall",
+      "start_line": 1160,
+      "end_line": 1209,
+      "reach": "transitive",
+      "why": "core.ApplyMessage at l.1196 in the eth_call path; consumes result, must adapt to new return."
+    },
+    {
+      "file": "internal/ethapi/api.go",
+      "symbol": "internal/ethapi.AccessList",
+      "start_line": 1620,
+      "end_line": 1711,
+      "reach": "transitive",
+      "why": "core.ApplyMessage at l.1702 (access-list creation path); propagates the extra return value."
+    },
+    {
+      "file": "eth/state_accessor.go",
+      "symbol": "eth.stateAtTransaction",
+      "start_line": 221,
+      "end_line": 265,
+      "reach": "transitive",
+      "why": "core.ApplyMessage at l.257 when replaying txs to reach a target index."
+    },
+    {
+      "file": "eth/tracers/api.go",
+      "symbol": "eth/tracers.API.traceTx-and-replay-callers",
+      "start_line": 501,
+      "end_line": 1008,
+      "reach": "transitive",
+      "why": "Multiple ApplyMessage calls (l.549, 708, 820, 1004) across trace/replay paths; each must thread the new return value."
+    },
+    {
+      "file": "cmd/evm/internal/t8ntool/execution.go",
+      "symbol": "cmd/evm/internal/t8ntool.Prestate.Apply",
+      "start_line": 120,
+      "end_line": 361,
+      "reach": "transitive",
+      "why": "core.ApplyMessage at l.240 (msgResult); the t8n tool reads ExecutionResult and would consume the new value."
+    },
+    {
+      "file": "miner/worker.go",
+      "symbol": "miner.worker.commitTransaction",
+      "start_line": 972,
+      "end_line": 983,
+      "reach": "transitive",
+      "why": "core.ApplyTransaction at l.977 -> applyTransaction -> ApplyMessage; 2-hop caller producing block receipts."
+    },
+    {
+      "file": "core/chain_makers.go",
+      "symbol": "core.BlockGen.AddTxWithChain",
+      "start_line": 116,
+      "end_line": 130,
+      "reach": "transitive",
+      "why": "ApplyTransaction at l.121; block generation path reaches TransitionDb via ApplyMessage."
+    }
+  ],
+  "grep_would_miss": [
+    "core.ApplyMessage (the wrapper) \u2014 a grep for 'TransitionDb' only hits state_transition.go:210 + tests; every real consumer reaches it through ApplyMessage and would be invisible to a TransitionDb name-grep.",
+    "core.ApplyTransaction / applyTransaction / Process \u2014 2-hop wrappers reached via ApplyMessage, not named TransitionDb.",
+    "miner.worker.commitTransaction and core.BlockGen.AddTxWithChain \u2014 reached via ApplyTransaction, two hops removed from the seed name."
+  ],
+  "notes": "TransitionDb is called once in non-test code (ApplyMessage); the real blast radius is the ApplyMessage/ApplyTransaction wrapper tree, which cks find_callers(TransitionDb, depth=2) surfaced well (it returned the ApplyMessage caller fan-out). _test.go callers (tracers tests, state_test_util) were excluded per instructions as they don't encode an external contract. eth/tracers/api.go entries collapsed into one row spanning the four ApplyMessage sites to avoid double-counting the same file/behavior."
+}

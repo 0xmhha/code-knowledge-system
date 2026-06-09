@@ -1,0 +1,52 @@
+{
+  "id": "CI08",
+  "seed": "core/txpool.ValidateTransaction (core/txpool/validation.go:55)",
+  "change": "you add a new transaction-type fork gate (i.e. a new per-type 'reject unless fork X active' branch like the IsBerlin/IsLondon/IsApplepie/IsCancun/AnzeonEnabled blocks, plus its per-type sub-validation)",
+  "impact": [
+    {
+      "file": "core/txpool/validation.go",
+      "symbol": "ValidateTransaction per-type fork gates (Berlin/London/Applepie/Cancun/Anzeon) + opts.Accept mask check",
+      "start_line": 56,
+      "end_line": 80,
+      "reach": "self-internal",
+      "why": "The cluster of 'type N rejected, pool not yet in <fork>' branches and the opts.Accept&(1<<tx.Type()) gate is exactly where a new tx-type fork gate is added; a new tx type needs its own fork-activation branch here and a new bit in the per-pool Accept mask."
+    },
+    {
+      "file": "core/txpool/validation.go",
+      "symbol": "ValidateTransaction per-type sub-validation (FeeDelegate / SetCode / Blob blocks)",
+      "start_line": 133,
+      "end_line": 173,
+      "reach": "self-internal",
+      "why": "Per-type structural validation that a new tx type's fork gate must be paired with (e.g. feePayer/auth/blob-sidecar checks); the validation path a new gate touches."
+    },
+    {
+      "file": "core/txpool/legacypool/legacypool.go",
+      "symbol": "LegacyPool.validateTxBasics (ValidateTransaction caller) + Accept mask",
+      "start_line": 650,
+      "end_line": 668,
+      "reach": "caller",
+      "why": "Primary pool caller of txpool.ValidateTransaction; defines its Accept bitmask (legacy/accesslist/dynamic/feeDelegate/setCode). A new tx-type gate requires adding the new type bit to this Accept mask or the type is rejected here."
+    },
+    {
+      "file": "core/txpool/blobpool/blobpool.go",
+      "symbol": "BlobPool.validateTx (ValidateTransaction caller) + Accept: 1<<BlobTxType",
+      "start_line": 1127,
+      "end_line": 1131,
+      "reach": "caller",
+      "why": "Blob pool caller of txpool.ValidateTransaction with its own Accept mask; any new tx type routed to a pool needs its Accept entry and may need a new pool or gating decision here."
+    },
+    {
+      "file": "core/txpool/validation.go",
+      "symbol": "ValidationOptions (Accept / Config / MaxSize / MinTip)",
+      "start_line": 30,
+      "end_line": 48,
+      "reach": "type-contract",
+      "why": "Accept is the per-pool type-acceptance bitmask consulted by the fork gate; a new tx type extends the meaning of this field and the Config fork predicates it queries."
+    }
+  ],
+  "grep_would_miss": [
+    "core/txpool/legacypool & blobpool Accept bitmasks \u2014 grep on 'ValidateTransaction' finds the call but not that adding a fork-gated type also requires flipping a bit in each pool's Accept mask (the silent rejection path at validation.go:57).",
+    "params.ChainConfig fork predicates (IsBerlin/IsLondon/IsApplepie/IsCancun/AnzeonEnabled) \u2014 a new gate needs a matching new predicate; grep on the seed name won't surface params/config_wbft.go."
+  ],
+  "notes": "Seed is core/txpool.ValidateTransaction (the stateless validator). The two production callers are LegacyPool.validateTxBasics (legacypool.go:665) and BlobPool.validateTx (blobpool.go:1131). ValidateTransactionWithState (validation.go:241) is a sibling, not a caller, and is out of scope for a *type-fork-gate* change except that it shares the per-pool Accept/Config plumbing. signer/fourbyte and signer/core ValidateTransaction are unrelated namesakes (different signature, SendTxArgs) \u2014 excluded. Test callers in validation_test.go excluded. The change is mostly self-internal (the gate lives inside the seed) plus the two pool Accept masks and a new ChainConfig fork predicate."
+}

@@ -1,0 +1,159 @@
+{
+  "id": "CI05",
+  "seed": "core/types.IsBlacklisted (StateAccount.Extra blacklist bit; mask AccountExtraMaskBlacklisted = 1<<63)",
+  "change": "you change how the blacklist bit is stored in StateAccount.Extra (bit position / encoding / which mask carries blacklisted)",
+  "impact": [
+    {
+      "file": "core/types/state_account_extra.go",
+      "symbol": "SetBlacklisted / ClearBlacklisted",
+      "start_line": 76,
+      "end_line": 84,
+      "reach": "direct",
+      "why": "Sibling write helpers that must use the same mask/encoding as IsBlacklisted; read+write of the bit must stay consistent."
+    },
+    {
+      "file": "core/types/state_account_extra.go",
+      "symbol": "AccountExtraMaskBlacklisted / AccountExtraValidMask",
+      "start_line": 31,
+      "end_line": 46,
+      "reach": "direct",
+      "why": "The mask constant defines the bit layout; ValidateExtra rejects accounts whose Extra has bits outside AccountExtraValidMask. Changing the bit changes validity of persisted accounts (semantic: genesis/state validation)."
+    },
+    {
+      "file": "core/types/state_account_extra.go",
+      "symbol": "ValidateExtra",
+      "start_line": 103,
+      "end_line": 108,
+      "reach": "direct",
+      "why": "Validates that no undefined bits are set; if the blacklist bit moves it must remain inside the valid mask or genesis/state load fails."
+    },
+    {
+      "file": "core/state/state_object.go",
+      "symbol": "stateObject.SetBlacklisted / ClearBlacklisted / IsBlacklisted",
+      "start_line": 524,
+      "end_line": 596,
+      "reach": "direct",
+      "why": "Reads/writes the blacklist bit on s.data.Extra via types helpers; EIP-161 empty-touch logic depends on the bit semantics."
+    },
+    {
+      "file": "core/state/statedb.go",
+      "symbol": "StateDB.IsBlacklisted / SetBlacklisted / ClearBlacklisted / GetExtra / SetExtra",
+      "start_line": 300,
+      "end_line": 466,
+      "reach": "direct",
+      "why": "StateDB accessors that surface the Extra bit to the rest of the node; every consumer below routes through here."
+    },
+    {
+      "file": "core/vm/interface.go",
+      "symbol": "StateDB interface (GetExtra/IsBlacklisted/SetBlacklisted/ClearBlacklisted)",
+      "start_line": 83,
+      "end_line": 87,
+      "reach": "1-hop",
+      "why": "Interface contract used by the EVM and native manager; defines the behavior the bit-layout must preserve."
+    },
+    {
+      "file": "core/vm/native_manager.go",
+      "symbol": "accountManagerSetBlacklisted / Clear / accountManagerIsBlacklisted.Run",
+      "start_line": 300,
+      "end_line": 370,
+      "reach": "1-hop",
+      "why": "Native AccountManager contract that exposes set/clear/is-blacklisted to on-chain calls; relies on the StateDB bit accessors and thus on the bit layout."
+    },
+    {
+      "file": "core/vm/evm.go",
+      "symbol": "EVM.Call / transfer blacklist gate",
+      "start_line": 480,
+      "end_line": 622,
+      "reach": "1-hop",
+      "why": "EVM call path reads StateDB.IsBlacklisted for caller/from/to under Anzeon rules; consensus-affecting behavior depends on the bit being read correctly."
+    },
+    {
+      "file": "core/state_transition.go",
+      "symbol": "TransitionDb blacklist hooks (from/to/feePayer)",
+      "start_line": 502,
+      "end_line": 580,
+      "reach": "1-hop",
+      "why": "State transition rejects blacklisted sender/recipient/fee-payer; consensus rule riding on the bit."
+    },
+    {
+      "file": "core/txpool/validation.go",
+      "symbol": "ValidateTransactionWithState blacklist checks",
+      "start_line": 248,
+      "end_line": 285,
+      "reach": "1-hop",
+      "why": "Txpool admission reads State.IsBlacklisted for from/to/feePayer; mempool behavior depends on the bit."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "engine signer blacklist check",
+      "start_line": 376,
+      "end_line": 376,
+      "reach": "1-hop",
+      "why": "Consensus seal verification rejects blacklisted signer via state.IsBlacklisted; consensus safety depends on the bit."
+    },
+    {
+      "file": "systemcontracts/gov_council.go",
+      "symbol": "initializeGovCouncil (blacklist spec: isSet=types.IsBlacklisted, setExtra=types.SetBlacklisted)",
+      "start_line": 83,
+      "end_line": 146,
+      "reach": "direct",
+      "why": "Genesis governance sync reads account.Extra with types.IsBlacklisted and writes it with types.SetBlacklisted to reconcile params vs alloc; bit-layout change reshapes genesis state and the gov-council storage set."
+    },
+    {
+      "file": "core/genesis.go",
+      "symbol": "genesis Extra apply + ValidateExtra",
+      "start_line": 142,
+      "end_line": 257,
+      "reach": "semantic",
+      "why": "Genesis writes account.Extra into StateDB and validates it; the blacklist bit is part of the persisted genesis account and the genesis hash."
+    },
+    {
+      "file": "trie/verkle.go",
+      "symbol": "VerkleTrie UpdateAccount / decode (ExtraLeafKey)",
+      "start_line": 110,
+      "end_line": 163,
+      "reach": "semantic",
+      "why": "Serializes acc.Extra little-endian into the verkle ExtraLeafKey and decodes it back; relies on the 64-bit Extra layout / bit positions without naming IsBlacklisted. A blacklist-bit move changes the stored/committed state."
+    },
+    {
+      "file": "core/types/state_account.go",
+      "symbol": "SlimAccount round-trip (Extra)",
+      "start_line": 60,
+      "end_line": 104,
+      "reach": "semantic",
+      "why": "Carries Extra through slim/full account conversion used by snapshots; depends on Extra being a uint64 bitfield."
+    },
+    {
+      "file": "core/types/gen_account_rlp.go",
+      "symbol": "StateAccount RLP encode (Extra)",
+      "start_line": 19,
+      "end_line": 22,
+      "reach": "semantic",
+      "why": "RLP encodes Extra as a uint64; the on-disk/consensus account encoding embeds the blacklist bit. Bit-layout changes alter encoded account bytes / state root."
+    },
+    {
+      "file": "internal/ethapi/api.go",
+      "symbol": "GetAccount Extra exposure / state override SetExtra",
+      "start_line": 830,
+      "end_line": 1053,
+      "reach": "semantic",
+      "why": "RPC surfaces statedb.GetExtra and applies SetExtra from overrides; external clients interpret the bitfield, so a layout change is an API-visible contract change."
+    },
+    {
+      "file": "eth/tracers/native/prestate.go",
+      "symbol": "prestate tracer Extra diff",
+      "start_line": 284,
+      "end_line": 361,
+      "reach": "semantic",
+      "why": "Tracer records pre/post Extra via GetExtra; diff output reflects the raw bitfield."
+    }
+  ],
+  "grep_would_miss": [
+    "trie/verkle.go ExtraLeafKey (de)serialization \u2014 never names IsBlacklisted/blacklist, only acc.Extra; pure bit-layout dependent.",
+    "core/types/gen_account_rlp.go RLP encoding of Extra \u2014 generated, references obj.Extra not the blacklist symbol.",
+    "core/types/state_account.go SlimAccount Extra round-trip \u2014 bitfield carrier, no blacklist keyword.",
+    "AccountExtraValidMask/ValidateExtra coupling \u2014 moving the bit can flip validity without any blacklist identifier appearing at the failing call site.",
+    "internal/ethapi GetAccount Extra exposure \u2014 API contract on the raw uint64."
+  ],
+  "notes": "Seed is the core/types.IsBlacklisted(uint64) bit reader (NOT systemcontracts.IsBlacklisted, which is a separate storage-set query and excluded). Real risk is semantic: the blacklist bit is a serialized part of StateAccount.Extra that flows through verkle/RLP/slim encoding and the genesis hash, plus the AccountExtraValidMask validity invariant. Test files (gov_council_test, account_manager_query_test) excluded except where they assert the encoding contract."
+}

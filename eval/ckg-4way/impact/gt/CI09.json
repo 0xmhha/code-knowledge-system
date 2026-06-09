@@ -1,0 +1,125 @@
+{
+  "id": "CI09",
+  "seed": "consensus/wbft/config.go:CreateInitialExtraData",
+  "change": "you change the WBFT extra-data encoding/layout (WBFTExtra struct fields / RLP order)",
+  "impact": [
+    {
+      "file": "core/types/istanbul.go",
+      "symbol": "WBFTExtra.EncodeRLP",
+      "start_line": 106,
+      "end_line": 119,
+      "reach": "direct",
+      "why": "Encode counterpart: serializes the WBFTExtra field list in fixed order; must match any layout/field change."
+    },
+    {
+      "file": "core/types/istanbul.go",
+      "symbol": "WBFTExtra.DecodeRLP",
+      "start_line": 122,
+      "end_line": 149,
+      "reach": "direct",
+      "why": "Decode counterpart: anonymous struct field order + rlp:\"nil\" tags must mirror the encoded layout exactly."
+    },
+    {
+      "file": "core/types/istanbul.go",
+      "symbol": "EpochInfo.EncodeRLP/DecodeRLP",
+      "start_line": 205,
+      "end_line": 225,
+      "reach": "direct",
+      "why": "WBFTExtra.EpochInfo is a nested RLP element; changing the epoch sub-layout changes the extra-data layout."
+    },
+    {
+      "file": "core/types/istanbul.go",
+      "symbol": "Candidate.EncodeRLP/DecodeRLP",
+      "start_line": 228,
+      "end_line": 246,
+      "reach": "direct",
+      "why": "Nested under EpochInfo.Candidates; part of the same RLP layout contract."
+    },
+    {
+      "file": "core/types/istanbul.go",
+      "symbol": "ExtractWBFTExtra",
+      "start_line": 251,
+      "end_line": 258,
+      "reach": "direct",
+      "why": "Canonical reader: rlp.DecodeBytes(h.Extra) into WBFTExtra; every header consumer funnels through it."
+    },
+    {
+      "file": "consensus/wbft/engine/apply_extra.go",
+      "symbol": "ApplyHeaderWBFTExtra/setExtra",
+      "start_line": 38,
+      "end_line": 50,
+      "reach": "direct",
+      "why": "Mutates and re-encodes WBFTExtra back into header.Extra during sealing/finalize; round-trips the layout."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "getExtra/setExtra",
+      "start_line": 1162,
+      "end_line": 1191,
+      "reach": "direct",
+      "why": "Constructs a zero-value WBFTExtra and rlp.EncodeToBytes; field set must track the struct."
+    },
+    {
+      "file": "consensus/wbft/engine/engine.go",
+      "symbol": "(multiple ExtractWBFTExtra consumers)",
+      "start_line": 301,
+      "end_line": 1439,
+      "reach": "transitive",
+      "why": "~9 sites (verifyHeader, seal, epoch, gasTip) read decoded WBFTExtra fields; semantics shift if fields move."
+    },
+    {
+      "file": "consensus/wbft/backend/engine.go",
+      "symbol": "(ExtractWBFTExtra consumers)",
+      "start_line": 350,
+      "end_line": 391,
+      "reach": "transitive",
+      "why": "Parent/header validation reads WBFTExtra seals; affected by layout/field changes."
+    },
+    {
+      "file": "consensus/wbft/backend/api.go",
+      "symbol": "(ExtractWBFTExtra consumers)",
+      "start_line": 302,
+      "end_line": 462,
+      "reach": "transitive",
+      "why": "RPC API surfaces decoded WBFTExtra; output/contract changes with layout."
+    },
+    {
+      "file": "core/types/block.go",
+      "symbol": "Header.GasTip",
+      "start_line": 111,
+      "end_line": 117,
+      "reach": "transitive",
+      "why": "Header consumer that decodes WBFTExtra to read GasTip; breaks if GasTip position/presence changes."
+    },
+    {
+      "file": "core/genesis.go",
+      "symbol": "genesis ExtraData producer",
+      "start_line": 247,
+      "end_line": 247,
+      "reach": "direct",
+      "why": "Genesis producer: calls CreateInitialExtraData to set genesis.ExtraData; the produced bytes must match the new layout."
+    },
+    {
+      "file": "core/chain_makers.go",
+      "symbol": "genesis ExtraData producer",
+      "start_line": 435,
+      "end_line": 435,
+      "reach": "direct",
+      "why": "Test/chain-maker genesis producer also emits encoded WBFTExtra via CreateInitialExtraData."
+    },
+    {
+      "file": "ethclient/simulated/wbft_backend.go",
+      "symbol": "sampleExtra producer",
+      "start_line": 103,
+      "end_line": 110,
+      "reach": "transitive",
+      "why": "Builds a &types.WBFTExtra literal and encodes it for the simulated backend genesis; field set must match."
+    }
+  ],
+  "grep_would_miss": [
+    "Header.GasTip in core/types/block.go \u2014 grep for 'CreateInitialExtraData' or 'WBFTExtra{' misses it; it only calls ExtractWBFTExtra.",
+    "The ~9 engine.go ExtractWBFTExtra read sites that depend on field positions \u2014 a grep for the seed name finds none of them.",
+    "EpochInfo/Candidate nested RLP codecs \u2014 coupled by RLP nesting, not by textual reference to WBFTExtra."
+  ],
+  "notes": "Seed CreateInitialExtraData (config.go:227) excluded as the definition. The true layout contract lives in istanbul.go Encode/DecodeRLP; CreateInitialExtraData is just one producer. cks find_callers/impact_analysis returned empty edges for these symbols, so the set was built from ripgrep (ExtractWBFTExtra callers + WBFTExtra producers) confirmed by Read."
+}
