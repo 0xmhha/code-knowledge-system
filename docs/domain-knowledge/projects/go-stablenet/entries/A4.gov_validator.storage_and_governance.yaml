@@ -1,0 +1,147 @@
+id: A4.gov_validator.storage_and_governance
+subsystem: A4
+knowledge_type: B2
+title: "GovValidator (0x1001): storage layout and validator-set governance"
+summary: |
+  GovValidator is the system contract at address 0x1001 that owns the
+  on-chain validator set. Its storage layout is defined by the
+  SLOT_VALIDATOR_* constants in systemcontracts/gov_validator.go, which
+  MUST mirror the slot annotations in solidity/v1/GovValidator.sol:
+  blsPoP precompile address (0x32), the __validators EnumerableSet.AddressSet
+  (value slot 0x33 + length, index mapping at 0x34), validatorToOperator
+  (0x35), operatorToValidator (0x36), validatorToBlsKey (0x37),
+  blsKeyToValidator (0x38) and gasTip (0x39). Slots 0x0..0x31 are reserved
+  for the inherited GovBase. initializeValidator seeds all of these at
+  genesis from systemContracts.govValidator.params (members, validators,
+  blsPublicKeys, optional gasTip), keeping the validators array, the
+  operator<->validator mappings and the BLS-key mappings index-aligned per
+  member. Mutating the set at runtime goes through GovBase's m-of-n
+  governance: an active member calls configureValidator (direct, gated by
+  onlyActiveMember) for its own slot, while quorum changes go through
+  proposeChangeQuorum / proposeAddMember / proposeRemoveMember +
+  approveProposal, which auto-executes once approvals reach the snapshotted
+  quorum (requiredApprovals).
+code_anchors:
+  - file: systemcontracts/gov_validator.go
+    symbol: SLOT_VALIDATOR_validators
+    line: 35
+    reason: "SLOT_VALIDATOR_* const block (0x32 blsPop .. 0x39 gasTip) defining the exact storage layout that must match the Solidity contract"
+  - file: systemcontracts/gov_validator.go
+    symbol: initializeValidator
+    line: 52
+    reason: "genesis initializer: seeds blsPoP, gasTip, validators array + length, validator<->operator and validator<->BLS-key mappings from govValidator.params"
+  - file: systemcontracts/gov_validator.go
+    symbol: ValidatorList
+    line: 203
+    reason: "storage read helper: reads the __validators EnumerableSet at SLOT_VALIDATOR_validators back out as []common.Address"
+  - file: systemcontracts/gov_validator.go
+    symbol: GetBLSPublicKey
+    line: 208
+    reason: "storage read helper: reads validatorToBlsKey mapping (0x37) for a validator address"
+  - file: systemcontracts/gov_validator.go
+    symbol: GetGasTip
+    line: 212
+    reason: "storage read helper: reads gasTip slot (0x39)"
+  - file: systemcontracts/stateutil.go
+    symbol: CalculateMappingSlot
+    line: 31
+    reason: "slot-derivation helper used by initializeValidator to compute mapping slots; keeps Go writes consistent with Solidity slot math"
+  - file: systemcontracts/solidity/v1/GovValidator.sol
+    symbol: GovValidator
+    reason: "Solidity storage layout with per-field slot annotations (0x32 blsPoP .. 0x39 gasTip) that the Go SLOT_VALIDATOR_* constants must mirror exactly"
+  - file: systemcontracts/solidity/v1/GovValidator.sol
+    symbol: configureValidator
+    reason: "runtime path for an active member to (re)register its own validator address + BLS key, gated by onlyActiveMember"
+  - file: systemcontracts/solidity/abstracts/GovBase.sol
+    symbol: approveProposal
+    line: 262
+    reason: "governance approval entry point; auto-executes when approvals reach the snapshotted quorum (requiredApprovals)"
+  - file: systemcontracts/solidity/abstracts/GovBase.sol
+    symbol: proposeChangeQuorum
+    line: 407
+    reason: "propose path for changing the m-of-n quorum that governs validator-set / governance changes"
+  - file: systemcontracts/contracts.go
+    symbol: GovValidatorContractV1
+    line: 38
+    reason: "go:embed of compiled v1 bytecode at artifacts/v1/GovValidator; CONTRACT_GOV_VALIDATOR registers it for version v1"
+code_keywords:
+  - GovValidator
+  - SLOT_VALIDATOR_validators
+  - SLOT_VALIDATOR_blsPop
+  - SLOT_VALIDATOR_validatorToOperator
+  - SLOT_VALIDATOR_operatorToValidator
+  - SLOT_VALIDATOR_validatorToBlsKey
+  - SLOT_VALIDATOR_blsKeyToValidator
+  - SLOT_VALIDATOR_gasTip
+  - initializeValidator
+  - configureValidator
+  - approveProposal
+  - proposeChangeQuorum
+  - GOV_VALIDATOR_PARAM_VALIDATORS
+  - GOV_VALIDATOR_PARAM_BLS_KEYS
+korean_aliases:
+  - "거브 밸리데이터"
+  - "밸리데이터 거버넌스 컨트랙트"
+  - "밸리데이터 셋 스토리지 레이아웃"
+  - "정족수 변경"
+  - "BLS 공개키 매핑"
+english_aliases:
+  - "validator governance contract"
+  - "validator set storage layout"
+  - "0x1001 contract"
+  - "validator slot constants"
+  - "quorum change governance"
+related_concepts:
+  - A4.system_contracts.addresses
+  - A4.system_contracts.gov_minter
+  - A3.validator_set.epoch_transition
+  - A8.genesis.inject_contracts_two_phase
+existing_doc_ref:
+  - file: .claude/docs/system-contract-flow.md
+invariants:
+  - "Slots 0x0..0x31 are reserved for the inherited GovBase; GovValidator's own fields start at 0x32 (blsPoP)."
+  - "The validators array and the per-validator BLS keys are kept index-aligned: initializeValidator writes validator i, its operator/member mapping, and blsKeys[i] in the same loop iteration."
+  - "validatorToOperator and operatorToValidator are maintained as inverse mappings; likewise validatorToBlsKey and blsKeyToValidator. Adding/removing a validator must update both directions."
+  - "len(members) == len(validators) == len(blsPublicKeys) is enforced by initializeValidator; mismatched genesis params error out."
+  - "The Go SLOT_VALIDATOR_* constants must byte-for-byte match the Solidity slot annotations in GovValidator.sol; the file header explicitly warns that changing them requires updating the contract."
+  - "Validator-set / quorum changes only take effect once approveProposal reaches the snapshotted requiredApprovals (m-of-n quorum)."
+pitfalls:
+  - "Changing a SLOT_VALIDATOR_* constant (or the Solidity field order) without migrating existing storage and reindexing every reader (ValidatorList, GetBLSPublicKey, GetGasTip and the EnumerableSet helpers) silently corrupts validator-set reads. Cross-reference A3.validator_set.epoch_transition, which consumes ValidatorList."
+  - "__validators is an EnumerableSet: value slot 0x33 holds the length and the array elements, while its index mapping lives at the next slot (0x34, derived via IncrementHash). Treating 0x33 as a plain array without the 0x34 index slot breaks membership/removal."
+  - "blsKeyToValidator is keyed by raw bytes (variable-length); initializeValidator uses a blsWrapper to feed the key bytes into CalculateMappingSlot. Hashing the wrong representation (e.g. padded hash vs raw bytes) yields a wrong slot."
+  - "initializeValidator only runs for Version == v1 (genesis params path); upgrades to a later version must not re-run initialization or they would overwrite existing storage."
+  - "gasTip defaults to params.InitialGasTip when govValidator.params.gasTip is absent; do not assume zero."
+constants:
+  - name: SLOT_VALIDATOR_blsPop
+    value: "0x32"
+    source_file: systemcontracts/gov_validator.go
+  - name: SLOT_VALIDATOR_validators
+    value: "0x33"
+    source_file: systemcontracts/gov_validator.go
+  - name: SLOT_VALIDATOR_validatorToOperator
+    value: "0x35"
+    source_file: systemcontracts/gov_validator.go
+  - name: SLOT_VALIDATOR_operatorToValidator
+    value: "0x36"
+    source_file: systemcontracts/gov_validator.go
+  - name: SLOT_VALIDATOR_validatorToBlsKey
+    value: "0x37"
+    source_file: systemcontracts/gov_validator.go
+  - name: SLOT_VALIDATOR_blsKeyToValidator
+    value: "0x38"
+    source_file: systemcontracts/gov_validator.go
+  - name: SLOT_VALIDATOR_gasTip
+    value: "0x39"
+    source_file: systemcontracts/gov_validator.go
+  - name: BLS_PUBLIC_KEY_LENGTH
+    value: 48
+    unit: bytes
+    source_file: systemcontracts/solidity/v1/GovValidator.sol
+  - name: BLS_SIGNATURE_LENGTH
+    value: 96
+    unit: bytes
+    source_file: systemcontracts/solidity/v1/GovValidator.sol
+risk_level: high
+source_of_truth: code
+status: needs_verification
+priority: P0
