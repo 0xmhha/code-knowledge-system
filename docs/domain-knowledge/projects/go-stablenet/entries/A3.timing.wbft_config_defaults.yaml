@@ -26,7 +26,7 @@ summary: |
 code_anchors:
   - file: params/config_wbft.go
     symbol: WBFTConfig
-    line: 187
+    line: 186
     reason: "chain-config struct; RequestTimeoutSeconds is seconds despite the line-187 'milliseconds' comment"
   - file: params/config_wbft.go
     symbol: DefaultAnzeonConfig
@@ -34,11 +34,11 @@ code_anchors:
     reason: "Anzeon defaults RequestTimeoutSeconds=2 / BlockPeriodSeconds=1 / EpochLength=10"
   - file: consensus/wbft/config.go
     symbol: DefaultConfig
-    line: 117
+    line: 116
     reason: "engine-layer default RequestTimeout=1000 (milliseconds) -- a separate fallback default"
   - file: consensus/wbft/config.go
     symbol: "Config.GetConfig"
-    line: 167
+    line: 161
     reason: "sec->ms bridge: RequestTimeout = RequestTimeoutSeconds * 1000"
 
 constants:

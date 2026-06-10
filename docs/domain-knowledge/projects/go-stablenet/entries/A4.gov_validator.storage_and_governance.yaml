@@ -24,7 +24,7 @@ summary: |
 code_anchors:
   - file: systemcontracts/gov_validator.go
     symbol: SLOT_VALIDATOR_validators
-    line: 35
+    line: 36
     reason: "SLOT_VALIDATOR_* const block (0x32 blsPop .. 0x39 gasTip) defining the exact storage layout that must match the Solidity contract"
   - file: systemcontracts/gov_validator.go
     symbol: initializeValidator
