@@ -37,11 +37,11 @@ summary: 'Classical BFT (Castro–Liskov PBFT, QBFT) proves SAFETY under up to F
 code_anchors:
   - file: consensus/wbft/validator/default.go
     symbol: defaultSet.F
-    line: 226
+    line: 222
     reason: F = (N−1)/3 as float64 — the byzantine bound
   - file: consensus/wbft/validator/default.go
     symbol: defaultSet.QuorumSize
-    line: 230
+    line: 226
     reason: Q = ceil(N − F) — the intersection-safe quorum
   - file: consensus/wbft/core/prepare.go
     symbol: Core.handlePrepareMsg
@@ -78,5 +78,5 @@ risk_level: high
 source_of_truth: paper
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

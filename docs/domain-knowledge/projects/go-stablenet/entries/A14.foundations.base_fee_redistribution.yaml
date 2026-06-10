@@ -23,7 +23,7 @@ summary: |
 code_anchors:
   - file: consensus/wbft/backend/engine.go
     symbol: Backend.Finalize
-    line: 180
+    line: 174
     reason: "Finalize entry point — delegates to Engine().Finalize(); base-fee redistribution lives in that path (StableNet diverges from EIP-1559 burn here)"
   - file: params/config.go
     line: 100
@@ -58,5 +58,5 @@ risk_level: high
 source_of_truth: code
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

@@ -39,7 +39,7 @@ summary: 'Under WBFT consensus a Commit-quorum block is FINAL the moment it is
 code_anchors:
   - file: core/blockchain.go
     symbol: BlockChain.forker
-    line: 265
+    line: 260
     reason: forker field — present but inert under WBFT instant finality
   - file: core/blockchain.go
     line: 1459
@@ -82,5 +82,5 @@ risk_level: high
 source_of_truth: code
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

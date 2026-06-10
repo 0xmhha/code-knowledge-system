@@ -39,15 +39,15 @@ summary: 'WBFT consensus seals are BLS aggregate signatures. The data structure
 code_anchors:
   - file: core/types/istanbul.go
     symbol: WBFTAggregatedSeal
-    line: 58
+    line: 52
     reason: Aggregate seal struct — Sealers (bitpack) + Signature ([96]byte BLS)
   - file: core/types/istanbul.go
     symbol: WBFTExtra
-    line: 87
+    line: 81
     reason: Block-header extradata — embeds PrevPreparedSeal + PrevCommittedSeal
   - file: core/types/istanbul.go
     symbol: WBFTExtra.PrevCommittedSeal
-    line: 92
+    line: 86
     reason: Previous block's commit attestation — verified during block insert
 code_keywords:
   - WBFTAggregatedSeal
@@ -84,5 +84,5 @@ risk_level: high
 source_of_truth: code
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

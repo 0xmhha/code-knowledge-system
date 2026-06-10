@@ -33,15 +33,15 @@ summary: 'go-stablenet is PoA with equal-weight validators: every validator''s
 code_anchors:
   - file: consensus/wbft/validator/default.go
     symbol: defaultValidator
-    line: 36
+    line: 32
     reason: Validator struct — Address + BLSPublicKey only; no Power/Weight/Stake field
   - file: consensus/wbft/validator/default.go
     symbol: defaultSet
-    line: 65
+    line: 61
     reason: Validator set struct — list + policy; no stake aggregation
   - file: consensus/wbft/validator/default.go
     symbol: defaultSet.QuorumSize
-    line: 230
+    line: 226
     reason: Quorum computed by count via ceil(N − F), not by stake
 code_keywords:
   - defaultValidator
@@ -76,5 +76,5 @@ risk_level: high
 source_of_truth: code
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

@@ -32,7 +32,7 @@ summary: 'The WBFT consensus engine drives one block per height through four
 code_anchors:
   - file: consensus/wbft/core/core.go
     symbol: Core.startNewRound
-    line: 167
+    line: 161
     reason: entry point for each new round/sequence — orchestrates state transitions
   - file: consensus/wbft/core/handler.go
     reason: event loop, message routing into handle{Preprepare,Prepare,Commit,RoundChange}Msg
@@ -91,5 +91,5 @@ risk_level: low
 source_of_truth: code+docs
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha
