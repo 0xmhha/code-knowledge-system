@@ -38,8 +38,8 @@ all: build
 help:
 	@echo "Build:"
 	@echo "  build         go build ./..."
-	@echo "  build-bins    build cks-mcp, cks-agent, cks-eval,"
-	@echo "                cks-glossary-gen, cks-inventory-check, cks-entry-verify into ./bin/"
+	@echo "  build-bins    build cks-mcp, cks-agent, cks-eval, cks-glossary-gen,"
+	@echo "                cks-inventory-check, cks-entry-verify, cks-anchor-refresh into ./bin/"
 	@echo ""
 	@echo "Quality:"
 	@echo "  test          go test -race ./..."
@@ -80,6 +80,7 @@ build-bins:
 	$(GO) build -o $(BIN_DIR)/cks-glossary-gen    ./cmd/cks-glossary-gen
 	$(GO) build -o $(BIN_DIR)/cks-inventory-check ./cmd/cks-inventory-check
 	$(GO) build -o $(BIN_DIR)/cks-entry-verify    ./cmd/cks-entry-verify
+	$(GO) build -o $(BIN_DIR)/cks-anchor-refresh  ./cmd/cks-anchor-refresh
 
 test:
 	$(GO) test -race ./...

@@ -47,7 +47,7 @@ summary: 'In PBFT/QBFT/WBFT, a PRE-PREPARE proposed in round r > 0 MUST carry
 code_anchors:
   - file: consensus/wbft/core/preprepare.go
     symbol: Core.handlePreprepareMsg
-    line: 114
+    line: 115
     reason: isJustified() — the safety-critical justification check
   - file: consensus/wbft/core/preprepare.go
     line: 69

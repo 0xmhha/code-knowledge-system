@@ -54,7 +54,7 @@ code_anchors:
     reason: Signature verification — equivocation detection precondition
   - file: consensus/wbft/core/preprepare.go
     symbol: Core.handlePreprepareMsg
-    line: 114
+    line: 115
     reason: Justification check; per-sender dedup in JustificationPrepares set
 code_keywords:
   - equivocation
