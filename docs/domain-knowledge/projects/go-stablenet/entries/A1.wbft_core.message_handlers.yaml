@@ -13,7 +13,7 @@ summary: |
 code_anchors:
   - file: consensus/wbft/core/preprepare.go
     symbol: "Core.handlePreprepareMsg"
-    line: 113
+    line: 114
     reason: "validates proposer signature and block, transitions to StatePreprepared"
   - file: consensus/wbft/core/prepare.go
     symbol: "Core.handlePrepareMsg"
@@ -59,5 +59,5 @@ risk_level: low
 source_of_truth: code
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

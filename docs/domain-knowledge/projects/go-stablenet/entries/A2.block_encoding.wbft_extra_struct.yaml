@@ -30,23 +30,23 @@ summary: 'WBFTExtra is the RLP-encoded payload that lives inside every WBFT
 code_anchors:
   - file: core/types/istanbul.go
     symbol: WBFTExtra
-    line: 87
+    line: 81
     reason: main struct definition
   - file: core/types/istanbul.go
     symbol: WBFTAggregatedSeal
-    line: 58
+    line: 52
     reason: PreparedSeal / CommittedSeal payload (BLS aggregate)
   - file: core/types/istanbul.go
     symbol: SealerSet
-    line: 296
+    line: 290
     reason: bit-packed bitmap; SetSealer / IsSealer / GetSealers helpers
   - file: core/types/istanbul.go
     symbol: EpochInfo
-    line: 105
+    line: 99
     reason: next-epoch validator manifest
   - file: core/types/istanbul.go
     symbol: Candidate
-    line: 100
+    line: 94
     reason: '{Addr, Diligence} entry referenced by EpochInfo.Validators indices'
   - file: core/types/istanbul.go
     symbol: IstanbulExtraVanity
@@ -111,5 +111,5 @@ risk_level: low
 source_of_truth: code
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

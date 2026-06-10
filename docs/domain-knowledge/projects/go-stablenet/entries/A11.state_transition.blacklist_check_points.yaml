@@ -16,7 +16,7 @@ summary: |
 code_anchors:
   - file: core/state_transition.go
     symbol: "StateTransition.TransitionDb"
-    line: 504
+    line: 505
     reason: "check ①: Sender (msg.From) blacklist — ErrBlacklistedAccount returned"
   - file: core/state_transition.go
     symbol: "StateTransition.TransitionDb"
@@ -83,5 +83,5 @@ source_of_truth: "code+docs"
 status: verified
 priority: P0
 
-last_verified_at: "2026-06-05"
+last_verified_at: "2026-06-09"
 verified_by: "domain-curation @code_commit 9978930ba (anchors: core/state_transition.go:504,509,577; core/vm/evm.go:213,217,480)"

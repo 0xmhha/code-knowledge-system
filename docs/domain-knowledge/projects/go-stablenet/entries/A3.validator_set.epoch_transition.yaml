@@ -24,20 +24,21 @@ summary: 'go-stablenet''s validator set is fixed for the duration of an epoch
 
 '
 code_anchors:
-  - file: consensus/wbft/backend/engine.go
-    symbol: Backend.GetValidators
-    line: 130
+  - file: consensus/wbft/engine/engine.go
+    symbol: Engine.GetValidators
+    line: 1097
     reason: primary validator lookup at a given header
   - file: consensus/wbft/backend/engine.go
     symbol: Backend.GetValidatorsForVerifying
-    line: 426
+    line: 420
     reason: returns (current, previous) sets for cross-epoch boundary verification
   - file: core/types/istanbul.go
     symbol: EpochInfo
-    line: 105
+    line: 99
     reason: the manifest written into the last block of each epoch
   - file: params/config_wbft.go
-    symbol: WBFTConfig.Epoch
+    symbol: WBFTConfig.EpochLength
+    line: 189
     reason: epoch length parameter (Mainnet 10, Testnet 140)
   - file: systemcontracts/gov_validator.go
     reason: GovValidator contract (0x1001) — source of truth for next-epoch candidates
@@ -85,5 +86,5 @@ risk_level: low
 source_of_truth: code+docs
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

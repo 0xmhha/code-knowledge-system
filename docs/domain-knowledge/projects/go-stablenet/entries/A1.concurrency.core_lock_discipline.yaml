@@ -35,9 +35,9 @@ code_anchors:
   - file: consensus/wbft/core/core.go
     line: 162
     reason: "Example write region: Lock → mutate c.current → Unlock"
-  - file: consensus/wbft/core/core.go
+  - file: consensus/wbft/core/priorstate.go
     symbol: priorState
-    line: 72
+    line: 28
     reason: "priorState carries its own RWMutex — separate from currentMutex, NOT a substitute"
 code_keywords:
   - currentMutex
@@ -71,5 +71,5 @@ risk_level: high
 source_of_truth: code
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

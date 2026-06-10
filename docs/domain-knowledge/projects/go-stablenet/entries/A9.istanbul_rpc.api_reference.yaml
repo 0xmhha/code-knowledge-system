@@ -29,7 +29,7 @@ code_anchors:
     line: 156
   - file: consensus/wbft/backend/api.go
     symbol: "API.Status"
-    line: 168
+    line: 169
     reason: "validator activity statistics over a range"
   - file: consensus/wbft/backend/api.go
     symbol: BlockSigners
@@ -85,5 +85,5 @@ risk_level: low
 source_of_truth: code
 status: verified
 priority: P1
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

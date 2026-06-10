@@ -1,0 +1,92 @@
+id: A1.testing.consensus_change_validation
+subsystem: A1
+knowledge_type: B6
+title: "Validating a WBFT consensus or state change before merge"
+summary: |
+  Procedure a reviewer or implementer follows to validate any change to
+  WBFT consensus or state transition so it does not silently break safety
+  or liveness. Run the Go unit tests for the touched package; run them
+  under the race detector (go test -race) whenever Core.current,
+  round-state, or locks are touched (see A1.concurrency.core_lock_discipline);
+  assert consensus health (round-0 finalization rate, quorum = ceil(N-F),
+  no fork/stall) via the istanbul RPC namespace (API.Status / GetValidators);
+  and finally run an integration/regression network test. The external
+  chainbench harness provides a b-wbft regression suite that boots a
+  multi-node WBFT network on the built gstable binary — chainbench is a
+  SEPARATE repo, so it appears only in prose, not as a code anchor. Mind
+  the regression-account funding gotcha: the default profile funds only
+  the validators plus one endpoint account.
+code_anchors:
+  - file: consensus/wbft/core/justification_test.go
+    symbol: TestJustifyTrue
+    line: 40
+    reason: "representative WBFT core consensus unit test; exercises round-change justification across quorum sizes 3..10 — run `go test ./consensus/wbft/core/...` when touching core consensus logic (step 1)"
+  - file: consensus/wbft/validator/default.go
+    symbol: "defaultSet.QuorumSize"
+    line: 226
+    reason: "quorum = ceil(N - F) — the value health assertion must match when checking finalization (step 3); cross-ref A1.wbft_core.quorum_calc"
+  - file: consensus/wbft/validator/default.go
+    symbol: "defaultSet.F"
+    line: 222
+    reason: "F = (N-1)/3 fault bound used by QuorumSize; defines the safety margin a change must not violate (step 3)"
+  - file: consensus/wbft/backend/api.go
+    symbol: "API.Status"
+    line: 169
+    reason: "istanbul RPC Status method returning RoundStats.RoundDistribution / TotalRounds and sealer activity — used to assert round-0 finalization rate and no-stall after a change (step 3)"
+  - file: consensus/wbft/backend/api.go
+    symbol: "API.GetValidators"
+    line: 136
+    reason: "istanbul RPC GetValidators — used with QuorumSize to confirm the active validator set and quorum during health assertion (step 3)"
+  - file: consensus/wbft/backend/engine.go
+    symbol: "Namespace: \"istanbul\""
+    line: 234
+    reason: "registers the istanbul RPC namespace exposing Status/GetValidators; this is the namespace reached for health assertion over RPC (step 3)"
+procedure_steps:
+  - "Step 1 — Unit tests: run the Go unit tests for every package you touched, e.g. `go test ./consensus/wbft/core/...`, `./consensus/wbft/backend/...`, `./consensus/wbft/validator/...`. justification_test.go (TestJustifyTrue/False) is the representative core consensus suite covering round-change justification."
+  - "Step 2 — Race detector: whenever the change touches Core.current, round-state, or any lock, re-run the touched package with `go test -race ./consensus/wbft/core/...`. This is mandatory, not optional — cross-reference the lock-discipline invariant (A1.concurrency.core_lock_discipline)."
+  - "Step 3 — Health assertion: boot a node (or use an existing network) and query the istanbul RPC namespace. Use istanbul.status (API.Status) to read RoundStats.RoundDistribution and confirm a high round-0 finalization rate with no stall; use istanbul.getValidators (API.GetValidators) and compare against QuorumSize = ceil(N - F) to confirm quorum and no fork."
+  - "Step 4 — Integration/regression: build the gstable binary and run the external chainbench b-wbft regression suite, which boots a multi-node WBFT network on that binary and replays consensus scenarios. NOTE: chainbench lives in a SEPARATE repository; reference it by name/procedure only."
+  - "Step 5 — Funding gotcha: when running the chainbench b-wbft regression, remember the default profile funds only the validator accounts plus one endpoint account. Any regression scenario that sends from other accounts must explicitly fund them first, or it will fail with insufficient-balance rather than a real consensus fault."
+code_keywords:
+  - "go test -race"
+  - QuorumSize
+  - "defaultSet.F"
+  - "API.Status"
+  - GetValidators
+  - RoundDistribution
+  - istanbul
+  - "c.current"
+  - b-wbft
+  - chainbench
+korean_aliases:
+  - "합의 변경 검증"
+  - "WBFT 변경 검증 절차"
+  - "레이스 디텍터 테스트"
+  - "합의 헬스 체크"
+  - "리그레션 네트워크 테스트"
+english_aliases:
+  - "validate consensus change"
+  - "WBFT change checklist"
+  - "race detector consensus test"
+  - "consensus health assertion"
+  - "wbft regression suite"
+invariants:
+  - "Any change touching c.current, round-state, or consensus locks must pass `go test -race` on the touched package before merge."
+  - "After the change, observed quorum behaviour must match QuorumSize = ceil(N - F); a finalization that succeeds with fewer commits indicates a broken safety bound."
+  - "Round-0 finalization rate must not regress and no fork/stall may appear in istanbul.status RoundDistribution after the change."
+pitfalls:
+  - "Relying on unit tests alone for a consensus change: low-contention unit tests rarely interleave the goroutines that expose a race in c.current — only `go test -race` and a multi-node network surface it."
+  - "Skipping the integration/regression network test because unit tests are green: safety/liveness bugs (forks, stalls) only manifest with multiple nodes and adversarial timing under chainbench."
+  - "Default chainbench profile funds only validators + one endpoint account; a regression that appears to fail on consensus may actually be an unfunded-account error — fund extra accounts explicitly."
+related_concepts:
+  - A1.concurrency.core_lock_discipline
+  - A1.wbft_core.quorum_calc
+  - A1.wbft_core.round_change_protocol
+  - A14.theory.3f1_intersection
+existing_doc_ref:
+  - file: .claude/docs/dev-basics.md
+  - file: .claude/docs/review-guide.md
+risk_level: high
+source_of_truth: "code+docs"
+status: needs_verification
+priority: P0

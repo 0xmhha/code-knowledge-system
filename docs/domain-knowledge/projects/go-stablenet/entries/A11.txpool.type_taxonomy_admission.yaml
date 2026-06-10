@@ -1,0 +1,138 @@
+id: A11.txpool.type_taxonomy_admission
+subsystem: A11
+knowledge_type: B1
+title: "Transaction type taxonomy and txpool admission fork gates"
+summary: |
+  StableNet inherits geth's typed-transaction envelope and adds one
+  proprietary type. The full taxonomy (core/types/transaction.go) is:
+  LegacyTxType 0x00, AccessListTxType 0x01, DynamicFeeTxType 0x02,
+  BlobTxType 0x03, SetCodeTxType 0x04, and StableNet's
+  FeeDelegateDynamicFeeTxType 0x16 (decimal 22) for fee-delegated txs.
+
+  Pool admission runs through txpool.ValidateTransaction (core/txpool/
+  validation.go). After a per-pool capability check (opts.Accept bitmask)
+  and a size check, each non-legacy type is gated behind a fork
+  activation, in this source order: any non-legacy type requires Berlin;
+  DynamicFee additionally requires London; FeeDelegateDynamicFee requires
+  Applepie (StableNet's fee-delegation fork); Blob requires Cancun;
+  SetCode requires Anzeon (checked via AnzeonEnabled(), a global enable
+  rather than a block-number gate). A type whose fork is not yet active
+  is rejected with core.ErrTxTypeNotSupported before any signature or
+  state work.
+
+  After the common gas/fee/sender checks, fee-delegated txs get an extra
+  admission gate: the tx must carry a FeePayer address, and the fee-payer
+  signature is recovered via types.FeePayer(NewFeeDelegateSigner(chainID),
+  tx); if recovery fails or the recovered address does not equal the
+  declared FeePayer, the tx is rejected with ErrInvalidFeePayer. This is
+  the stateless half; the stateful fee-payer balance check lives later in
+  ValidateTransactionWithState (ErrFeePayerInsufficientFunds).
+code_anchors:
+  - file: core/types/transaction.go
+    symbol: LegacyTxType
+    line: 48
+    reason: "the transaction type taxonomy constants 0x00..0x04 plus StableNet's FeeDelegateDynamicFeeTxType 0x16"
+  - file: core/types/tx_fee_delegation.go
+    symbol: FeeDelegateDynamicFeeTx
+    line: 27
+    reason: "StableNet-only fee-delegated tx struct: wraps DynamicFeeTx and adds FeePayer + FV/FR/FS feePayer signature"
+  - file: core/types/tx_fee_delegation.go
+    symbol: "(*FeeDelegateDynamicFeeTx).txType"
+    line: 116
+    reason: "binds the FeeDelegateDynamicFeeTx struct to type byte 0x16"
+  - file: core/types/tx_setcode.go
+    symbol: "(*SetCodeTx).txType"
+    line: 186
+    reason: "binds the SetCodeTx struct to type byte 0x04 (gated behind Anzeon in the pool)"
+  - file: core/txpool/validation.go
+    symbol: ValidateTransaction
+    line: 55
+    reason: "the stateless pool-admission entry point that applies the per-type fork gates and the fee-payer recovery check"
+  - file: core/txpool/validation.go
+    symbol: "ValidateTransaction (Berlin gate)"
+    line: 66
+    reason: "any non-legacy tx type is rejected until Berlin is active"
+  - file: core/txpool/validation.go
+    symbol: "ValidateTransaction (London gate)"
+    line: 69
+    reason: "DynamicFeeTxType is rejected until London is active"
+  - file: core/txpool/validation.go
+    symbol: "ValidateTransaction (Applepie gate)"
+    line: 72
+    reason: "FeeDelegateDynamicFeeTxType is rejected until Applepie (StableNet fee-delegation fork) is active"
+  - file: core/txpool/validation.go
+    symbol: "ValidateTransaction (Cancun gate)"
+    line: 75
+    reason: "BlobTxType is rejected until Cancun is active"
+  - file: core/txpool/validation.go
+    symbol: "ValidateTransaction (Anzeon gate)"
+    line: 78
+    reason: "SetCodeTxType is rejected unless AnzeonEnabled() (a global enable, not a block-number gate)"
+  - file: core/txpool/validation.go
+    symbol: "ValidateTransaction (fee-payer recovery)"
+    line: 133
+    reason: "fee-delegated tx must declare a FeePayer and the recovered fee-payer signer must equal it, else ErrInvalidFeePayer"
+  - file: core/txpool/errors.go
+    symbol: ErrInvalidFeePayer
+    line: 69
+    reason: "the error returned when the fee-payer is nil or the recovered fee-payer signature does not match the declared FeePayer"
+  - file: core/types/transaction_signing.go
+    symbol: FeePayer
+    line: 161
+    reason: "recovers the fee-payer address from the FV/FR/FS signature; used by the pool admission fee-payer check"
+  - file: params/config.go
+    symbol: "(*ChainConfig).IsApplepie"
+    line: 1038
+    reason: "fork predicate gating FeeDelegateDynamicFee admission"
+  - file: params/config.go
+    symbol: "(*ChainConfig).AnzeonEnabled"
+    line: 1085
+    reason: "global Anzeon enable gating SetCode admission (note: not a block-number predicate)"
+code_keywords:
+  - ValidateTransaction
+  - ErrTxTypeNotSupported
+  - ErrInvalidFeePayer
+  - FeeDelegateDynamicFeeTxType
+  - SetCodeTxType
+  - BlobTxType
+  - DynamicFeeTxType
+  - IsBerlin
+  - IsLondon
+  - IsApplepie
+  - IsCancun
+  - AnzeonEnabled
+  - NewFeeDelegateSigner
+  - "opts.Accept"
+korean_aliases:
+  - "트랜잭션 타입 분류"
+  - "txpool 진입 검증"
+  - "타입별 포크 게이트"
+  - "수수료 위임 트랜잭션 검증"
+  - "feePayer 서명 검증"
+english_aliases:
+  - "transaction type taxonomy"
+  - "txpool admission gates"
+  - "per-type fork gating"
+  - "fee delegate tx validation"
+  - "fee payer signature recovery"
+invariants:
+  - "A non-legacy tx type is rejected from the pool until its activating fork is live (Berlin for any non-legacy, London for DynamicFee, Applepie for FeeDelegateDynamicFee, Cancun for Blob, Anzeon for SetCode)."
+  - "A pool only admits tx types whose bit is set in opts.Accept; otherwise ErrTxTypeNotSupported is returned before any other validation."
+  - "A FeeDelegateDynamicFee tx is admitted only if it declares a FeePayer and the signature-recovered fee-payer address equals that declared FeePayer, else ErrInvalidFeePayer."
+  - "Fork gating is purely stateless (block number / global enable); fee-payer balance sufficiency is checked separately in ValidateTransactionWithState."
+pitfalls:
+  - "Adding a new tx type constant in transaction.go without adding a matching fork gate in ValidateTransaction lets the type into the pool unconditionally, regardless of fork activation."
+  - "Anzeon is gated via AnzeonEnabled() (a global boolean), not via a block-number predicate like the other forks; copying the IsX(num) pattern for it is wrong."
+  - "The fee-payer check in ValidateTransaction is stateless signature recovery only; forgetting the corresponding ValidateTransactionWithState balance check would let an underfunded fee-payer tx be accepted."
+  - "FeeDelegateDynamicFeeTxType is 0x16 (decimal 22), not contiguous with the 0x00..0x04 range; off-by-one or range-based type handling will miss it."
+related_concepts:
+  - A6.fee_delegation.signing_model
+  - A6.anzeon_gas.tip_override
+  - A7.hardfork.add_new_fork_procedure
+  - A11.state_transition.blacklist_check_points
+existing_doc_ref:
+  - file: .claude/docs/stablenet-features.md
+risk_level: medium
+source_of_truth: code
+status: needs_verification
+priority: P0

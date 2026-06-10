@@ -43,14 +43,14 @@ summary: 'The FLP result (Fischer–Lynch–Paterson, 1985) proves no determinis
 code_anchors:
   - file: consensus/wbft/core/core.go
     symbol: Core.roundChangeTimer
-    line: 116
+    line: 110
     reason: Round-change timer field — instantiates partial-synchrony assumption
   - file: consensus/wbft/core/core.go
     line: 409
     reason: time.AfterFunc(timeout, ...) — the timer that fires the next round
   - file: consensus/wbft/validator/default.go
     symbol: defaultSet.QuorumSize
-    line: 230
+    line: 226
     reason: Safety floor that holds even when liveness is suspended
 code_keywords:
   - roundChangeTimer
@@ -83,5 +83,5 @@ risk_level: high
 source_of_truth: paper
 status: verified
 priority: P0
-last_verified_at: "2026-06-07"
+last_verified_at: "2026-06-09"
 verified_by: mhha

@@ -30,7 +30,7 @@ code_anchors:
     reason: "chain-config struct; RequestTimeoutSeconds is seconds despite the line-187 'milliseconds' comment"
   - file: params/config_wbft.go
     symbol: DefaultAnzeonConfig
-    line: 212
+    line: 210
     reason: "Anzeon defaults RequestTimeoutSeconds=2 / BlockPeriodSeconds=1 / EpochLength=10"
   - file: consensus/wbft/config.go
     symbol: DefaultConfig
@@ -96,5 +96,5 @@ source_of_truth: code
 status: verified
 priority: P1
 
-last_verified_at: "2026-06-05"
+last_verified_at: "2026-06-09"
 verified_by: "domain-curation @code_commit 9978930ba (anchors: config_wbft.go:187,212; consensus/wbft/config.go:117,167)"
