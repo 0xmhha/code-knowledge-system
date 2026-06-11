@@ -65,10 +65,10 @@ func TestRetrievalTrace_IsValid(t *testing.T) {
 	}
 
 	cases := map[string]func(*RetrievalTrace){
-		"empty prompt":    func(tr *RetrievalTrace) { tr.Prompt = "" },
-		"empty producer":  func(tr *RetrievalTrace) { tr.Producer = "" },
-		"no steps":        func(tr *RetrievalTrace) { tr.Steps = nil },
-		"bad step kind":   func(tr *RetrievalTrace) { tr.Steps[0].Kind = "ckg.bogus" },
+		"empty prompt":   func(tr *RetrievalTrace) { tr.Prompt = "" },
+		"empty producer": func(tr *RetrievalTrace) { tr.Producer = "" },
+		"no steps":       func(tr *RetrievalTrace) { tr.Steps = nil },
+		"bad step kind":  func(tr *RetrievalTrace) { tr.Steps[0].Kind = "ckg.bogus" },
 	}
 	for name, mutate := range cases {
 		tr := validTrace()
