@@ -23,25 +23,25 @@ const (
 // findSymbolResponse wraps the CKG citations + any dummy directives the
 // backend emitted on the way out.
 type findSymbolResponse struct {
-	Symbol       string                       `json:"symbol"`
-	Citations    []contract.Citation          `json:"citations"`
-	Instructions []contract.DummyInstruction  `json:"instructions,omitempty"`
+	Symbol       string                      `json:"symbol"`
+	Citations    []contract.Citation         `json:"citations"`
+	Instructions []contract.DummyInstruction `json:"instructions,omitempty"`
 }
 
 // graphNeighborsResponse is the wire shape for find_callers / find_callees.
 type graphNeighborsResponse struct {
-	Seed         contract.Citation            `json:"seed"`
-	Direction    string                       `json:"direction"` // "callers" | "callees"
-	Neighbors    []contract.Neighbor          `json:"neighbors"`
-	Instructions []contract.DummyInstruction  `json:"instructions,omitempty"`
+	Seed         contract.Citation           `json:"seed"`
+	Direction    string                      `json:"direction"` // "callers" | "callees"
+	Neighbors    []contract.Neighbor         `json:"neighbors"`
+	Instructions []contract.DummyInstruction `json:"instructions,omitempty"`
 }
 
 // subgraphResponse is the wire shape for get_subgraph.
 type subgraphResponse struct {
-	Seed         string                       `json:"seed"`
-	Nodes        []contract.Citation          `json:"nodes"`
-	Edges        []contract.Neighbor          `json:"edges"`
-	Instructions []contract.DummyInstruction  `json:"instructions,omitempty"`
+	Seed         string                      `json:"seed"`
+	Nodes        []contract.Citation         `json:"nodes"`
+	Edges        []contract.Neighbor         `json:"edges"`
+	Instructions []contract.DummyInstruction `json:"instructions,omitempty"`
 }
 
 // registerFindSymbol wires cks.context.find_symbol.
@@ -59,6 +59,7 @@ func registerFindSymbol(s *mcpserver.MCPServer, d Deps) {
 			mcpgo.Description("Comma-separated symbol kinds (e.g., \"function,method\").")),
 		mcpgo.WithString("path_glob",
 			mcpgo.Description("Restrict to file paths matching this glob.")),
+		withExcludeTests(),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleFindSymbol(ctx, d, req)
@@ -84,6 +85,9 @@ func handleFindSymbol(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*
 	if err != nil {
 		return mcpgo.NewToolResultErrorf("%s: %v", ToolNameFindSymbol, err), nil
 	}
+	if excludeTestsArg(req) {
+		citations = filterCitationsTests(citations)
+	}
 	return mcpgo.NewToolResultStructured(findSymbolResponse{
 		Symbol:       name,
 		Citations:    citations,
@@ -104,6 +108,7 @@ func registerFindCallers(s *mcpserver.MCPServer, d Deps) {
 			mcpgo.Description("Maximum traversal depth (default 1).")),
 		mcpgo.WithNumber("max_total",
 			mcpgo.Description("Cap on total neighbours (0 = no cap).")),
+		withExcludeTests(),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleFindRelatives(ctx, d, req, ToolNameFindCallers, "callers", []contract.Relation{contract.RelationCalledBy})
@@ -123,6 +128,7 @@ func registerFindCallees(s *mcpserver.MCPServer, d Deps) {
 			mcpgo.Description("Maximum traversal depth (default 1).")),
 		mcpgo.WithNumber("max_total",
 			mcpgo.Description("Cap on total neighbours (0 = no cap).")),
+		withExcludeTests(),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleFindRelatives(ctx, d, req, ToolNameFindCallees, "callees", []contract.Relation{contract.RelationCalls})
@@ -170,6 +176,9 @@ func handleFindRelatives(
 	if err != nil {
 		return mcpgo.NewToolResultErrorf("%s: %v", toolName, err), nil
 	}
+	if excludeTestsArg(req) {
+		neighbors = filterNeighborsByTarget(neighbors)
+	}
 	return mcpgo.NewToolResultStructured(graphNeighborsResponse{
 		Seed:         cits[0],
 		Direction:    direction,
@@ -192,6 +201,7 @@ func registerGetSubgraph(s *mcpserver.MCPServer, d Deps) {
 			mcpgo.Description("Maximum traversal depth (default 1).")),
 		mcpgo.WithNumber("max_total",
 			mcpgo.Description("Cap on total nodes (0 = no cap).")),
+		withExcludeTests(),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleGetSubgraph(ctx, d, req)
@@ -214,6 +224,10 @@ func handleGetSubgraph(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (
 	nodes, edges, err := d.CKG.GetSubgraph(ctx, symbol, opts)
 	if err != nil {
 		return mcpgo.NewToolResultErrorf("%s: %v", ToolNameGetSubgraph, err), nil
+	}
+	if excludeTestsArg(req) {
+		nodes = filterCitationsTests(nodes)
+		edges = filterEdgesTests(edges)
 	}
 	return mcpgo.NewToolResultStructured(subgraphResponse{
 		Seed:         symbol,
@@ -243,4 +257,3 @@ func intArg(req mcpgo.CallToolRequest, key string, dflt int) int {
 	v := req.GetFloat(key, float64(dflt))
 	return int(v)
 }
-

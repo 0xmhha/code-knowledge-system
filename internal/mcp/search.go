@@ -42,6 +42,7 @@ func registerSemanticSearch(s *mcpserver.MCPServer, d Deps) {
 			mcpgo.Description("Restrict to file paths matching this glob.")),
 		mcpgo.WithString("kinds",
 			mcpgo.Description("Comma-separated symbol kinds (e.g., \"function,method\").")),
+		withExcludeTests(),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleSemanticSearch(ctx, d, req)
@@ -71,6 +72,9 @@ func handleSemanticSearch(ctx context.Context, d Deps, req mcpgo.CallToolRequest
 	if err != nil {
 		return mcpgo.NewToolResultErrorf("%s: %v", ToolNameSemanticSearch, err), nil
 	}
+	if excludeTestsArg(req) {
+		hits = filterHitsTests(hits)
+	}
 	return mcpgo.NewToolResultStructured(searchResponse{
 		Query:        query,
 		Hits:         hits,
@@ -94,6 +98,7 @@ func registerSearchText(s *mcpserver.MCPServer, d Deps) {
 			mcpgo.Description("Restrict to a language (e.g., \"go\").")),
 		mcpgo.WithString("path_glob",
 			mcpgo.Description("Restrict to file paths matching this glob.")),
+		withExcludeTests(),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleSearchText(ctx, d, req)
@@ -119,6 +124,9 @@ func handleSearchText(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*
 	hits, err := d.CKG.BM25Search(ctx, query, opts)
 	if err != nil {
 		return mcpgo.NewToolResultErrorf("%s: %v", ToolNameSearchText, err), nil
+	}
+	if excludeTestsArg(req) {
+		hits = filterHitsTests(hits)
 	}
 	return mcpgo.NewToolResultStructured(searchResponse{
 		Query:        query,
