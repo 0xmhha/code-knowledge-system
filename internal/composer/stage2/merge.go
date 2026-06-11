@@ -122,14 +122,26 @@ func (a *aggregator) entry(c contract.Citation) *ScoredCitation {
 // results returns the accumulated citations sorted by descending Score.
 // Ties are broken by File path for deterministic output (eval reports
 // must reproduce). When cap > 0, the slice is truncated to that length.
-func (a *aggregator) results(cap int) []ScoredCitation {
+//
+// When demoteTests is true, every citation whose File is a test path
+// (as classified by isTestPath) has its Score multiplied by
+// testDemotionFactor before sorting. This ensures production code ranks
+// above test files when the active intent is not test-oriented, while
+// keeping test files available lower in the evidence pack. Demotion is
+// applied to the returned copy — the aggregator's internal map is not
+// mutated, so results() can be called multiple times with different flags.
+func (a *aggregator) results(cap int, demoteTests bool) []ScoredCitation {
 	if len(a.byCitation) == 0 {
 		return nil
 	}
 
 	out := make([]ScoredCitation, 0, len(a.byCitation))
 	for _, sc := range a.byCitation {
-		out = append(out, *sc)
+		entry := *sc
+		if demoteTests && isTestPath(entry.Citation.File) {
+			entry.Score *= testDemotionFactor
+		}
+		out = append(out, entry)
 	}
 
 	sort.SliceStable(out, func(i, j int) bool {

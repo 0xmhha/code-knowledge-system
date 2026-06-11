@@ -243,7 +243,15 @@ func (s *Searcher) Search(ctx context.Context, keywords []string, ckvHits []cont
 		}
 	}
 
-	out.Citations = agg.results(s.config.MaxCitations)
+	// Demote test-file citations when the active intent is not
+	// test-oriented. This keeps production code reliably above test
+	// files in the evidence pack for queries that want the
+	// implementation, while leaving tests accessible lower in the
+	// pack as examples. For IntentTestAdd the user explicitly wants
+	// tests, so demotion is skipped (current double-count boost
+	// stays intact).
+	demoteTests := intent != contract.IntentTestAdd
+	out.Citations = agg.results(s.config.MaxCitations, demoteTests)
 	if len(keywords) > 0 {
 		out.Coverage = float64(hitCount) / float64(len(keywords))
 	}

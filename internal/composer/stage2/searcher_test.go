@@ -301,7 +301,7 @@ func TestAggregator_TiesBrokenByFileThenStartLine(t *testing.T) {
 	a.addBM25List("k2", []contract.Hit{bm25Hit("a.go", 1, 10, 5.0)})
 	a.addBM25List("k3", []contract.Hit{bm25Hit("b.go", 1, 10, 5.0)})
 
-	out := a.results(0)
+	out := a.results(0, false)
 	want := []contract.Citation{
 		cit("a.go", 1, 10),
 		cit("b.go", 1, 10),
@@ -578,7 +578,7 @@ func TestAggregator_DedupsByCitationKey(t *testing.T) {
 	a.addBM25List("k2", []contract.Hit{bm25Hit("x.go", 1, 10, 4.0)})
 	a.addSymbolList("k3", []contract.Citation{cit("x.go", 1, 10)})
 
-	out := a.results(0)
+	out := a.results(0, false)
 	if len(out) != 1 {
 		t.Fatalf("len = %d, want 1 (dedup)", len(out))
 	}
@@ -601,7 +601,7 @@ func TestAggregator_RankAffectsContribution(t *testing.T) {
 		bm25Hit("b.go", 1, 1, 0.9), // rank 2
 		bm25Hit("c.go", 1, 1, 0.5), // rank 3
 	})
-	out := a.results(0)
+	out := a.results(0, false)
 	if len(out) != 3 {
 		t.Fatalf("len = %d, want 3", len(out))
 	}
@@ -621,7 +621,93 @@ func TestAggregator_RankAffectsContribution(t *testing.T) {
 func TestAggregator_EmptyResultsNil(t *testing.T) {
 	t.Parallel()
 	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight, DefaultCkvWeight)
-	if got := a.results(10); got != nil {
+	if got := a.results(10, false); got != nil {
 		t.Errorf("results on empty aggregator = %v, want nil", got)
+	}
+}
+
+// --- Test-file demotion ---
+
+// TestSearch_NonTestIntentDemotesTestFiles asserts that for a non-test intent
+// (e.g. IntentBugFix), a production citation and a test citation with the
+// same base RRF score rank production first because of testDemotionFactor.
+func TestSearch_NonTestIntentDemotesTestFiles(t *testing.T) {
+	t.Parallel()
+	// Both files appear at BM25 rank 1 in their own single-element lists,
+	// giving each an identical raw contribution of BMWeight/(RRFK+1).
+	// After demotion, the test file's score becomes that value * 0.25,
+	// so production must rank first.
+	a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight, DefaultCkvWeight)
+	a.addBM25List("kw", []contract.Hit{bm25Hit("handler.go", 1, 10, 1.0)})
+	a.addBM25List("kw2", []contract.Hit{bm25Hit("handler_test.go", 1, 10, 1.0)})
+
+	out := a.results(0, true /* demoteTests */)
+	if len(out) != 2 {
+		t.Fatalf("results count = %d, want 2", len(out))
+	}
+	if out[0].Citation.File != "handler.go" {
+		t.Errorf("rank-1 file = %q, want handler.go (production should outrank test)", out[0].Citation.File)
+	}
+	if out[1].Citation.File != "handler_test.go" {
+		t.Errorf("rank-2 file = %q, want handler_test.go", out[1].Citation.File)
+	}
+	// Confirm the production score is strictly higher than the demoted test score.
+	if out[0].Score <= out[1].Score {
+		t.Errorf("production score (%v) should be greater than demoted test score (%v)", out[0].Score, out[1].Score)
+	}
+}
+
+// TestSearch_IntentTestAddDoesNotDemoteTestFiles asserts that for IntentTestAdd
+// a test citation with equal base RRF score is not demoted relative to a
+// production citation (current boost behavior must be preserved).
+func TestSearch_IntentTestAddDoesNotDemoteTestFiles(t *testing.T) {
+	t.Parallel()
+	// Fake returns the same hit for every BM25Search call.
+	// Use a test file so we can verify it is NOT demoted.
+	ckg := &ckgclient.Fake{
+		BM25Hits: []contract.Hit{bm25Hit("handler_test.go", 1, 10, 1.0)},
+	}
+	s, _ := New(ckg)
+
+	out, err := s.Search(context.Background(), []string{"Handler"}, nil, contract.IntentTestAdd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Citations) != 1 {
+		t.Fatalf("citations count = %d, want 1", len(out.Citations))
+	}
+	// IntentTestAdd runs the supplemental *_test.go BM25 pass so the file
+	// appears twice (two RRF contributions). The score must be > 0, meaning
+	// it was not zeroed or excessively penalised. Specifically, score must
+	// equal 2 * BMWeight/(RRFK+1) (two passes, each rank 1).
+	want := 2 * rrfContribution(DefaultBMWeight, 1)
+	if !almostEqual(out.Citations[0].Score, want) {
+		t.Errorf("score for IntentTestAdd test file = %.6f, want %.6f (no demotion)", out.Citations[0].Score, want)
+	}
+}
+
+// TestAggregator_DemotionIsDeterministic asserts that calling results() with
+// demoteTests=true produces the same order on repeated calls (no map-iteration
+// randomness leaking through the demotion path).
+func TestAggregator_DemotionIsDeterministic(t *testing.T) {
+	t.Parallel()
+	build := func() *aggregator {
+		a := newAggregator(DefaultRRFK, DefaultBMWeight, DefaultSymbolWeight, DefaultCkvWeight)
+		a.addBM25List("k", []contract.Hit{
+			bm25Hit("handler_test.go", 1, 10, 1.0),
+			bm25Hit("handler.go", 1, 10, 1.0),
+			bm25Hit("util_test.go", 20, 30, 1.0),
+			bm25Hit("util.go", 20, 30, 1.0),
+		})
+		return a
+	}
+	first := build().results(0, true)
+	for i := 0; i < 10; i++ {
+		got := build().results(0, true)
+		for j := range got {
+			if got[j].Citation.File != first[j].Citation.File {
+				t.Fatalf("iteration %d: position %d = %q, want %q (non-deterministic)", i, j, got[j].Citation.File, first[j].Citation.File)
+			}
+		}
 	}
 }
