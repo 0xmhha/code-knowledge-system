@@ -1,0 +1,62 @@
+id: A4.gov_validator.genesis_initialization
+subsystem: A4
+knowledge_type: B2
+title: "GovValidator genesis initialization (initializeValidator)"
+summary: |
+  initializeValidator is the Go-side seeder that writes the GovValidator
+  (0x1001) contract storage at genesis from systemContracts.govValidator.params.
+  It runs initializeBase to seed inherited GovBase fields, writes the blsPoP
+  precompile address and the gasTip (supplied value or params.InitialGasTip),
+  then — when the validators/blsPublicKeys params are supplied — cross-validates
+  len(members) == len(validators) == len(blsPublicKeys) and walks the validator
+  list, emitting StateParam writes for the __validators EnumerableSet (length +
+  array element + index mapping), the validatorToOperator / operatorToValidator
+  inverse mappings, the validatorToBlsKey bytes mapping, and the
+  blsKeyToValidator mapping keyed by raw BLS bytes. Duplicate addresses are
+  skipped; the length write fires only if at least one validator was seeded.
+code_anchors:
+  - file: systemcontracts/gov_validator.go
+    symbol: initializeValidator
+    reason: "entry point: seeds blsPoP, gasTip, validators array, validator<->operator and BLS-key mappings at genesis"
+  - file: systemcontracts/gov_validator.go
+    symbol: MakeMultipleParam
+    reason: "splits a multi-slot bytes value (BLS key) into base-slot + dynamic-slot StateParam writes"
+  - file: systemcontracts/stateutil.go
+    symbol: CalculateMappingSlot
+    reason: "keccak256(key . slot) used to derive every mapping slot written by initializeValidator"
+code_keywords:
+  - initializeValidator
+  - initializeBase
+  - blsWrapper
+  - MakeMultipleParam
+  - VarLenBytesToMultipleHash
+  - CalculateMappingSlot
+  - CalculateDynamicSlot
+  - IncrementHash
+  - SLOT_VALIDATOR_blsPop
+  - SLOT_VALIDATOR_validators
+  - SLOT_VALIDATOR_validatorToOperator
+  - SLOT_VALIDATOR_validatorToBlsKey
+  - SLOT_VALIDATOR_blsKeyToValidator
+  - SLOT_VALIDATOR_gasTip
+korean_aliases:
+  - "거버넌스 밸리데이터"
+  - "거버넌스 밸리데이터 컨트랙트"
+  - "밸리데이터 컨트랙트 초기화"
+  - "제네시스 초기화"
+  - "제네시스 시스템 컨트랙트 초기화"
+  - "초기 밸리데이터 셋업"
+english_aliases:
+  - "GovValidator genesis init"
+  - "validator contract initialization"
+  - "initializeValidator"
+  - "genesis validator seeding"
+related_concepts:
+  - A4.gov_validator.storage_and_governance
+  - A4.system_contracts.addresses
+  - A8.genesis.inject_contracts_two_phase
+existing_doc_ref:
+  - file: .claude/docs/system-contract-flow.md
+risk_level: high
+source_of_truth: code
+status: verified

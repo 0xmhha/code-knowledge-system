@@ -435,6 +435,97 @@ entries:
         - GovValidator
         - WBFTConfig
     - aliases:
+        - 밸리데이터셋
+        - 밸리데이터셋 생성
+        - 밸리데이터 집합 생성
+        - 프로포저 정책
+        - 라운드로빈 프로포저
+        - 스티키 프로포저
+        - 프로포저 선정
+        - validator set construction
+        - validator set builder
+        - proposer selector
+        - round-robin proposer
+        - sticky proposer
+        - ProposerPolicy
+      canonical: A3.validator_set.set_construction
+      code_keywords:
+        - NewSet
+        - NewSetByValidators
+        - newDefaultSet
+        - defaultSet
+        - defaultValidator
+        - roundRobinProposer
+        - stickyProposer
+        - CalcProposer
+        - GetProposer
+        - QuorumSize
+        - ProposerPolicy
+        - RoundRobin
+        - Sticky
+        - ValidatorSet
+    - aliases:
+        - 코인 발행
+        - 코인 발행 제안
+        - 발행 제안
+        - 발행 한도
+        - 민팅 한도
+        - 민터 한도
+        - 민터 권한
+        - 발행 증명
+        - 마스터 민터
+        - mint proposal
+        - mint proof
+        - minter allowance
+        - max minter allowance
+        - allowance
+        - master minter
+        - authorised minter
+      canonical: A4.gov_minter.mint_proposal_allowance
+      code_keywords:
+        - MintProof
+        - GetMintProposalAmount
+        - GetReservedMintAmount
+        - initializeMinter
+        - IsMinter
+        - GetMaxMinterAllowance
+        - GetMinterCount
+        - GetMinterAt
+        - DefaultMaxMinterAllowance
+        - initializeMasterMinter
+        - SLOT_GOV_MINTER_reservedMintAmount
+        - SLOT_GOV_MINTER_mintProposalAmounts
+        - SLOT_GOV_MASTER_MINTER_maxMinterAllowance
+        - SLOT_GOV_MASTER_MINTER_isMinter
+        - SLOT_GOV_MASTER_MINTER_minterList
+    - aliases:
+        - 거버넌스 밸리데이터
+        - 거버넌스 밸리데이터 컨트랙트
+        - 밸리데이터 컨트랙트 초기화
+        - 제네시스 초기화
+        - 제네시스 시스템 컨트랙트 초기화
+        - 초기 밸리데이터 셋업
+        - GovValidator genesis init
+        - validator contract initialization
+        - initializeValidator
+        - genesis validator seeding
+      canonical: A4.gov_validator.genesis_initialization
+      code_keywords:
+        - initializeValidator
+        - initializeBase
+        - blsWrapper
+        - MakeMultipleParam
+        - VarLenBytesToMultipleHash
+        - CalculateMappingSlot
+        - CalculateDynamicSlot
+        - IncrementHash
+        - SLOT_VALIDATOR_blsPop
+        - SLOT_VALIDATOR_validators
+        - SLOT_VALIDATOR_validatorToOperator
+        - SLOT_VALIDATOR_validatorToBlsKey
+        - SLOT_VALIDATOR_blsKeyToValidator
+        - SLOT_VALIDATOR_gasTip
+    - aliases:
         - 시스템 컨트랙트 주소
         - 거버넌스 컨트랙트 주소
         - 네이티브 매니저 주소
@@ -468,6 +559,34 @@ entries:
         - GetBurnBalance
         - GetRefundableBalance
         - CONTRACT_GOV_MINTER
+    - aliases:
+        - 스토리지 슬롯
+        - 스토리지 슬롯 레이아웃
+        - 슬롯 레이아웃
+        - 슬롯 계산
+        - 매핑 슬롯
+        - 동적 배열 슬롯
+        - 솔리디티 스토리지
+        - storage slot layout
+        - storage slot computation
+        - mapping slot
+        - dynamic array slot
+        - solidity storage layout
+        - EnumerableSet storage
+      canonical: A4.system_contracts.storage_slot_layout
+      code_keywords:
+        - CalculateMappingSlot
+        - CalculateDynamicSlot
+        - IncrementHash
+        - VarLenBytesToMultipleHash
+        - EncodeBytesToSlots
+        - GetBytes
+        - EnumerableSet
+        - NewEnumerableSet
+        - NewAddressSet
+        - StateReader
+        - StateParam
+        - MakeMultipleParam
     - aliases:
         - 계정 확장 비트
         - 블랙리스트 비트

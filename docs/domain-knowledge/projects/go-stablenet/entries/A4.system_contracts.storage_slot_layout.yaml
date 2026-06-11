@@ -1,0 +1,63 @@
+id: A4.system_contracts.storage_slot_layout
+subsystem: A4
+knowledge_type: B2
+title: "System contract storage slot layout helpers (CalculateMappingSlot / CalculateDynamicSlot / EncodeBytesToSlots)"
+summary: |
+  All Go-side genesis seeders for the 0x100x governance contracts follow the
+  EVM/Solidity storage-slot rules through a toolbox in systemcontracts/stateutil.go:
+  CalculateMappingSlot(baseSlot, key) = keccak256(leftPad32(key) || baseSlot) for
+  mapping fields; CalculateDynamicSlot(baseSlot, i) = keccak256(leftPad32(baseSlot)) + i
+  for the i-th element of dynamic arrays / spilled bytes chunks; IncrementHash(baseSlot, n)
+  = baseSlot + n to pair an EnumerableSet value slot with its companion index slot;
+  VarLenBytesToMultipleHash / EncodeBytesToSlots implement Solidity short/long bytes
+  packing (<=31B packed in the base slot, >31B spills 32B chunks); GetBytes reverses it
+  for reads; EnumerableSet (NewEnumerableSet / NewAddressSet) bundles the value+index
+  slot pair used by ValidatorList and minterList. Every storage write a Go initializer
+  emits is a params.StateParam with Key = a slot hash derived above and a 32-byte Value.
+code_anchors:
+  - file: systemcontracts/stateutil.go
+    symbol: CalculateMappingSlot
+    reason: "Solidity mapping slot: keccak256(leftPad32(key) || slot)"
+  - file: systemcontracts/stateutil.go
+    symbol: CalculateDynamicSlot
+    reason: "Solidity dynamic-array slot: keccak256(leftPad32(slot)) + index"
+  - file: systemcontracts/stateutil.go
+    symbol: EnumerableSet
+    reason: "value-slot/index-slot pair backing the OZ EnumerableSet (Length / Contains / Values / At)"
+code_keywords:
+  - CalculateMappingSlot
+  - CalculateDynamicSlot
+  - IncrementHash
+  - VarLenBytesToMultipleHash
+  - EncodeBytesToSlots
+  - GetBytes
+  - EnumerableSet
+  - NewEnumerableSet
+  - NewAddressSet
+  - StateReader
+  - StateParam
+  - MakeMultipleParam
+korean_aliases:
+  - "스토리지 슬롯"
+  - "스토리지 슬롯 레이아웃"
+  - "슬롯 레이아웃"
+  - "슬롯 계산"
+  - "매핑 슬롯"
+  - "동적 배열 슬롯"
+  - "솔리디티 스토리지"
+english_aliases:
+  - "storage slot layout"
+  - "storage slot computation"
+  - "mapping slot"
+  - "dynamic array slot"
+  - "solidity storage layout"
+  - "EnumerableSet storage"
+related_concepts:
+  - A4.gov_validator.genesis_initialization
+  - A4.gov_validator.storage_and_governance
+  - A4.system_contracts.addresses
+existing_doc_ref:
+  - file: .claude/docs/system-contract-flow.md
+risk_level: high
+source_of_truth: code
+status: verified
