@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"strings"
+	"unicode"
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -10,6 +12,34 @@ import (
 	"github.com/0xmhha/code-knowledge-system/internal/ckvclient"
 	"github.com/0xmhha/code-knowledge-system/pkg/contract"
 )
+
+// ftsOrQuery turns a free-text query into an explicit FTS5 OR expression for
+// the search_text tool. search_text is documented as "terms joined as OR",
+// but FTS5 parses a bare multi-word string as an implicit AND of barewords —
+// so a natural-language or glossary-expanded query matches nothing unless one
+// document contains every term, and any FTS5-special character (?, ", *, :, …)
+// raises a syntax error. Tokenizing on non-word runes, quoting each token, and
+// joining with OR honours the contract and makes multi-term / expanded queries
+// usable. This lives at the tool boundary only; the composer's internal BM25
+// seeding (which feeds clean per-keyword terms) is intentionally untouched.
+func ftsOrQuery(query string) string {
+	toks := strings.FieldsFunc(query, func(r rune) bool {
+		return !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_')
+	})
+	quoted := make([]string, 0, len(toks))
+	seen := make(map[string]struct{}, len(toks))
+	for _, t := range toks {
+		if _, ok := seen[t]; ok {
+			continue
+		}
+		seen[t] = struct{}{}
+		quoted = append(quoted, `"`+t+`"`)
+	}
+	if len(quoted) == 0 {
+		return query
+	}
+	return strings.Join(quoted, " OR ")
+}
 
 const (
 	ToolNameSemanticSearch = "cks.context.semantic_search"
@@ -123,7 +153,7 @@ func handleSearchText(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*
 	collector := contract.NewInstructionCollector()
 	ctx = contract.WithCollector(ctx, collector)
 
-	hits, err := d.CKG.BM25Search(ctx, maybeExpand(d, req, query), opts)
+	hits, err := d.CKG.BM25Search(ctx, ftsOrQuery(maybeExpand(d, req, query)), opts)
 	if err != nil {
 		return mcpgo.NewToolResultErrorf("%s: %v", ToolNameSearchText, err), nil
 	}
