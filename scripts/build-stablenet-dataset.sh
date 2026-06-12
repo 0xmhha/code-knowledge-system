@@ -43,7 +43,7 @@ POLICY_DIR="generated/policies"
 CKG_POLICY="$POLICY_DIR/stablenet-ckg-policy.yaml"
 CKV_POLICY="$POLICY_DIR/stablenet-ckv.yaml"
 CKG_OUT="data/ckg-stablenet"
-CKV_OUT="ckv-stablenet"
+CKV_OUT="data/ckv-stablenet"
 
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }

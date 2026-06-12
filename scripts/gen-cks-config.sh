@@ -44,7 +44,7 @@ backends:
     policy_file: "$CKS_ROOT/generated/policies/stablenet-ckg-policy.yaml"
     timeout_ms: 5000
   ckv:
-    path: "$CKS_ROOT/ckv-stablenet"
+    path: "$CKS_ROOT/data/ckv-stablenet"
     timeout_ms: 3000
     embed_model: "$EMBED_MODEL"
     ollama_url: "$OLLAMA_URL"
