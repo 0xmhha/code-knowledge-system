@@ -43,6 +43,7 @@ func registerSemanticSearch(s *mcpserver.MCPServer, d Deps) {
 		mcpgo.WithString("kinds",
 			mcpgo.Description("Comma-separated symbol kinds (e.g., \"function,method\").")),
 		withExcludeTests(),
+		withExpand(),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleSemanticSearch(ctx, d, req)
@@ -68,7 +69,7 @@ func handleSemanticSearch(ctx context.Context, d Deps, req mcpgo.CallToolRequest
 	collector := contract.NewInstructionCollector()
 	ctx = contract.WithCollector(ctx, collector)
 
-	hits, err := d.CKV.SemanticSearch(ctx, query, opts)
+	hits, err := d.CKV.SemanticSearch(ctx, maybeExpand(d, req, query), opts)
 	if err != nil {
 		return mcpgo.NewToolResultErrorf("%s: %v", ToolNameSemanticSearch, err), nil
 	}
@@ -99,6 +100,7 @@ func registerSearchText(s *mcpserver.MCPServer, d Deps) {
 		mcpgo.WithString("path_glob",
 			mcpgo.Description("Restrict to file paths matching this glob.")),
 		withExcludeTests(),
+		withExpand(),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleSearchText(ctx, d, req)
@@ -121,7 +123,7 @@ func handleSearchText(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*
 	collector := contract.NewInstructionCollector()
 	ctx = contract.WithCollector(ctx, collector)
 
-	hits, err := d.CKG.BM25Search(ctx, query, opts)
+	hits, err := d.CKG.BM25Search(ctx, maybeExpand(d, req, query), opts)
 	if err != nil {
 		return mcpgo.NewToolResultErrorf("%s: %v", ToolNameSearchText, err), nil
 	}

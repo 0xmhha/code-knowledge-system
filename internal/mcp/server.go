@@ -26,6 +26,7 @@ import (
 	"github.com/0xmhha/code-knowledge-system/internal/ckgclient"
 	"github.com/0xmhha/code-knowledge-system/internal/ckvclient"
 	"github.com/0xmhha/code-knowledge-system/internal/composer"
+	"github.com/0xmhha/code-knowledge-system/internal/vocab"
 )
 
 // ToolNameGetForTask is the wire name of the get_for_task tool. Exported
@@ -52,6 +53,13 @@ type Deps struct {
 	// caller correlate health output with running binary build tags.
 	// Empty string is acceptable; the field is informational, not load-bearing.
 	BuilderVersion string
+
+	// Vocab is the glossary resolver shared with the composer's Stage 1.
+	// When non-nil it backs the opt-in `expand` flag on semantic_search /
+	// search_text, so direct callers get the same concept→symbol query
+	// expansion the get_for_task path already enjoys. Nil → expand is a
+	// no-op (the verbatim query is used).
+	Vocab *vocab.Resolver
 
 	// Index configures the cks.ops.index maintenance tool (G8). Zero value
 	// (no binaries) disables it — the tool then tells the agent to run the

@@ -161,6 +161,7 @@ func run(ctx context.Context, configPath string) error {
 		Composer:       c,
 		CKG:            ckg,
 		CKV:            ckv,
+		Vocab:          vocabResolver,
 		BuilderVersion: builderVersion,
 		Index: cksmcp.IndexConfig{
 			CKVBinary:        cfg.Backends.CKV.BinaryPath,
