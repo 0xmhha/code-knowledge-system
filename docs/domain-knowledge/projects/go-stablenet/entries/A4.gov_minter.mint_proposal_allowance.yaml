@@ -1,0 +1,75 @@
+id: A4.gov_minter.mint_proposal_allowance
+subsystem: A4
+knowledge_type: B1
+title: "Coin mint proposals, MintProof, and minter allowance management (GovMinter + GovMasterMinter)"
+summary: |
+  Native-coin issuance is gated by two contracts: GovMasterMinter (0x1002) holds
+  the registry of authorised minters and the per-minter maxMinterAllowance ceiling;
+  GovMinter (0x1003) holds per-proposal reservations and the off-chain deposit proof.
+  MintProof carries the (beneficiary, amount, timestamp, depositId, bankReference,
+  memo) tuple bridging an off-chain deposit to an on-chain mint; GovMinter tracks
+  usedProofHashes (replay protection), reservedMintAmount (running ceiling) and
+  mintProposalAmounts (per-proposal reservation read back by GetMintProposalAmount).
+  GovMasterMinter tracks fiatToken, maxMinterAllowance (default DefaultMaxMinterAllowance
+  = 10B * 10^18), the isMinter mapping and the minterList; IsMinter, GetMinterCount,
+  GetMinterAt and GetMaxMinterAllowance expose those slots. Per-minter remaining
+  allowance is held on FiatToken, not GovMasterMinter.
+code_anchors:
+  - file: systemcontracts/gov_minter.go
+    symbol: MintProof
+    reason: "on-chain proof bridging an off-chain deposit to an on-chain mint"
+  - file: systemcontracts/gov_minter.go
+    symbol: GetMintProposalAmount
+    reason: "reads the per-proposal reserved mint amount"
+  - file: systemcontracts/gov_master_minter.go
+    symbol: IsMinter
+    reason: "checks whether an address is an authorised minter"
+  - file: systemcontracts/gov_master_minter.go
+    symbol: GetMaxMinterAllowance
+    reason: "reads the per-minter ceiling enforced by FiatToken"
+  - file: systemcontracts/gov_master_minter.go
+    symbol: initializeMasterMinter
+    reason: "seeds fiatToken, maxMinterAllowance, isMinter and minterList from genesis params"
+code_keywords:
+  - MintProof
+  - GetMintProposalAmount
+  - GetReservedMintAmount
+  - initializeMinter
+  - IsMinter
+  - GetMaxMinterAllowance
+  - GetMinterCount
+  - GetMinterAt
+  - DefaultMaxMinterAllowance
+  - initializeMasterMinter
+  - SLOT_GOV_MINTER_reservedMintAmount
+  - SLOT_GOV_MINTER_mintProposalAmounts
+  - SLOT_GOV_MASTER_MINTER_maxMinterAllowance
+  - SLOT_GOV_MASTER_MINTER_isMinter
+  - SLOT_GOV_MASTER_MINTER_minterList
+korean_aliases:
+  - "코인 발행"
+  - "코인 발행 제안"
+  - "발행 제안"
+  - "발행 한도"
+  - "민팅 한도"
+  - "민터 한도"
+  - "민터 권한"
+  - "발행 증명"
+  - "마스터 민터"
+english_aliases:
+  - "mint proposal"
+  - "mint proof"
+  - "minter allowance"
+  - "max minter allowance"
+  - "allowance"
+  - "master minter"
+  - "authorised minter"
+related_concepts:
+  - A4.system_contracts.gov_minter
+  - A4.system_contracts.addresses
+  - A4.system_contracts.storage_slot_layout
+existing_doc_ref:
+  - file: .claude/docs/system-contract-flow.md
+risk_level: high
+source_of_truth: code
+status: verified

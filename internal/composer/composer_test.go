@@ -201,6 +201,56 @@ func TestCompose_FullPipelinePopulatesPack(t *testing.T) {
 	}
 }
 
+func TestComposeTraced_ProducesTrace(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, func(f *fixture) {
+		f.ckv.SearchHits = []contract.Hit{hit("login.go", 10, 30, 0.9, contract.HitSourceCKV)}
+		f.ckg.BM25Hits = []contract.Hit{hit("login.go", 10, 30, 8.0, contract.HitSourceCKG)}
+		f.fetcher.Bodies = map[string]string{
+			cit("login.go", 10, 30).Key(): "func Login() { return validate() }",
+		}
+	})
+
+	pack, trace, err := f.composer.ComposeTraced(context.Background(), "find the Login handler")
+	if err != nil {
+		t.Fatalf("ComposeTraced: %v", err)
+	}
+	if !pack.IsValid() {
+		t.Error("pack.IsValid()=false")
+	}
+	if !trace.IsValid() {
+		t.Fatalf("trace.IsValid()=false; trace=%+v", trace)
+	}
+	if trace.Producer != "composer" {
+		t.Errorf("Producer=%q, want composer", trace.Producer)
+	}
+	if trace.Prompt != "find the Login handler" {
+		t.Errorf("Prompt=%q", trace.Prompt)
+	}
+	if trace.Rounds < 1 || trace.CKVCalls != trace.Rounds {
+		t.Errorf("Rounds=%d CKVCalls=%d (want CKVCalls==Rounds>=1)", trace.Rounds, trace.CKVCalls)
+	}
+	// First step is a ckv recall; the trailing step is the ckg seed search.
+	if trace.Steps[0].Kind != contract.StepCKVRecall {
+		t.Errorf("first step kind=%q, want %q", trace.Steps[0].Kind, contract.StepCKVRecall)
+	}
+	if last := trace.Steps[len(trace.Steps)-1]; last.Kind != contract.StepCKGBM25 {
+		t.Errorf("last step kind=%q, want %q", last.Kind, contract.StepCKGBM25)
+	}
+	if len(trace.FinalSeeds) == 0 {
+		t.Error("FinalSeeds empty after successful pipeline")
+	}
+
+	// Compose delegates to ComposeTraced — same pack, trace discarded.
+	pack2, err := f.composer.Compose(context.Background(), "find the Login handler")
+	if err != nil {
+		t.Fatalf("Compose (delegation): %v", err)
+	}
+	if pack2.Query != pack.Query {
+		t.Errorf("Compose vs ComposeTraced Query mismatch: %q vs %q", pack2.Query, pack.Query)
+	}
+}
+
 func TestCompose_IntegrityHashVerifies(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, func(f *fixture) {

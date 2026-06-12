@@ -1,0 +1,81 @@
+id: A3.validator_set.set_construction
+subsystem: A3
+knowledge_type: B1
+title: "WBFT validator set construction and proposer selection"
+summary: |
+  An in-memory WBFT validator set is built by the validator package:
+  New(addr, blsKey) wraps one validator (defaultValidator) and
+  NewSet(addrs, blsKeys, policy) / NewSetByValidators(validators, policy)
+  build a defaultSet. newDefaultSet seeds the set's validators slice in
+  the order the caller supplied — there is no internal sort — and picks
+  the proposer selector based on policy.Id: roundRobinProposer for the
+  RoundRobin policy (advances by seed = lastProposerIndex + round + 1)
+  and stickyProposer for the Sticky policy (same seed minus the +1, so
+  the proposer stays put across rounds with the same lastProposer).
+  defaultSet protects mutations of validators with validatorMu (RWMutex);
+  CalcProposer recomputes the active proposer via the selected selector,
+  and QuorumSize returns ceil(N - (N-1)/3) — the WBFT 2N/3 quorum over
+  equal-power validators. The deterministic order that callers feed in
+  is the ordering that all selectors then index into.
+code_anchors:
+  - file: consensus/wbft/validator/validator.go
+    symbol: NewSetByValidators
+    reason: "construct a ValidatorSet from a pre-built Validators slice (callers preserve their own order)"
+  - file: consensus/wbft/validator/validator.go
+    symbol: NewSet
+    reason: "construct a ValidatorSet from parallel addrs / blsPublicKeys slices"
+  - file: consensus/wbft/validator/default.go
+    symbol: newDefaultSet
+    reason: "internal builder: stores validators in caller order, chooses roundRobin/sticky selector by policy.Id"
+  - file: consensus/wbft/validator/default.go
+    symbol: defaultSet.CalcProposer
+    reason: "recomputes the active proposer using the configured selector under validatorMu"
+  - file: consensus/wbft/validator/default.go
+    symbol: roundRobinProposer
+    reason: "RoundRobin selector: pick = (lastProposerIndex + round + 1) % N"
+  - file: consensus/wbft/validator/default.go
+    symbol: stickyProposer
+    reason: "Sticky selector: pick = (lastProposerIndex + round) % N"
+  - file: consensus/wbft/validator/default.go
+    symbol: defaultSet.QuorumSize
+    reason: "WBFT quorum = ceil(N - F) over equal-power validators"
+code_keywords:
+  - NewSet
+  - NewSetByValidators
+  - newDefaultSet
+  - defaultSet
+  - defaultValidator
+  - roundRobinProposer
+  - stickyProposer
+  - CalcProposer
+  - GetProposer
+  - QuorumSize
+  - ProposerPolicy
+  - RoundRobin
+  - Sticky
+  - ValidatorSet
+korean_aliases:
+  - "밸리데이터셋"
+  - "밸리데이터셋 생성"
+  - "밸리데이터 집합 생성"
+  - "프로포저 정책"
+  - "라운드로빈 프로포저"
+  - "스티키 프로포저"
+  - "프로포저 선정"
+english_aliases:
+  - "validator set construction"
+  - "validator set builder"
+  - "proposer selector"
+  - "round-robin proposer"
+  - "sticky proposer"
+  - "ProposerPolicy"
+related_concepts:
+  - A1.wbft_core.consensus_flow_architecture
+  - A1.wbft_core.quorum_calc
+  - A3.validator_set.epoch_transition
+existing_doc_ref:
+  - file: .claude/docs/wbft-consensus.md
+    section: "13. WBFT 합의 엔진 내부 구조"
+risk_level: medium
+source_of_truth: code
+status: verified

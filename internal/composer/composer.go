@@ -33,6 +33,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -132,9 +133,21 @@ func New(
 
 // Compose runs the full pipeline. Returns a stamped, IsValid()-passing
 // EvidencePack on success, or an error on hard failure / fail_closed.
+//
+// Compose discards the RetrievalTrace; callers that want to inspect how the
+// pack's seeds were selected (e.g. the evaluation harness) call ComposeTraced.
 func (c *Composer) Compose(ctx context.Context, prompt string) (contract.EvidencePack, error) {
+	pack, _, err := c.ComposeTraced(ctx, prompt)
+	return pack, err
+}
+
+// ComposeTraced is Compose plus a RetrievalTrace describing the ckv→ckg funnel
+// that produced the pack (Producer="composer"). The trace shares its shape
+// with the LLM agent's trace so the two retrieval algorithms can be scored
+// against each other. On any error the returned trace is the zero value.
+func (c *Composer) ComposeTraced(ctx context.Context, prompt string) (contract.EvidencePack, contract.RetrievalTrace, error) {
 	if prompt == "" {
-		return contract.EvidencePack{}, errors.New("composer: empty prompt")
+		return contract.EvidencePack{}, contract.RetrievalTrace{}, errors.New("composer: empty prompt")
 	}
 	start := time.Now()
 
@@ -166,28 +179,32 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 	// 2. Stage 1 — keyword extraction.
 	s1Out, err := c.stage1.Extract(ctx, prompt, intentVal)
 	if err != nil {
-		return contract.EvidencePack{}, fmt.Errorf("composer: stage1: %w", err)
+		return contract.EvidencePack{}, contract.RetrievalTrace{}, fmt.Errorf("composer: stage1: %w", err)
 	}
 	next(&tm.stage1)
 
 	// 3. Stage 2 — ckg citation search.
 	s2Out, err := c.stage2.Search(ctx, s1Out.Keywords, s1Out.Hits, intentVal)
 	if err != nil {
-		return contract.EvidencePack{}, fmt.Errorf("composer: stage2: %w", err)
+		return contract.EvidencePack{}, contract.RetrievalTrace{}, fmt.Errorf("composer: stage2: %w", err)
 	}
 	next(&tm.stage2)
+
+	// Build the retrieval trace from the funnel's provenance (Stage 1 ckv
+	// recall rounds + Stage 2 ckg seeds) before the graph stage consumes them.
+	trace := buildComposerTrace(prompt, intentVal, s1Out, s2Out)
 
 	// 4. Stage 3 — graph expansion.
 	s3Out, err := c.stage3.Expand(ctx, s2Out.Citations, intentVal)
 	if err != nil {
-		return contract.EvidencePack{}, fmt.Errorf("composer: stage3: %w", err)
+		return contract.EvidencePack{}, contract.RetrievalTrace{}, fmt.Errorf("composer: stage3: %w", err)
 	}
 	next(&tm.stage3)
 
 	// 5. Stage 4 — budget allocation (fetches bodies + greedy fits).
 	s4Out, err := c.budget.Allocate(ctx, s3Out.Seeds, s3Out.Neighbors)
 	if err != nil {
-		return contract.EvidencePack{}, fmt.Errorf("composer: stage4: %w", err)
+		return contract.EvidencePack{}, contract.RetrievalTrace{}, fmt.Errorf("composer: stage4: %w", err)
 	}
 	next(&tm.stage4)
 
@@ -201,11 +218,11 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 	}
 	s5Out, err := c.sanitize.Sanitize(ctx, sanIn)
 	if err != nil {
-		return contract.EvidencePack{}, fmt.Errorf("composer: stage5: %w", err)
+		return contract.EvidencePack{}, contract.RetrievalTrace{}, fmt.Errorf("composer: stage5: %w", err)
 	}
 	next(&tm.stage5)
 	if s5Out.FailClosed {
-		return contract.EvidencePack{}, fmt.Errorf("%w: rule=%s", ErrFailClosed, s5Out.FailClosedRule)
+		return contract.EvidencePack{}, contract.RetrievalTrace{}, fmt.Errorf("%w: rule=%s", ErrFailClosed, s5Out.FailClosedRule)
 	}
 
 	// 7. Assemble EvidencePack — drop sanitized-out items, filter
@@ -219,11 +236,68 @@ func (c *Composer) Compose(ctx context.Context, prompt string) (contract.Evidenc
 
 	// 8. Integrity stamp — SHA-256 over the canonical pack form.
 	if err := contract.StampIntegrity(&pack); err != nil {
-		return contract.EvidencePack{}, fmt.Errorf("composer: stamp integrity: %w", err)
+		return contract.EvidencePack{}, contract.RetrievalTrace{}, fmt.Errorf("composer: stamp integrity: %w", err)
 	}
 
 	c.emitFootprint(ctx, prompt, intentVal, pack, time.Since(start), s4Out, s5Out, tm)
-	return pack, nil
+	return pack, trace, nil
+}
+
+// buildComposerTrace assembles a producer="composer" RetrievalTrace from the
+// Stage-1 (ckv recall/rerank) and Stage-2 (ckg seed search) provenance. Each
+// ckv recall round becomes a step; the final round carries the distilled
+// keywords, confidence, and the union of ckv hits. A trailing ckg.bm25 step
+// records the keyword search that seeds the graph stage.
+//
+// CKVCalls is exact (one ckv.SemanticSearch per Stage-1 round). CKGCalls is
+// left zero pending backend-level call instrumentation — the structural
+// signal (steps, seeds, keywords, rounds) is the present value.
+func buildComposerTrace(prompt string, intentVal contract.Intent, s1 stage1.Stage1Output, s2 stage2.Stage2Output) contract.RetrievalTrace {
+	steps := make([]contract.RetrievalStep, 0, len(s1.AugmentedQueries)+1)
+	for i, q := range s1.AugmentedQueries {
+		st := contract.RetrievalStep{
+			N:        i + 1,
+			Kind:     contract.StepCKVRecall,
+			Query:    q,
+			Source:   contract.HitSourceCKV,
+			Decision: "augment",
+		}
+		if i == len(s1.AugmentedQueries)-1 {
+			st.Keywords = s1.Keywords
+			st.Confidence = s1.Confidence
+			st.TopHits = s1.Hits
+			st.Decision = "accept"
+		}
+		steps = append(steps, st)
+	}
+	steps = append(steps, contract.RetrievalStep{
+		N:        len(steps) + 1,
+		Kind:     contract.StepCKGBM25,
+		Query:    strings.Join(s1.Keywords, " "),
+		Source:   contract.HitSourceCKG,
+		Keywords: s1.Keywords,
+		TopHits:  s2.Hits,
+		Decision: "expand",
+	})
+
+	seeds := make([]contract.Citation, 0, len(s2.Citations))
+	for _, sc := range s2.Citations {
+		seeds = append(seeds, sc.Citation)
+	}
+
+	return contract.RetrievalTrace{
+		Producer:       "composer",
+		Intent:         intentVal,
+		Prompt:         prompt,
+		VocabExpanded:  s1.VocabExpanded,
+		VocabKeywords:  s1.VocabKeywords,
+		Steps:          steps,
+		FinalSeeds:     seeds,
+		FailedKeywords: s2.FailedKeywords,
+		Rounds:         s1.Rounds,
+		CKVCalls:       s1.Rounds,
+		CKGCalls:       0, // TODO(trace): exact ckg call count needs ckgclient instrumentation
+	}
 }
 
 // stageTimings holds the wall-clock duration of each composer stage. Emitted
