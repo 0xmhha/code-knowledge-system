@@ -19,6 +19,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -100,17 +102,28 @@ func Register(s *mcpserver.MCPServer, d Deps) error {
 	return nil
 }
 
-// Run constructs an MCP server named "cks" (version v from BuilderVersion
-// or a fallback), registers the tools, and serves stdio until ctx is
-// cancelled or stdin closes. Intended entry point for cmd/cks-mcp.
-func Run(ctx context.Context, d Deps) error {
+// build constructs an MCP server named "cks" (version v from BuilderVersion
+// or a fallback) with all tools registered. Shared by the stdio (Run) and
+// Streamable-HTTP (RunHTTP) entry points so the registered surface is
+// identical across transports.
+func build(d Deps) (*mcpserver.MCPServer, error) {
 	v := d.BuilderVersion
 	if v == "" {
 		v = "0.0.0"
 	}
 	s := mcpserver.NewMCPServer("cks", v)
 	if err := Register(s, d); err != nil {
-		return fmt.Errorf("mcp: register: %w", err)
+		return nil, fmt.Errorf("mcp: register: %w", err)
+	}
+	return s, nil
+}
+
+// Run registers the tools and serves stdio until ctx is cancelled or stdin
+// closes. Intended entry point for cmd/cks-mcp's default (stdio) transport.
+func Run(ctx context.Context, d Deps) error {
+	s, err := build(d)
+	if err != nil {
+		return err
 	}
 	// mcp-go's stdio server does not currently surface ctx into its
 	// loop; the caller's ctx still gates anything Compose / Health do
@@ -120,6 +133,34 @@ func Run(ctx context.Context, d Deps) error {
 		return fmt.Errorf("mcp: serve stdio: %w", err)
 	}
 	return nil
+}
+
+// RunHTTP serves the MCP surface over Streamable HTTP on addr until ctx is
+// cancelled, then shuts the listener down gracefully. Unlike stdio (one
+// client per subprocess) this lets several cks instances run on different
+// ports and accept connections from remote Claude Code clients; cks.ops.health
+// advertises which DB/model+indexed commit each instance serves so a caller
+// can identify the instance it reached.
+func RunHTTP(ctx context.Context, d Deps, addr string) error {
+	s, err := build(d)
+	if err != nil {
+		return err
+	}
+	httpSrv := mcpserver.NewStreamableHTTPServer(s)
+	errCh := make(chan error, 1)
+	go func() { errCh <- httpSrv.Start(addr) }()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return httpSrv.Shutdown(shutdownCtx)
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("mcp: serve http on %q: %w", addr, err)
+		}
+		return nil
+	}
 }
 
 // registerGetForTask wires the cks.context.get_for_task tool. The schema

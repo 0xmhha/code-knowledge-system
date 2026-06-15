@@ -115,11 +115,36 @@ type CKVConfig struct {
 
 // ListenConfig controls how cks exposes its surface to callers.
 //
-// Per HLD §10 the HTTP listener is loopback-only in Phase 0/1; binding to a
-// non-loopback address is rejected by Validate.
+// Transport selects the MCP transport: "stdio" (default) wires one client to
+// a subprocess over stdin/stdout; "http" serves Streamable HTTP on HTTPAddr,
+// which lets one host run several cks instances (different DBs/models) on
+// different ports, reachable by remote Claude Code clients. cks.ops.health
+// advertises each instance's model + indexed commit so callers can tell them
+// apart.
+//
+// HTTPAddr is loopback-only unless AllowRemote is set: exposing the retrieval
+// surface to the network is an explicit opt-in, not the default.
 type ListenConfig struct {
 	HTTPAddr string `yaml:"http_addr"`
 	MCPStdio bool   `yaml:"mcp_stdio"`
+	// Transport is "stdio" | "http". Empty falls back to MCPStdio (stdio)
+	// for config back-compat.
+	Transport string `yaml:"transport"`
+	// AllowRemote permits binding HTTPAddr to a non-loopback (routable)
+	// address. Default false keeps the listener loopback-only. Enabling it
+	// exposes retrieval to the network; the sanitize ruleset still applies,
+	// but operators should add auth / network controls (token auth is a
+	// follow-up).
+	AllowRemote bool `yaml:"allow_remote"`
+}
+
+// ResolvedTransport returns the effective MCP transport, defaulting to stdio
+// when unset (honoring the legacy MCPStdio flag).
+func (l ListenConfig) ResolvedTransport() string {
+	if l.Transport != "" {
+		return strings.ToLower(l.Transport)
+	}
+	return "stdio"
 }
 
 // LoggingConfig matches the footprint package's Mode/Level vocabulary and
@@ -227,9 +252,19 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: logging.mode=%q invalid (prod|dev)", c.Logging.Mode)
 	}
 
-	if c.Listen.HTTPAddr != "" {
+	switch strings.ToLower(c.Listen.Transport) {
+	case "", "stdio", "http":
+	default:
+		return fmt.Errorf("config: listen.transport=%q invalid (stdio|http)", c.Listen.Transport)
+	}
+	if strings.ToLower(c.Listen.Transport) == "http" && c.Listen.HTTPAddr == "" {
+		return fmt.Errorf("config: listen.transport=http requires listen.http_addr")
+	}
+	// Loopback is enforced by default; AllowRemote is the explicit opt-in to
+	// bind a routable address for remote callers.
+	if c.Listen.HTTPAddr != "" && !c.Listen.AllowRemote {
 		if err := validateLoopback(c.Listen.HTTPAddr); err != nil {
-			return fmt.Errorf("config: listen.http_addr: %w", err)
+			return fmt.Errorf("config: listen.http_addr: %w (set listen.allow_remote: true to bind a routable address)", err)
 		}
 	}
 

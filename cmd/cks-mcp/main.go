@@ -30,7 +30,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -81,9 +80,6 @@ func run(ctx context.Context, configPath string) error {
 	cfg, err := loadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
-	}
-	if !cfg.Listen.MCPStdio {
-		return errors.New("config.listen.mcp_stdio is false; cks-mcp serves stdio only")
 	}
 
 	ruleset, err := loadRuleset(cfg.Sanitize.RulesPath)
@@ -175,6 +171,10 @@ func run(ctx context.Context, configPath string) error {
 			DomainProjectDir: cfg.Domain.ProjectDir,
 			DomainCorpusDir:  cfg.Domain.CorpusDir,
 		},
+	}
+	if cfg.Listen.ResolvedTransport() == "http" {
+		log.Printf("cks-mcp: serving Streamable HTTP on %s (allow_remote=%v)", cfg.Listen.HTTPAddr, cfg.Listen.AllowRemote)
+		return cksmcp.RunHTTP(ctx, deps, cfg.Listen.HTTPAddr)
 	}
 	return cksmcp.Run(ctx, deps)
 }
