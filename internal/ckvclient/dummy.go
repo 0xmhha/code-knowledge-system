@@ -3,6 +3,8 @@ package ckvclient
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,33 +22,27 @@ import (
 // Once ckv is ready, callers swap Dummy out for Real. The Composer and
 // every other CKS module remain unchanged — they speak Client either way.
 type Dummy struct {
-	// SkillPath is the absolute path to the skill directory the upstream
-	// LLM will consult. Defaults to DefaultSkillPath when empty.
+	// SkillPath is the skill directory the upstream LLM will consult. When
+	// empty it defaults to <SourcePath>/.claude (see skill).
 	SkillPath string
-	// SourcePath is the absolute path to the go-stablenet source tree.
-	// Defaults to DefaultSourcePath when empty.
+	// SourcePath is the go-stablenet source tree. When empty it defaults to
+	// the current working directory (see source).
 	SourcePath string
 
 	// Degraded marks this Dummy as a fallback for an UNAVAILABLE real ckv
 	// (e.g. Ollama down). When set, Health reports Reachable=false so the
 	// cks.ops.health rollup yields "degraded" (S5) instead of falsely "ok".
-	// DegradedReason is surfaced in the health StatsHash for operators.
+	// DegradedReason is surfaced in the health Reason field for operators.
 	Degraded       bool
 	DegradedReason string
 }
 
-// DefaultSkillPath is the on-disk skill directory used when a Dummy is
-// constructed without an explicit override. Hard-coded per the
-// integrated workplan to keep wiring trivial during the dummy phase.
-const DefaultSkillPath = "/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest/.claude"
-
-// DefaultSourcePath is the on-disk go-stablenet source root used when a
-// Dummy is constructed without an explicit override.
-const DefaultSourcePath = "/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest"
-
-// NewDummy returns a Dummy with the default skill + source paths.
+// NewDummy returns a Dummy. When SkillPath/SourcePath are left unset they
+// default to the current working directory (cks-mcp runs from the indexed
+// repo root) — see source/skill. The caller (cmd/cks-mcp) sets SourcePath
+// from config when available.
 func NewDummy() *Dummy {
-	return &Dummy{SkillPath: DefaultSkillPath, SourcePath: DefaultSourcePath}
+	return &Dummy{}
 }
 
 // NewDegradedDummy returns a Dummy that additionally reports the ckv backend
@@ -55,29 +51,31 @@ func NewDummy() *Dummy {
 // unavailable: the pipeline still flows via recorded instructions, but the
 // operator sees the degraded signal instead of a false "ok".
 func NewDegradedDummy(reason string) *Dummy {
-	return &Dummy{
-		SkillPath:      DefaultSkillPath,
-		SourcePath:     DefaultSourcePath,
-		Degraded:       true,
-		DegradedReason: reason,
-	}
+	return &Dummy{Degraded: true, DegradedReason: reason}
 }
 
 // Compile-time assertion that Dummy satisfies Client.
 var _ Client = (*Dummy)(nil)
 
-func (d *Dummy) skill() string {
-	if d.SkillPath == "" {
-		return DefaultSkillPath
+// source returns the configured source tree, falling back to the current
+// working directory. cks-mcp runs from the indexed repo root, so cwd is a
+// valid default that works on any machine — unlike a hard-coded absolute path.
+func (d *Dummy) source() string {
+	if d.SourcePath != "" {
+		return d.SourcePath
 	}
-	return d.SkillPath
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return "."
 }
 
-func (d *Dummy) source() string {
-	if d.SourcePath == "" {
-		return DefaultSourcePath
+// skill returns the configured skill directory, defaulting to <source>/.claude.
+func (d *Dummy) skill() string {
+	if d.SkillPath != "" {
+		return d.SkillPath
 	}
-	return d.SourcePath
+	return filepath.Join(d.source(), ".claude")
 }
 
 // SemanticSearch records a ckv.SemanticSearch instruction on the

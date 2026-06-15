@@ -3,6 +3,8 @@ package ckgclient
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/0xmhha/code-knowledge-system/pkg/contract"
@@ -19,42 +21,43 @@ import (
 // Once ckg is ready, callers swap Dummy out for Real. The Composer and
 // every other CKS module remain unchanged — they speak Client either way.
 type Dummy struct {
-	// SkillPath is the absolute path to the skill directory the upstream
-	// LLM will consult. Defaults to DefaultSkillPath when empty.
+	// SkillPath is the skill directory the upstream LLM will consult. When
+	// empty it defaults to <SourcePath>/.claude (see skill).
 	SkillPath string
-	// SourcePath is the absolute path to the go-stablenet source tree.
-	// Defaults to DefaultSourcePath when empty.
+	// SourcePath is the go-stablenet source tree. When empty it defaults to
+	// the current working directory (see source).
 	SourcePath string
 }
 
-// DefaultSkillPath / DefaultSourcePath mirror the constants in
-// ckvclient so both dummies point at the same on-disk skill set and
-// source tree without an external config file.
-const (
-	DefaultSkillPath  = "/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest/.claude"
-	DefaultSourcePath = "/Users/wm-it-22-00661/Work/github/stable-net/go-stablenet-latest"
-)
-
-// NewDummy returns a Dummy with the default skill + source paths.
+// NewDummy returns a Dummy. When SkillPath/SourcePath are left unset they
+// default to the current working directory; the caller (cmd/cks-mcp) sets
+// SourcePath from config when available.
 func NewDummy() *Dummy {
-	return &Dummy{SkillPath: DefaultSkillPath, SourcePath: DefaultSourcePath}
+	return &Dummy{}
 }
 
 // Compile-time assertion that Dummy satisfies Client.
 var _ Client = (*Dummy)(nil)
 
-func (d *Dummy) skill() string {
-	if d.SkillPath == "" {
-		return DefaultSkillPath
+// source returns the configured source tree, falling back to the current
+// working directory (cks-mcp runs from the indexed repo root), so dummy
+// directives stay valid on any machine instead of a hard-coded path.
+func (d *Dummy) source() string {
+	if d.SourcePath != "" {
+		return d.SourcePath
 	}
-	return d.SkillPath
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return "."
 }
 
-func (d *Dummy) source() string {
-	if d.SourcePath == "" {
-		return DefaultSourcePath
+// skill returns the configured skill directory, defaulting to <source>/.claude.
+func (d *Dummy) skill() string {
+	if d.SkillPath != "" {
+		return d.SkillPath
 	}
-	return d.SourcePath
+	return filepath.Join(d.source(), ".claude")
 }
 
 // BM25Search records a ckg.BM25Search instruction and returns a single

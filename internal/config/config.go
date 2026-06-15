@@ -98,6 +98,10 @@ type CKGConfig struct {
 // absolute path to that binary; empty means "look up `ckv` on $PATH".
 type CKVConfig struct {
 	Path string `yaml:"path"`
+	// Provider selects the embedding backend (see internal/embedder).
+	// Empty defaults to "ollama". The model must match what the index was
+	// built with regardless of provider.
+	Provider string `yaml:"provider"`
 	// BinaryPath is retained for the agent-triggered index op (cks.ops.index,
 	// G8 shells `ckv reindex`); it is NOT used on the query path anymore —
 	// G1 imports pkg/ckv in-process, so there is no `ckv mcp` subprocess.

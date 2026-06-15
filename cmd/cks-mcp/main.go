@@ -39,7 +39,6 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/0xmhha/code-knowledge-vector/pkg/embed/ollama"
 	ckvtypes "github.com/0xmhha/code-knowledge-vector/pkg/types"
 
 	"github.com/0xmhha/code-knowledge-system/internal/ckgclient"
@@ -47,6 +46,7 @@ import (
 	"github.com/0xmhha/code-knowledge-system/internal/composer"
 	"github.com/0xmhha/code-knowledge-system/internal/composer/budget"
 	"github.com/0xmhha/code-knowledge-system/internal/composer/intent"
+	"github.com/0xmhha/code-knowledge-system/internal/embedder"
 	"github.com/0xmhha/code-knowledge-system/internal/composer/sanitize"
 	"github.com/0xmhha/code-knowledge-system/internal/composer/stage1"
 	"github.com/0xmhha/code-knowledge-system/internal/composer/stage2"
@@ -87,36 +87,11 @@ func run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("load sanitize ruleset: %w", err)
 	}
 
-	ckg, ckgCloser, err := buildCKGClient(cfg.Backends.CKG.Path)
+	be, err := buildBackends(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("build ckg client: %w", err)
+		return err
 	}
-	defer func() { _ = ckgCloser() }()
-
-	// Construct the shared bge-m3 embedder ONCE (G2). The ckv adapter and the
-	// intent classifier use the SAME instance so anchor, query, and chunk
-	// vectors live in one model space. On Ollama failure we enter degraded
-	// mode (S5): a Smart Dummy ckv + a 1024-dim fake intent embedder, with
-	// cks.ops.health reporting "degraded" — never a crash.
-	var (
-		ckvEmb         ckvtypes.Embedder
-		degradedReason string
-	)
-	if cfg.Backends.CKV.Path != "" {
-		emb, embErr := buildEmbedder(cfg.Backends.CKV)
-		if embErr != nil {
-			degradedReason = embErr.Error()
-			log.Printf("cks-mcp: ckv embedder unavailable (%v) — degraded mode", embErr)
-		} else {
-			ckvEmb = emb
-		}
-	}
-
-	ckv, ckvCloser, err := buildCKVClient(ctx, cfg.Backends.CKV, ckvEmb, degradedReason)
-	if err != nil {
-		return fmt.Errorf("build ckv client: %w", err)
-	}
-	defer func() { _ = ckvCloser() }()
+	defer be.close()
 
 	fp, fpCloser, err := buildFootprint(cfg.Logging)
 	if err != nil {
@@ -124,17 +99,6 @@ func run(ctx context.Context, configPath string) error {
 	}
 	defer func() { _ = fpCloser() }()
 
-	// Intent embedder: the shared bge-m3 adapter (bridged to intent's
-	// single-text Embedder) when available; otherwise a 1024-dim fake so the
-	// pipeline still runs (intent becomes noise → IntentUnknown fan-out,
-	// acceptable in degraded mode). Dim 1024 (not the old 32) keeps any
-	// downstream dim assumptions consistent with the real model.
-	var embedder intent.Embedder
-	if ckvEmb != nil {
-		embedder = intentEmbedderAdapter{e: ckvEmb}
-	} else {
-		embedder = &intent.FakeEmbedder{Dim: 1024}
-	}
 	// Real BodyFetcher: read the cited line range from disk. The
 	// indexed source tree at cfg.Backends.CKG.SourceRoot (cwd when
 	// empty) MUST match the snapshot ckg was built against — otherwise
@@ -148,17 +112,18 @@ func run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("vocab.Load: %w", err)
 	}
 
-	c, err := buildComposer(ctx, ckg, ckv, embedder, fetcher, ruleset, vocabResolver, fp)
+	c, err := buildComposer(ctx, be.ckg, be.ckv, be.intentEmb, fetcher, ruleset, vocabResolver, fp)
 	if err != nil {
 		return fmt.Errorf("build composer: %w", err)
 	}
 
 	deps := cksmcp.Deps{
 		Composer:       c,
-		CKG:            ckg,
-		CKV:            ckv,
+		CKG:            be.ckg,
+		CKV:            be.ckv,
 		Vocab:          vocabResolver,
 		BuilderVersion: builderVersion,
+		Embed:          be.cap,
 		Index: cksmcp.IndexConfig{
 			CKVBinary:        cfg.Backends.CKV.BinaryPath,
 			CKGBinary:        cfg.Backends.CKG.BinaryPath,
@@ -185,9 +150,12 @@ func run(ctx context.Context, configPath string) error {
 // the upstream LLM can fulfil the request via skills against the
 // go-stablenet source tree. The returned closer should be deferred by
 // the caller; the Dummy's closer is a no-op.
-func buildCKGClient(path string) (ckgclient.Client, func() error, error) {
+func buildCKGClient(path, sourceRoot string) (ckgclient.Client, func() error, error) {
 	if path == "" {
 		d := ckgclient.NewDummy()
+		if sourceRoot != "" {
+			d.SourcePath = sourceRoot
+		}
 		return d, d.Close, nil
 	}
 	real, err := ckgclient.NewReal(path)
@@ -218,14 +186,20 @@ func buildVocabResolver(path string) (*vocab.Resolver, error) {
 // degraded health, S5) rather than crashing the server. The Dummy records
 // each would-have-been ckv call on the Composer's instruction collector so
 // the upstream LLM can fulfil the request via skills against go-stablenet.
-func buildCKVClient(ctx context.Context, cfg config.CKVConfig, emb ckvtypes.Embedder, degradedReason string) (ckvclient.Client, func() error, error) {
+func buildCKVClient(ctx context.Context, cfg config.CKVConfig, emb ckvtypes.Embedder, degradedReason, sourceRoot string) (ckvclient.Client, func() error, error) {
+	withSource := func(d *ckvclient.Dummy) *ckvclient.Dummy {
+		if sourceRoot != "" {
+			d.SourcePath = sourceRoot
+		}
+		return d
+	}
 	if cfg.Path == "" {
-		d := ckvclient.NewDummy()
+		d := withSource(ckvclient.NewDummy())
 		return d, d.Close, nil
 	}
 	if emb == nil {
 		// Configured but the embedder couldn't be built (Ollama down).
-		d := ckvclient.NewDegradedDummy(degradedReason)
+		d := withSource(ckvclient.NewDegradedDummy(degradedReason))
 		return d, d.Close, nil
 	}
 	real, err := ckvclient.NewReal(ctx, ckvclient.RealOpts{DataPath: cfg.Path, Embedder: emb})
@@ -233,32 +207,86 @@ func buildCKVClient(ctx context.Context, cfg config.CKVConfig, emb ckvtypes.Embe
 		// ckv.Open failed (index identity mismatch, missing files): degrade
 		// instead of crashing, and surface why via health (S5).
 		log.Printf("cks-mcp: ckv.Open failed (%v) — degraded mode", err)
-		d := ckvclient.NewDegradedDummy(err.Error())
+		d := withSource(ckvclient.NewDegradedDummy(err.Error()))
 		return d, d.Close, nil
 	}
 	return real, real.Close, nil
 }
 
-// buildEmbedder constructs the shared Ollama embedder (a ckv types.Embedder)
-// for the configured model. For bge-m3 it asserts the probed dimension is
-// 1024 (S3): the only failure mode the manifest identity check can't catch is
-// "Ollama served a different-dimensioned model under the bge-m3 name."
-func buildEmbedder(cfg config.CKVConfig) (ckvtypes.Embedder, error) {
-	model := cfg.EmbedModel
-	if model == "" {
-		model = "bge-m3"
-	}
-	adapter, err := ollama.Open(ollama.Options{Endpoint: cfg.OllamaURL, ModelName: model})
+// backends bundles the assembled ckg/ckv clients, the intent embedder, and the
+// embedding Capability, with a single composite closer. buildBackends is the
+// one place the degrade-vs-crash policy lives: ckg failure is fatal (no graph,
+// no citations), while an embedder/ckv failure degrades to the Smart Dummy and
+// a non-serviceable health status rather than crashing.
+type backends struct {
+	ckg       ckgclient.Client
+	ckv       ckvclient.Client
+	intentEmb intent.Embedder
+	cap       embedder.Capability
+	close     func()
+}
+
+func buildBackends(ctx context.Context, cfg *config.Config) (*backends, error) {
+	sourceRoot := cfg.Backends.CKG.SourceRoot
+
+	ckg, ckgCloser, err := buildCKGClient(cfg.Backends.CKG.Path, sourceRoot)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build ckg client: %w", err)
 	}
-	if model == "bge-m3" {
-		if got := adapter.Dimension(); got != 1024 {
-			_ = adapter.Close()
-			return nil, fmt.Errorf("embedder %q dim=%d, want 1024 (bge-m3)", model, got)
+
+	// Construct the embedding backend once and share it between the ckv
+	// adapter and the intent classifier (one model space, G2). The Capability
+	// is captured even on failure so health can report the intended model.
+	var (
+		ckvEmb         ckvtypes.Embedder
+		cap            embedder.Capability
+		degradedReason string
+	)
+	if cfg.Backends.CKV.Path != "" {
+		emb, c, embErr := embedder.Open(cfg.Backends.CKV.Provider, cfg.Backends.CKV.EmbedModel, cfg.Backends.CKV.OllamaURL)
+		cap = c
+		if embErr != nil {
+			degradedReason = embErr.Error()
+			log.Printf("cks-mcp: ckv embedder unavailable (%v) — degraded mode", embErr)
+		} else {
+			ckvEmb = emb
+		}
+	} else {
+		cap = embedder.Capability{
+			Provider: cfg.Backends.CKV.Provider,
+			Model:    cfg.Backends.CKV.EmbedModel,
+			Endpoint: cfg.Backends.CKV.OllamaURL,
 		}
 	}
-	return adapter, nil
+
+	ckv, ckvCloser, err := buildCKVClient(ctx, cfg.Backends.CKV, ckvEmb, degradedReason, sourceRoot)
+	if err != nil {
+		_ = ckgCloser()
+		return nil, fmt.Errorf("build ckv client: %w", err)
+	}
+
+	// Intent embedder: the shared adapter when available; otherwise a fake so
+	// the pipeline still constructs. The serviceability gate refuses real work
+	// in this state, so the fake only keeps the wiring valid — it never serves
+	// a degraded pack. Dim matches the model so downstream assumptions hold.
+	var intentEmb intent.Embedder
+	if ckvEmb != nil {
+		intentEmb = intentEmbedderAdapter{e: ckvEmb}
+	} else {
+		dim := cap.Dim
+		if dim == 0 {
+			dim = 1024
+		}
+		intentEmb = &intent.FakeEmbedder{Dim: dim}
+	}
+
+	return &backends{
+		ckg:       ckg,
+		ckv:       ckv,
+		intentEmb: intentEmb,
+		cap:       cap,
+		close:     func() { _ = ckvCloser(); _ = ckgCloser() },
+	}, nil
 }
 
 // intentEmbedderAdapter bridges a ckv types.Embedder (batch API) to the

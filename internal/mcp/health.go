@@ -43,6 +43,7 @@ type backendStat struct {
 	LastIndexAt    *time.Time `json:"last_index_at,omitempty"`   // ckv only
 	Provider       string     `json:"provider,omitempty"`        // ckv embedding provider
 	Model          string     `json:"model,omitempty"`           // ckv embedding model
+	Dim            int        `json:"dim,omitempty"`             // ckv embedding dimension
 	Endpoint       string     `json:"endpoint,omitempty"`        // ckv model endpoint
 	DataPath       string     `json:"data_path,omitempty"`       // backend DB path
 	Reason         string     `json:"reason,omitempty"`          // why not serviceable
@@ -70,9 +71,10 @@ func handleHealth(ctx context.Context, d Deps, _ mcpgo.CallToolRequest) (*mcpgo.
 	// Identity/metadata is config-sourced (known regardless of reachability),
 	// so a caller can still see which model+DB this instance is wired to even
 	// when the backend is down.
-	ckv.Provider = ckvProvider(d.Index)
-	ckv.Model = d.Index.EmbedModel
-	ckv.Endpoint = d.Index.OllamaURL
+	ckv.Provider = d.Embed.Provider
+	ckv.Model = d.Embed.Model
+	ckv.Dim = d.Embed.Dim
+	ckv.Endpoint = d.Embed.Endpoint
 	ckv.DataPath = d.Index.CKVDataPath
 	if ckvErr != nil {
 		ckv.Error = ckvErr.Error()
@@ -102,17 +104,6 @@ func handleHealth(ctx context.Context, d Deps, _ mcpgo.CallToolRequest) (*mcpgo.
 		},
 	}
 	return mcpgo.NewToolResultStructured(out, "health"), nil
-}
-
-// ckvProvider names the embedding provider for health metadata. Until a
-// config-driven provider field lands (provider abstraction phase), the only
-// implementation is Ollama; report it when a model is configured so the
-// metadata is self-describing rather than blank.
-func ckvProvider(idx IndexConfig) string {
-	if idx.EmbedModel == "" && idx.OllamaURL == "" && idx.CKVDataPath == "" {
-		return ""
-	}
-	return "ollama"
 }
 
 // serviceable probes both backends and reports whether the composer can

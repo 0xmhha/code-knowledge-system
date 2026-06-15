@@ -28,6 +28,7 @@ import (
 	"github.com/0xmhha/code-knowledge-system/internal/ckgclient"
 	"github.com/0xmhha/code-knowledge-system/internal/ckvclient"
 	"github.com/0xmhha/code-knowledge-system/internal/composer"
+	"github.com/0xmhha/code-knowledge-system/internal/embedder"
 	"github.com/0xmhha/code-knowledge-system/internal/vocab"
 )
 
@@ -55,6 +56,12 @@ type Deps struct {
 	// caller correlate health output with running binary build tags.
 	// Empty string is acceptable; the field is informational, not load-bearing.
 	BuilderVersion string
+
+	// Embed describes the embedding backend this instance serves (provider,
+	// model, endpoint, dimension). Surfaced by cks.ops.health so a caller can
+	// tell which model + instance it reached. Filled from config, so it
+	// reports intended identity even when the backend is down.
+	Embed embedder.Capability
 
 	// Vocab is the glossary resolver shared with the composer's Stage 1.
 	// When non-nil it backs the opt-in `expand` flag on semantic_search /
