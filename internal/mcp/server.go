@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -142,32 +143,103 @@ func Run(ctx context.Context, d Deps) error {
 	return nil
 }
 
+// HTTPPolicy controls who may connect to the Streamable HTTP listener.
+//
+// AllowRemote false → loopback clients only. AllowRemote true with no
+// AllowedCIDRs → loopback + private/LAN (RFC1918/ULA) + link-local, matching a
+// trusted local network. AllowRemote true with AllowedCIDRs → loopback plus
+// exactly those networks. This is network-scope filtering, not per-client
+// auth: any host on an allowed network can connect.
+type HTTPPolicy struct {
+	AllowRemote  bool
+	AllowedCIDRs []string
+}
+
 // RunHTTP serves the MCP surface over Streamable HTTP on addr until ctx is
 // cancelled, then shuts the listener down gracefully. Unlike stdio (one
 // client per subprocess) this lets several cks instances run on different
 // ports and accept connections from remote Claude Code clients; cks.ops.health
 // advertises which DB/model+indexed commit each instance serves so a caller
-// can identify the instance it reached.
-func RunHTTP(ctx context.Context, d Deps, addr string) error {
+// can identify the instance it reached. Client source IPs are filtered per
+// policy (clientACL).
+func RunHTTP(ctx context.Context, d Deps, addr string, policy HTTPPolicy) error {
 	s, err := build(d)
 	if err != nil {
 		return err
 	}
-	httpSrv := mcpserver.NewStreamableHTTPServer(s)
+	allow, err := clientACL(policy)
+	if err != nil {
+		return err
+	}
+	mcpHandler := mcpserver.NewStreamableHTTPServer(s)
+	srv := &http.Server{Addr: addr, Handler: aclMiddleware(mcpHandler, allow)}
+
 	errCh := make(chan error, 1)
-	go func() { errCh <- httpSrv.Start(addr) }()
+	go func() { errCh <- srv.ListenAndServe() }()
 
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return httpSrv.Shutdown(shutdownCtx)
+		return srv.Shutdown(shutdownCtx)
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("mcp: serve http on %q: %w", addr, err)
 		}
 		return nil
 	}
+}
+
+// clientACL compiles policy into a predicate over client IPs. Loopback is
+// always allowed. When AllowRemote is false, only loopback passes. With
+// explicit CIDRs, only loopback + those networks pass; otherwise the default
+// LAN policy (private + link-local) applies.
+func clientACL(policy HTTPPolicy) (func(net.IP) bool, error) {
+	var nets []*net.IPNet
+	for _, cidr := range policy.AllowedCIDRs {
+		_, n, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("mcp: invalid allowed CIDR %q: %w", cidr, err)
+		}
+		nets = append(nets, n)
+	}
+	return func(ip net.IP) bool {
+		if ip == nil {
+			return false
+		}
+		if ip.IsLoopback() {
+			return true
+		}
+		if !policy.AllowRemote {
+			return false
+		}
+		if len(nets) > 0 {
+			for _, n := range nets {
+				if n.Contains(ip) {
+					return true
+				}
+			}
+			return false
+		}
+		// Default LAN policy: private (RFC1918 + ULA fc00::/7) and link-local.
+		return ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	}, nil
+}
+
+// aclMiddleware rejects requests whose source IP fails allow. It uses the
+// direct TCP peer (RemoteAddr), not X-Forwarded-For, which a client could spoof.
+func aclMiddleware(next http.Handler, allow func(net.IP) bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		if !allow(net.ParseIP(host)) {
+			http.Error(w, "forbidden: client network not allowed", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // registerGetForTask wires the cks.context.get_for_task tool. The schema

@@ -138,8 +138,12 @@ func run(ctx context.Context, configPath string) error {
 		},
 	}
 	if cfg.Listen.ResolvedTransport() == "http" {
-		log.Printf("cks-mcp: serving Streamable HTTP on %s (allow_remote=%v)", cfg.Listen.HTTPAddr, cfg.Listen.AllowRemote)
-		return cksmcp.RunHTTP(ctx, deps, cfg.Listen.HTTPAddr)
+		log.Printf("cks-mcp: serving Streamable HTTP on %s (allow_remote=%v, allowed_cidrs=%v)",
+			cfg.Listen.HTTPAddr, cfg.Listen.AllowRemote, cfg.Listen.AllowedCIDRs)
+		return cksmcp.RunHTTP(ctx, deps, cfg.Listen.HTTPAddr, cksmcp.HTTPPolicy{
+			AllowRemote:  cfg.Listen.AllowRemote,
+			AllowedCIDRs: cfg.Listen.AllowedCIDRs,
+		})
 	}
 	return cksmcp.Run(ctx, deps)
 }

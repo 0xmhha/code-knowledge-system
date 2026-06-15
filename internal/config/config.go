@@ -135,11 +135,18 @@ type ListenConfig struct {
 	// for config back-compat.
 	Transport string `yaml:"transport"`
 	// AllowRemote permits binding HTTPAddr to a non-loopback (routable)
-	// address. Default false keeps the listener loopback-only. Enabling it
-	// exposes retrieval to the network; the sanitize ruleset still applies,
-	// but operators should add auth / network controls (token auth is a
-	// follow-up).
+	// address. Default false keeps the listener loopback-only. When true the
+	// HTTP server additionally filters by client source IP (see AllowedCIDRs):
+	// by default only loopback + private/LAN ranges may connect, matching a
+	// trusted local network. This is network-scope filtering, NOT per-client
+	// auth — any device on the allowed network can connect.
 	AllowRemote bool `yaml:"allow_remote"`
+	// AllowedCIDRs optionally restricts which client source networks may
+	// connect when AllowRemote is true. Empty means the default LAN policy
+	// (loopback + RFC1918/ULA private + link-local). When set, ONLY loopback
+	// and the listed CIDRs are allowed — use it to tighten to a single subnet
+	// (e.g. "192.168.1.0/24"). Ignored when AllowRemote is false.
+	AllowedCIDRs []string `yaml:"allowed_cidrs"`
 }
 
 // ResolvedTransport returns the effective MCP transport, defaulting to stdio
@@ -269,6 +276,11 @@ func (c *Config) Validate() error {
 	if c.Listen.HTTPAddr != "" && !c.Listen.AllowRemote {
 		if err := validateLoopback(c.Listen.HTTPAddr); err != nil {
 			return fmt.Errorf("config: listen.http_addr: %w (set listen.allow_remote: true to bind a routable address)", err)
+		}
+	}
+	for _, cidr := range c.Listen.AllowedCIDRs {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("config: listen.allowed_cidrs: %q is not a valid CIDR: %w", cidr, err)
 		}
 	}
 
