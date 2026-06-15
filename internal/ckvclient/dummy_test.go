@@ -41,11 +41,11 @@ func TestDummy_SemanticSearch_RecordsInstruction(t *testing.T) {
 	if inst.Query != "consensus failure handling" {
 		t.Errorf("Query: got %q", inst.Query)
 	}
-	if inst.SkillPath != DefaultSkillPath {
-		t.Errorf("SkillPath: got %q, want %q", inst.SkillPath, DefaultSkillPath)
+	if inst.SkillPath != d.skill() {
+		t.Errorf("SkillPath: got %q, want %q", inst.SkillPath, d.skill())
 	}
-	if inst.SourcePath != DefaultSourcePath {
-		t.Errorf("SourcePath: got %q, want %q", inst.SourcePath, DefaultSourcePath)
+	if inst.SourcePath != d.source() {
+		t.Errorf("SourcePath: got %q, want %q", inst.SourcePath, d.source())
 	}
 	if inst.Args["k"] != "5" {
 		t.Errorf("Args[k]: got %q, want 5", inst.Args["k"])

@@ -93,13 +93,30 @@ type SearchFilter struct {
 // Health is the result of a Client.Health() call. Reports backend state
 // (reachability + version pins), not call-specific metrics.
 type Health struct {
-	// Reachable is true when the backend responded within the health
-	// check timeout.
+	// Reachable is true when the ckv index itself is loaded and responding.
+	// This is the "index identity" signal — it says nothing about whether
+	// the embedding model behind the index is alive (see ModelReachable).
 	Reachable bool
+	// ModelReachable is true when the embedding model endpoint (e.g. the
+	// Ollama bge-m3 daemon) answered the most recent liveness probe or
+	// query. It is deliberately separate from Reachable: an index can be
+	// loaded (Reachable=true) while the model serving its vectors has died
+	// at runtime (ModelReachable=false) — a disconnect the old single
+	// "Reachable" flag could not express. Dummy/unconfigured backends
+	// report false: semantic retrieval is not actually available.
+	ModelReachable bool
 	// StatsHash is the ckv stats hash for cross-run reproducibility;
 	// the evaluation harness compares this across runs.
 	StatsHash string
+	// IndexedHead is the git commit of the source snapshot the index was
+	// built against — i.e. the project (go-stablenet) commit the DB
+	// "learned". Surfaced in cks.ops.health so a caller can tell which
+	// code state a given MCP instance was trained on.
+	IndexedHead string
 	// LastIndexAt is when the backend last completed an index build.
 	// Zero when the backend did not report it.
 	LastIndexAt time.Time
+	// Reason explains why the backend is not fully serviceable (model
+	// down, not configured, index mismatch). Empty when healthy.
+	Reason string
 }

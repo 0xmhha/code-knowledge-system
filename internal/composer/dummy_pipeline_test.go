@@ -2,6 +2,8 @@ package composer
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -73,21 +75,26 @@ func TestCompose_DummyBackendsPopulateInstructions(t *testing.T) {
 		t.Fatalf("Instructions: got 0, want at least one (ckv SemanticSearch via stage1)")
 	}
 
-	// Every instruction must carry the configured skill + source paths
-	// and a non-empty directive.
+	// With unconfigured dummies the skill/source paths default to the current
+	// working directory (see ckvclient/ckgclient Dummy.source/skill).
+	wantSource, _ := os.Getwd()
+	wantSkill := filepath.Join(wantSource, ".claude")
+
+	// Every instruction must carry the derived skill + source paths and a
+	// non-empty directive.
 	seenBackends := map[string]bool{}
 	for i, inst := range pack.Instructions {
 		seenBackends[inst.Backend] = true
-		if inst.SkillPath != ckvclient.DefaultSkillPath {
-			t.Errorf("inst[%d].SkillPath: got %q, want %q", i, inst.SkillPath, ckvclient.DefaultSkillPath)
+		if inst.SkillPath != wantSkill {
+			t.Errorf("inst[%d].SkillPath: got %q, want %q", i, inst.SkillPath, wantSkill)
 		}
-		if inst.SourcePath != ckvclient.DefaultSourcePath {
-			t.Errorf("inst[%d].SourcePath: got %q, want %q", i, inst.SourcePath, ckvclient.DefaultSourcePath)
+		if inst.SourcePath != wantSource {
+			t.Errorf("inst[%d].SourcePath: got %q, want %q", i, inst.SourcePath, wantSource)
 		}
 		if inst.Directive == "" {
 			t.Errorf("inst[%d].Directive empty", i)
 		}
-		if !strings.Contains(inst.Directive, ckvclient.DefaultSourcePath) {
+		if !strings.Contains(inst.Directive, wantSource) {
 			t.Errorf("inst[%d].Directive missing source path", i)
 		}
 	}

@@ -19,6 +19,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"time"
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -26,6 +29,7 @@ import (
 	"github.com/0xmhha/code-knowledge-system/internal/ckgclient"
 	"github.com/0xmhha/code-knowledge-system/internal/ckvclient"
 	"github.com/0xmhha/code-knowledge-system/internal/composer"
+	"github.com/0xmhha/code-knowledge-system/internal/embedder"
 	"github.com/0xmhha/code-knowledge-system/internal/vocab"
 )
 
@@ -53,6 +57,12 @@ type Deps struct {
 	// caller correlate health output with running binary build tags.
 	// Empty string is acceptable; the field is informational, not load-bearing.
 	BuilderVersion string
+
+	// Embed describes the embedding backend this instance serves (provider,
+	// model, endpoint, dimension). Surfaced by cks.ops.health so a caller can
+	// tell which model + instance it reached. Filled from config, so it
+	// reports intended identity even when the backend is down.
+	Embed embedder.Capability
 
 	// Vocab is the glossary resolver shared with the composer's Stage 1.
 	// When non-nil it backs the opt-in `expand` flag on semantic_search /
@@ -100,17 +110,28 @@ func Register(s *mcpserver.MCPServer, d Deps) error {
 	return nil
 }
 
-// Run constructs an MCP server named "cks" (version v from BuilderVersion
-// or a fallback), registers the tools, and serves stdio until ctx is
-// cancelled or stdin closes. Intended entry point for cmd/cks-mcp.
-func Run(ctx context.Context, d Deps) error {
+// build constructs an MCP server named "cks" (version v from BuilderVersion
+// or a fallback) with all tools registered. Shared by the stdio (Run) and
+// Streamable-HTTP (RunHTTP) entry points so the registered surface is
+// identical across transports.
+func build(d Deps) (*mcpserver.MCPServer, error) {
 	v := d.BuilderVersion
 	if v == "" {
 		v = "0.0.0"
 	}
 	s := mcpserver.NewMCPServer("cks", v)
 	if err := Register(s, d); err != nil {
-		return fmt.Errorf("mcp: register: %w", err)
+		return nil, fmt.Errorf("mcp: register: %w", err)
+	}
+	return s, nil
+}
+
+// Run registers the tools and serves stdio until ctx is cancelled or stdin
+// closes. Intended entry point for cmd/cks-mcp's default (stdio) transport.
+func Run(ctx context.Context, d Deps) error {
+	s, err := build(d)
+	if err != nil {
+		return err
 	}
 	// mcp-go's stdio server does not currently surface ctx into its
 	// loop; the caller's ctx still gates anything Compose / Health do
@@ -120,6 +141,105 @@ func Run(ctx context.Context, d Deps) error {
 		return fmt.Errorf("mcp: serve stdio: %w", err)
 	}
 	return nil
+}
+
+// HTTPPolicy controls who may connect to the Streamable HTTP listener.
+//
+// AllowRemote false → loopback clients only. AllowRemote true with no
+// AllowedCIDRs → loopback + private/LAN (RFC1918/ULA) + link-local, matching a
+// trusted local network. AllowRemote true with AllowedCIDRs → loopback plus
+// exactly those networks. This is network-scope filtering, not per-client
+// auth: any host on an allowed network can connect.
+type HTTPPolicy struct {
+	AllowRemote  bool
+	AllowedCIDRs []string
+}
+
+// RunHTTP serves the MCP surface over Streamable HTTP on addr until ctx is
+// cancelled, then shuts the listener down gracefully. Unlike stdio (one
+// client per subprocess) this lets several cks instances run on different
+// ports and accept connections from remote Claude Code clients; cks.ops.health
+// advertises which DB/model+indexed commit each instance serves so a caller
+// can identify the instance it reached. Client source IPs are filtered per
+// policy (clientACL).
+func RunHTTP(ctx context.Context, d Deps, addr string, policy HTTPPolicy) error {
+	s, err := build(d)
+	if err != nil {
+		return err
+	}
+	allow, err := clientACL(policy)
+	if err != nil {
+		return err
+	}
+	mcpHandler := mcpserver.NewStreamableHTTPServer(s)
+	srv := &http.Server{Addr: addr, Handler: aclMiddleware(mcpHandler, allow)}
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.ListenAndServe() }()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("mcp: serve http on %q: %w", addr, err)
+		}
+		return nil
+	}
+}
+
+// clientACL compiles policy into a predicate over client IPs. Loopback is
+// always allowed. When AllowRemote is false, only loopback passes. With
+// explicit CIDRs, only loopback + those networks pass; otherwise the default
+// LAN policy (private + link-local) applies.
+func clientACL(policy HTTPPolicy) (func(net.IP) bool, error) {
+	var nets []*net.IPNet
+	for _, cidr := range policy.AllowedCIDRs {
+		_, n, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("mcp: invalid allowed CIDR %q: %w", cidr, err)
+		}
+		nets = append(nets, n)
+	}
+	return func(ip net.IP) bool {
+		if ip == nil {
+			return false
+		}
+		if ip.IsLoopback() {
+			return true
+		}
+		if !policy.AllowRemote {
+			return false
+		}
+		if len(nets) > 0 {
+			for _, n := range nets {
+				if n.Contains(ip) {
+					return true
+				}
+			}
+			return false
+		}
+		// Default LAN policy: private (RFC1918 + ULA fc00::/7) and link-local.
+		return ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	}, nil
+}
+
+// aclMiddleware rejects requests whose source IP fails allow. It uses the
+// direct TCP peer (RemoteAddr), not X-Forwarded-For, which a client could spoof.
+func aclMiddleware(next http.Handler, allow func(net.IP) bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		if !allow(net.ParseIP(host)) {
+			http.Error(w, "forbidden: client network not allowed", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // registerGetForTask wires the cks.context.get_for_task tool. The schema

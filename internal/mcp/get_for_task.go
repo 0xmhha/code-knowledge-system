@@ -24,6 +24,18 @@ func handleGetForTask(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*
 		return mcpgo.NewToolResultError("cks.context.get_for_task: missing required argument \"prompt\""), nil
 	}
 
+	// Fail loud when the backend is not serviceable. A ckv-down ("degraded")
+	// or fully down state cannot produce the semantic context an upper-layer
+	// LLM needs to design correctly; returning a ckg-only pack here would let
+	// the caller act on silently degraded evidence. Refuse with an actionable
+	// reason so the caller waits for / provisions ckv instead of proceeding.
+	if ok, reason := serviceable(ctx, d); !ok {
+		return mcpgo.NewToolResultError(fmt.Sprintf(
+			"cks.context.get_for_task: service unavailable — %s. "+
+				"ckv semantic retrieval is required for design-grade context; "+
+				"wait for ckv to become ready or provision it, then retry.", reason)), nil
+	}
+
 	pack, err := d.Composer.Compose(ctx, prompt)
 	if err != nil {
 		// Fail-closed is a policy outcome the caller needs to distinguish
