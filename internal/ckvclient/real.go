@@ -3,6 +3,8 @@ package ckvclient
 import (
 	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/0xmhha/code-knowledge-vector/pkg/ckv"
@@ -13,6 +15,13 @@ import (
 
 // DefaultK is the SemanticSearch limit when SearchOpts.K is zero.
 const DefaultK = 10
+
+// modelProbeTTL bounds how often Health issues a fresh embedding-model
+// liveness probe. Health is a fast, frequently-polled signal, so we cache
+// the probe result for this window instead of embedding on every call; a
+// failed real query trips the modelDown flag for immediate detection in
+// between probes.
+const modelProbeTTL = 5 * time.Second
 
 // RealOpts configures the in-process ckv adapter (G1). The old subprocess
 // fields (BinaryPath / Env / CallTimeout) are gone — cks imports pkg/ckv
@@ -38,7 +47,20 @@ type RealOpts struct {
 // runs. ckv.Engine is concurrent-safe for reads, so Real needs no locking.
 type Real struct {
 	eng    *ckv.Engine
+	emb    ckvtypes.Embedder
 	closed bool
+
+	// modelDown is tripped when a real SemanticSearch fails (the engine's
+	// embed call could not reach the model) and cleared on success, so the
+	// next Health reflects a runtime disconnect without waiting for a probe.
+	modelDown atomic.Bool
+
+	// probe* cache the most recent embedding-model liveness probe under a
+	// modelProbeTTL window (see probeModel).
+	probeMu         sync.Mutex
+	lastProbe       time.Time
+	lastProbeOK     bool
+	lastProbeReason string
 }
 
 // Compile-time guarantee Real satisfies Client.
@@ -60,7 +82,9 @@ func NewReal(ctx context.Context, opts RealOpts) (*Real, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ckvclient: ckv.Open %q: %w", opts.DataPath, err)
 	}
-	return &Real{eng: eng}, nil
+	// The caller (cmd/cks-mcp) only constructs Real after buildEmbedder
+	// probed the model successfully, so the model starts known-up.
+	return &Real{eng: eng, emb: opts.Embedder, lastProbeOK: true}, nil
 }
 
 // SemanticSearch runs an in-process vector query and translates each
@@ -81,8 +105,13 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 	}
 	resp, err := r.eng.SemanticSearch(ctx, query, ckv.SearchOptions{K: k})
 	if err != nil {
+		// A query failure means the engine could not embed the query —
+		// almost always the model endpoint is unreachable. Trip the flag so
+		// the next Health reports the model down without waiting for a probe.
+		r.modelDown.Store(true)
 		return nil, fmt.Errorf("ckvclient: SemanticSearch: %w", err)
 	}
+	r.modelDown.Store(false)
 	if resp == nil {
 		return nil, nil
 	}
@@ -128,15 +157,21 @@ func (r *Real) Freshness(ctx context.Context) (FreshnessReport, error) {
 	}, nil
 }
 
-// Health reports the in-process engine as reachable plus the index identity.
-// StatsHash is the indexed git head (stable per snapshot, what the eval
-// harness compares across runs); LastIndexAt parses the manifest's RFC3339
-// built-at timestamp when present.
+// Health reports two distinct signals: index identity (the engine is open,
+// Reachable=true, with StatsHash/IndexedHead = the indexed git head and
+// LastIndexAt from the manifest) and embedding-model liveness
+// (ModelReachable, via probeModel). Separating them lets cks.ops.health tell
+// "index loaded but model down" apart from "fully healthy" — the runtime
+// disconnect the old manifest-only Health silently reported as reachable.
 func (r *Real) Health(ctx context.Context) (Health, error) {
 	man := r.eng.Manifest()
+	modelUp, reason := r.probeModel(ctx)
 	h := Health{
-		Reachable: true,
-		StatsHash: man.IndexedHead,
+		Reachable:      true,
+		ModelReachable: modelUp,
+		StatsHash:      man.IndexedHead,
+		IndexedHead:    man.IndexedHead,
+		Reason:         reason,
 	}
 	if man.BuiltAt != "" {
 		if t, perr := time.Parse(time.RFC3339, man.BuiltAt); perr == nil {
@@ -144,6 +179,34 @@ func (r *Real) Health(ctx context.Context) (Health, error) {
 		}
 	}
 	return h, nil
+}
+
+// probeModel reports embedding-model liveness. It short-circuits to "down"
+// when a real query has tripped modelDown; otherwise it reuses a cached
+// probe within modelProbeTTL and only issues a fresh single-token embed when
+// the cache is stale. A probe failure also trips modelDown so a concurrent
+// query path observes the outage immediately.
+func (r *Real) probeModel(ctx context.Context) (bool, string) {
+	if r.modelDown.Load() {
+		return false, "embedding model unreachable (last query failed)"
+	}
+	r.probeMu.Lock()
+	defer r.probeMu.Unlock()
+	if !r.lastProbe.IsZero() && time.Since(r.lastProbe) < modelProbeTTL {
+		return r.lastProbeOK, r.lastProbeReason
+	}
+	_, err := r.emb.Embed(ctx, []string{"liveness probe"})
+	r.lastProbe = time.Now()
+	if err != nil {
+		r.lastProbeOK = false
+		r.lastProbeReason = "embedding model probe failed: " + err.Error()
+		r.modelDown.Store(true)
+	} else {
+		r.lastProbeOK = true
+		r.lastProbeReason = ""
+		r.modelDown.Store(false)
+	}
+	return r.lastProbeOK, r.lastProbeReason
 }
 
 // Close releases the underlying ckv engine. Idempotent.

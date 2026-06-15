@@ -137,22 +137,30 @@ func (d *Dummy) Freshness(ctx context.Context) (FreshnessReport, error) {
 	return FreshnessReport{Fresh: true}, nil
 }
 
-// Health reports the dummy as reachable without recording an instruction;
-// health checks are part of the CKS bootstrap, not part of the retrieval
-// pipeline the upstream LLM needs to fulfil.
+// Health reports the dummy as not model-reachable without recording an
+// instruction; health checks are part of the CKS bootstrap, not part of the
+// retrieval pipeline the upstream LLM needs to fulfil.
+//
+// Under the ckv-required policy a Smart Dummy never represents a serviceable
+// ckv: with no embedder there is no semantic retrieval, so ModelReachable is
+// always false and the reason is carried in the dedicated Reason field (not
+// smuggled through StatsHash, which is reserved for cross-run identity).
 func (d *Dummy) Health(ctx context.Context) (Health, error) {
 	if d.Degraded {
-		// Report unreachable so aggregateHealthStatus rolls up to "degraded".
-		hash := "degraded"
+		reason := "ckv index configured but embedder (Ollama) unavailable"
 		if d.DegradedReason != "" {
-			hash = "degraded: " + d.DegradedReason
+			reason = d.DegradedReason
 		}
-		return Health{Reachable: false, StatsHash: hash}, nil
+		// Reachable=false: the configured index could not be opened/served.
+		return Health{Reachable: false, ModelReachable: false, Reason: reason}, nil
 	}
+	// Plain dummy = ckv not configured. The index "responds" (Reachable) but
+	// there is no model, so it is not ready to serve design-grade context.
 	return Health{
-		Reachable:   true,
-		StatsHash:   "dummy",
-		LastIndexAt: time.Time{},
+		Reachable:      true,
+		ModelReachable: false,
+		Reason:         "ckv not configured (Smart Dummy) — semantic retrieval unavailable",
+		LastIndexAt:    time.Time{},
 	}, nil
 }
 

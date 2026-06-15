@@ -38,8 +38,11 @@ type fixture struct {
 func newFixture(t *testing.T, setup func(f *fixture)) *fixture {
 	t.Helper()
 	f := &fixture{
-		ckv:      &ckvclient.Fake{},
-		ckg:      &ckgclient.Fake{},
+		// Default to serviceable backends so handlers under test (e.g.
+		// get_for_task) pass the serviceability gate; health-specific tests
+		// override these to exercise down/degraded rollups.
+		ckv:      &ckvclient.Fake{HealthVal: ckvclient.Health{Reachable: true, ModelReachable: true}},
+		ckg:      &ckgclient.Fake{HealthVal: ckgclient.Health{Reachable: true}},
 		embedder: &intent.FakeEmbedder{Dim: 16},
 		fetcher:  &budget.FakeFetcher{Bodies: map[string]string{}},
 		ruleset: &config.SanitizeRuleset{
@@ -147,7 +150,7 @@ func TestHandleHealth_AllReachable_ReturnsOK(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, func(f *fixture) {
 		f.ckg.HealthVal = ckgclient.Health{Reachable: true, SchemaVersion: "v1", IndexedHead: "abc"}
-		f.ckv.HealthVal = ckvclient.Health{Reachable: true, StatsHash: "h1"}
+		f.ckv.HealthVal = ckvclient.Health{Reachable: true, ModelReachable: true, StatsHash: "h1"}
 	})
 
 	res, err := handleHealth(context.Background(), f.deps, mcpgo.CallToolRequest{})
@@ -157,6 +160,9 @@ func TestHandleHealth_AllReachable_ReturnsOK(t *testing.T) {
 	got := unpackResult(t, res)
 	if got["status"] != "ok" {
 		t.Errorf("status = %v, want \"ok\"", got["status"])
+	}
+	if got["serviceable"] != true {
+		t.Errorf("serviceable = %v, want true", got["serviceable"])
 	}
 	if got["builder_version"] != "cks-test/0.0.1" {
 		t.Errorf("builder_version = %v, want cks-test/0.0.1", got["builder_version"])
@@ -208,10 +214,11 @@ func TestHandleHealth_CKGDown_ReturnsDown(t *testing.T) {
 	}
 }
 
-func TestHandleHealth_CKVDown_ReturnsDegraded(t *testing.T) {
+func TestHandleHealth_CKVDown_ReturnsDegradedNotServiceable(t *testing.T) {
 	t.Parallel()
-	// HLD §10: ckv unreachable -> fall back to ckg-only. The pack path
-	// still works, so the system is degraded, not down.
+	// ckv unreachable: the rollup keeps the "degraded" label for diagnosis
+	// (the failure is on the ckv side), but degraded is NOT serviceable —
+	// semantic understanding is required, so serviceable must be false.
 	f := newFixture(t, func(f *fixture) {
 		f.ckg.HealthVal = ckgclient.Health{Reachable: true}
 		f.ckv.HealthErr = errors.New("ckv backend unreachable")
@@ -223,11 +230,64 @@ func TestHandleHealth_CKVDown_ReturnsDegraded(t *testing.T) {
 	}
 	got := unpackResult(t, res)
 	if got["status"] != "degraded" {
-		t.Errorf("status = %v, want \"degraded\" (ckv optional, ckg up)", got["status"])
+		t.Errorf("status = %v, want \"degraded\" (ckg up, ckv down)", got["status"])
+	}
+	if got["serviceable"] != false {
+		t.Errorf("serviceable = %v, want false (degraded is not serviceable)", got["serviceable"])
 	}
 }
 
+// TestHandleHealth_CKVModelDown_NotServiceable covers the runtime-disconnect
+// case the old manifest-only health missed: the index is loaded (Reachable)
+// but the embedding model died (ModelReachable=false). It must roll up to
+// degraded + not serviceable rather than a false "ok".
+func TestHandleHealth_CKVModelDown_NotServiceable(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, func(f *fixture) {
+		f.ckg.HealthVal = ckgclient.Health{Reachable: true}
+		f.ckv.HealthVal = ckvclient.Health{Reachable: true, ModelReachable: false, Reason: "model down"}
+	})
+
+	got := unpackResult(t, mustHealth(t, f))
+	if got["status"] != "degraded" {
+		t.Errorf("status = %v, want \"degraded\"", got["status"])
+	}
+	if got["serviceable"] != false {
+		t.Errorf("serviceable = %v, want false", got["serviceable"])
+	}
+}
+
+func mustHealth(t *testing.T, f *fixture) *mcpgo.CallToolResult {
+	t.Helper()
+	res, err := handleHealth(context.Background(), f.deps, mcpgo.CallToolRequest{})
+	if err != nil {
+		t.Fatalf("handleHealth: %v", err)
+	}
+	return res
+}
+
 // --- handleGetForTask ---
+
+// TestHandleGetForTask_NotServiceable_FailsLoud asserts the query path
+// refuses (IsError) instead of composing a degraded pack when ckv is down.
+func TestHandleGetForTask_NotServiceable_FailsLoud(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, func(f *fixture) {
+		f.ckg.HealthVal = ckgclient.Health{Reachable: true}
+		f.ckv.HealthVal = ckvclient.Health{Reachable: true, ModelReachable: false, Reason: "ckv not ready"}
+	})
+
+	res, err := handleGetForTask(context.Background(), f.deps, callToolReq(map[string]any{"prompt": "anything"}))
+	if err != nil {
+		t.Fatalf("handleGetForTask should return MCP error result, not Go error: %v", err)
+	}
+	if res == nil || !res.IsError {
+		t.Fatalf("expected IsError=true when not serviceable; got %+v", res)
+	}
+	if !strings.Contains(resultText(res), "service unavailable") {
+		t.Errorf("error text missing 'service unavailable': %q", resultText(res))
+	}
+}
 
 func TestHandleGetForTask_RequiresPrompt(t *testing.T) {
 	t.Parallel()
