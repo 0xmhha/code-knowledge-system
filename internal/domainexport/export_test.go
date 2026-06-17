@@ -27,8 +27,8 @@ func TestRenderEntry_FullEntry(t *testing.T) {
 		CodeAnchors: []inventory.CodeAnchor{
 			{File: "params/config_wbft.go", Symbol: "DefaultGovMinterAddress", Line: 41, Reason: "GovMinter"},
 		},
-		EnglishAliases: []string{"system contract addresses"},
-		CodeKeywords:   []string{"DefaultGovMinterAddress"},
+		EnglishAliases:  []string{"system contract addresses"},
+		CodeKeywords:    []string{"DefaultGovMinterAddress"},
 		RelatedConcepts: []string{"A5.account_extra.bit_layout"},
 	}
 	md := RenderEntry(e, sampleProject())

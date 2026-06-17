@@ -4,13 +4,13 @@ import "time"
 
 // PRRef is a reference to a pull request that modified a symbol or file.
 type PRRef struct {
-	Number    int       `json:"number"`
-	Title     string    `json:"title"`
-	Summary   string    `json:"summary,omitempty"`
-	BaseSHA   string    `json:"base_sha,omitempty"`
-	HeadSHA   string    `json:"head_sha,omitempty"`
-	MergedAt  time.Time `json:"merged_at,omitempty"`
-	Repo      string    `json:"repo,omitempty"`
+	Number   int       `json:"number"`
+	Title    string    `json:"title"`
+	Summary  string    `json:"summary,omitempty"`
+	BaseSHA  string    `json:"base_sha,omitempty"`
+	HeadSHA  string    `json:"head_sha,omitempty"`
+	MergedAt time.Time `json:"merged_at,omitempty"`
+	Repo     string    `json:"repo,omitempty"`
 }
 
 // HunkEvidence is one code change (hunk) relevant to an intent query,

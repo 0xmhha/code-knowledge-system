@@ -51,7 +51,7 @@ func SummarizeByIntent(results []ScenarioResult) []IntentSummary {
 	}
 	const unspecified = "(unspecified)"
 	type acc struct {
-		count int
+		count                    int
 		sumP, sumR, sumF, sumLat float64
 	}
 	buckets := make(map[string]*acc)

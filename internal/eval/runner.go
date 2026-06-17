@@ -207,10 +207,10 @@ func (r *Runner) executeOnce(ctx context.Context, s *Scenario) (Metrics, error) 
 // Latency gets the percentile treatment because operationally it's
 // the field most likely to vary across runs:
 //
-//   LatencyMS    = p50 (legacy field name kept for backwards compat)
-//   LatencyMSP50 = p50 (explicit alias)
-//   LatencyMSP95 = p95 (== p50 when len < 5)
-//   LatencyMSMax = p100 (max observed)
+//	LatencyMS    = p50 (legacy field name kept for backwards compat)
+//	LatencyMSP50 = p50 (explicit alias)
+//	LatencyMSP95 = p95 (== p50 when len < 5)
+//	LatencyMSMax = p100 (max observed)
 func medianMetrics(ms []Metrics) Metrics {
 	if len(ms) == 0 {
 		return Metrics{}

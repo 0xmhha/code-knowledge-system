@@ -57,7 +57,7 @@ func main() {
 // lineUpdate is a single anchor whose line must change, keyed by (file, symbol)
 // so the YAML rewriter can find the exact anchor inside code_anchors.
 type lineUpdate struct {
-	file, symbol  string
+	file, symbol     string
 	oldLine, newLine int
 }
 

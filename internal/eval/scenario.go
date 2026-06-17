@@ -49,14 +49,14 @@ type Scenario struct {
 // must stay authoritative); the eval package owns its own wire shape
 // and translates into contract.Citation at parse time.
 type scenarioWire struct {
-	Version           int                  `yaml:"version"`
-	Name              string               `yaml:"name"`
-	Description       string               `yaml:"description,omitempty"`
-	Prompt            string               `yaml:"prompt"`
-	Intent            string               `yaml:"intent,omitempty"`
+	Version           int                    `yaml:"version"`
+	Name              string                 `yaml:"name"`
+	Description       string                 `yaml:"description,omitempty"`
+	Prompt            string                 `yaml:"prompt"`
+	Intent            string                 `yaml:"intent,omitempty"`
 	ExpectedCitations []scenarioCitationWire `yaml:"expected_citations,omitempty"`
-	MatchMode         MatchMode            `yaml:"match_mode,omitempty"`
-	Runs              int                  `yaml:"runs,omitempty"`
+	MatchMode         MatchMode              `yaml:"match_mode,omitempty"`
+	Runs              int                    `yaml:"runs,omitempty"`
 }
 
 type scenarioCitationWire struct {

@@ -49,11 +49,11 @@ import (
 
 func main() {
 	var (
-		projectDir     = flag.String("project", "", "project directory")
-		entryRef       = flag.String("entry", "", "entry id (e.g. A1.wbft_core.quorum_calc) or path to entry YAML")
-		reviewer       = flag.String("by", "", "reviewer handle to record under verified_by")
-		date           = flag.String("date", "", "verification date YYYY-MM-DD (default: today UTC)")
-		skipInventory  = flag.Bool("skip-inventory", false, "do not rewrite inventory.md after the promotion")
+		projectDir    = flag.String("project", "", "project directory")
+		entryRef      = flag.String("entry", "", "entry id (e.g. A1.wbft_core.quorum_calc) or path to entry YAML")
+		reviewer      = flag.String("by", "", "reviewer handle to record under verified_by")
+		date          = flag.String("date", "", "verification date YYYY-MM-DD (default: today UTC)")
+		skipInventory = flag.Bool("skip-inventory", false, "do not rewrite inventory.md after the promotion")
 	)
 	flag.Parse()
 

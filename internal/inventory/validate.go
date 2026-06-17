@@ -12,9 +12,9 @@ import (
 // tooling is not in the loop. If the schema's regex changes, update
 // these strings — the schema YAML file is the source of truth.
 var (
-	entryIDPattern       = regexp.MustCompile(`^[A-Z][0-9]+\.[a-z0-9_]+(\.[a-z0-9_]+)+$`)
-	subsystemPattern     = regexp.MustCompile(`^[A-Z][0-9]+$`)
-	dateYYYYMMDDPattern  = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
+	entryIDPattern        = regexp.MustCompile(`^[A-Z][0-9]+\.[a-z0-9_]+(\.[a-z0-9_]+)+$`)
+	subsystemPattern      = regexp.MustCompile(`^[A-Z][0-9]+$`)
+	dateYYYYMMDDPattern   = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
 	knowledgeTypesAllowed = map[string]bool{
 		"B1": true, "B2": true, "B3": true, "B4": true, "B5": true, "B6": true, "B7": true,
 	}

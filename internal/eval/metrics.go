@@ -7,7 +7,7 @@
 //
 // Files:
 //   - metrics.go   pure citation-set comparison (precision/recall/f1,
-//                  match modes, median over runs)
+//     match modes, median over runs)
 //   - scenario.go  YAML schema + loader
 //   - runner.go    Runner: scenario → MCP get_for_task → metrics
 //   - report.go    JSON report serialization

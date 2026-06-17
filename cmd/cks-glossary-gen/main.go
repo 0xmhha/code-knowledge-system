@@ -36,18 +36,18 @@ import (
 // We unmarshal lazily — unknown fields are tolerated so a schema bump
 // that doesn't touch these fields does not break the generator.
 type entryFile struct {
-	ID              string   `yaml:"id"`
-	Status          string   `yaml:"status"`
-	KoreanAliases   []string `yaml:"korean_aliases"`
-	EnglishAliases  []string `yaml:"english_aliases"`
-	CodeKeywords    []string `yaml:"code_keywords"`
+	ID             string   `yaml:"id"`
+	Status         string   `yaml:"status"`
+	KoreanAliases  []string `yaml:"korean_aliases"`
+	EnglishAliases []string `yaml:"english_aliases"`
+	CodeKeywords   []string `yaml:"code_keywords"`
 }
 
 // glossaryFile is the on-disk shape of a vocab.Glossary plus a single
 // canonical-tracking field per entry. The shape matches vocab.Load
 // exactly except for the canonical field, which the loader tolerates.
 type glossaryFile struct {
-	Version int                `yaml:"version"`
+	Version int                 `yaml:"version"`
 	Entries []glossaryFileEntry `yaml:"entries"`
 }
 

@@ -4,9 +4,9 @@ import "testing"
 
 func TestQualifyGovernsSymbol(t *testing.T) {
 	cases := []struct {
-		name           string
-		file, symbol   string
-		want           string
+		name         string
+		file, symbol string
+		want         string
 	}{
 		{"plain function",
 			"params/config_wbft.go", "DefaultAnzeonConfig",

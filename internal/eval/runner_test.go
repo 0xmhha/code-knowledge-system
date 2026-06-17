@@ -13,12 +13,12 @@ import (
 // --- mockMCPClient ---
 
 type mockMCPClient struct {
-	initCalls  int
-	initErr    error
-	callOut    map[string]*mcpgo.CallToolResult
-	callErr    map[string]error
-	calls      []toolCall
-	closed     bool
+	initCalls int
+	initErr   error
+	callOut   map[string]*mcpgo.CallToolResult
+	callErr   map[string]error
+	calls     []toolCall
+	closed    bool
 }
 
 type toolCall struct {
