@@ -29,6 +29,17 @@
 #   ./scripts/cks-mcpd.sh logs   <name> [-f]
 #   ./scripts/cks-mcpd.sh register   <name> [--scope user|local|project]
 #   ./scripts/cks-mcpd.sh unregister <name>
+#   ./scripts/cks-mcpd.sh remove <name> | --all | --stale \
+#                                [--force] [--purge] [--keep-logs] [--scope <s>]
+#
+# remove — delete an instance's state dir (run/cks-mcpd/<name>/):
+#   <name>        remove one instance (refuses if running unless --force)
+#   --all         remove every instance
+#   --stale       remove only dead instances (running ones are kept) — clears
+#                 leftover `list` rows after stop
+#   --force       stop a running instance, then remove it
+#   --purge       also unregister from Claude Code (claude mcp remove cks-<name>)
+#   --keep-logs   delete pid/config/port but keep cks-mcp.log
 #
 # Examples:
 #   ./scripts/cks-mcpd.sh start stablenet --config cks-stablenet.yaml --port 8801
@@ -300,7 +311,74 @@ cmd_unregister() {
   claude mcp remove "$sv" -s "$scope"
 }
 
-usage() { sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# _remove_one <name> <force> <purge> <keep_logs> <scope>
+_remove_one() {
+  local n="$1" force="$2" purge="$3" keep_logs="$4" scope="$5"
+  local d; d="$(inst_dir "$n")"
+  [[ -d "$d" ]] || { info "skip '$n': no such instance"; return 0; }
+  if alive "$n"; then
+    if [[ "$force" == "true" ]]; then cmd_stop "$n"; else
+      info "skip '$n': running — stop it first or pass --force"; return 0
+    fi
+  fi
+  if [[ "$purge" == "true" ]]; then
+    if command -v claude >/dev/null 2>&1; then
+      info "unregistering $(srvname "$n") (scope=$scope)"
+      claude mcp remove "$(srvname "$n")" -s "$scope" >/dev/null 2>&1 || true
+    else
+      info "note: 'claude' CLI not on PATH — skipping unregister for '$n'"
+    fi
+  fi
+  if [[ "$keep_logs" == "true" ]]; then
+    rm -f "$(cfgfile "$n")" "$(portfile "$n")" "$(advfile "$n")" "$(pidfile "$n")"
+    info "removed '$n' (kept log: $(logfile "$n"))"
+  else
+    rm -rf "$d"
+    info "removed '$n'"
+  fi
+}
+
+cmd_remove() {
+  local target="" all="false" stale="false" force="false" purge="false" keep_logs="false" scope="user"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --all)       all="true"; shift ;;
+      --stale)     stale="true"; shift ;;
+      --force)     force="true"; shift ;;
+      --purge)     purge="true"; shift ;;
+      --keep-logs) keep_logs="true"; shift ;;
+      --scope)     scope="$2"; shift 2 ;;
+      -*)          die "remove: unknown arg '$1'" ;;
+      *)           [[ -z "$target" ]] || die "remove: extra arg '$1'"; target="$1"; shift ;;
+    esac
+  done
+
+  # Build the work list.
+  local names=()
+  if [[ "$all" == "true" || "$stale" == "true" ]]; then
+    [[ -z "$target" ]] || die "remove: <name> cannot be combined with --all/--stale"
+    [[ -d "$RUN_DIR" ]] || { info "nothing to remove"; return 0; }
+    local d n
+    for d in "$RUN_DIR"/*/; do
+      [[ -d "$d" ]] || continue
+      n="$(basename "$d")"
+      # --stale: only dead instances (running ones are left intact)
+      if [[ "$stale" == "true" ]] && alive "$n"; then continue; fi
+      names+=("$n")
+    done
+    [[ ${#names[@]} -gt 0 ]] || { info "nothing to remove"; return 0; }
+  else
+    [[ -n "$target" ]] || die "remove: missing <name> (or --all / --stale)"
+    valid_name "$target"
+    names=("$target")
+  fi
+
+  local n
+  for n in "${names[@]}"; do _remove_one "$n" "$force" "$purge" "$keep_logs" "$scope"; done
+}
+
+# Print the leading comment header (everything before `set -euo pipefail`).
+usage() { awk 'NR>1 && /^set -euo/{exit} NR>1{sub(/^# ?/,""); print}' "${BASH_SOURCE[0]}"; }
 
 main() {
   local cmd="${1:-}"; shift || true
@@ -313,6 +391,7 @@ main() {
     logs)       cmd_logs "$@" ;;
     register)   cmd_register "$@" ;;
     unregister) cmd_unregister "$@" ;;
+    remove|rm)  cmd_remove "$@" ;;
     ""|-h|--help|help) usage ;;
     *) die "unknown command '$cmd' (try --help)" ;;
   esac
