@@ -15,20 +15,24 @@ summary: |
 
 code_anchors:
   - file: core/state_transition.go
-    symbol: "StateTransition.TransitionDb"
+    enclosing_symbol: "StateTransition.TransitionDb"
     line: 505
+    kind: loc
     reason: "check ①: Sender (msg.From) blacklist — ErrBlacklistedAccount returned"
   - file: core/state_transition.go
-    symbol: "StateTransition.TransitionDb"
+    enclosing_symbol: "StateTransition.TransitionDb"
     line: 509
+    kind: loc
     reason: "check ②: Recipient (msg.To) blacklist — contract creation exempt because msg.To == nil"
   - file: core/state_transition.go
-    symbol: "StateTransition.TransitionDb"
+    enclosing_symbol: "StateTransition.TransitionDb"
     line: 577
+    kind: loc
     reason: "check ③: FeePayer blacklist — only when st.msg.FeePayer != nil and rules.IsAnzeon"
   - file: core/vm/evm.go
-    symbol: "EVM.Call"
+    enclosing_symbol: "EVM.Call"
     line: 213
+    kind: loc
     reason: "check ④: inside the AnzeonEnabled() gate (evm.go:210) — zero-address transfer block (ErrZeroAddressTransfer at :213) and native-manager/precompile transfer block (ErrValueTransferToPrecompile at :217)"
   - file: core/vm/evm.go
     symbol: "EVM.Call"
