@@ -80,12 +80,21 @@ func run(projectDir, graphPath string, check bool, maxShift int) error {
 	}
 	sort.Strings(ids)
 
-	var checked, clean, drift, review, unresolved int
+	var checked, clean, drift, review, unresolved, locSkipped int
 	updatesByPath := map[string][]lineUpdate{}
 
 	for _, id := range ids {
 		e := proj.Entries[id]
 		for _, a := range e.CodeAnchors {
+			if a.ResolvedKind() == inventory.AnchorKindLoc {
+				// loc anchors point at an arbitrary line inside enclosing_symbol
+				// by design (a call site / gate / branch); refreshing them to a
+				// definition line would corrupt the author's intent. Never
+				// repoint — that is the whole reason the kind exists (it makes
+				// the old maxShift "REVIEW" guess explicit and deterministic).
+				locSkipped++
+				continue
+			}
 			if a.Symbol == "" || a.Line == 0 {
 				continue // line is not symbol-derived; nothing to refresh
 			}
@@ -127,7 +136,7 @@ func run(projectDir, graphPath string, check bool, maxShift int) error {
 		}
 	}
 
-	fmt.Printf("\nchecked=%d clean=%d drift=%d review=%d unresolved=%d\n", checked, clean, drift, review, unresolved)
+	fmt.Printf("\nchecked=%d clean=%d drift=%d review=%d unresolved=%d loc_skipped=%d\n", checked, clean, drift, review, unresolved, locSkipped)
 
 	if check {
 		if drift > 0 || review > 0 || unresolved > 0 {

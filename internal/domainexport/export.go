@@ -49,11 +49,27 @@ func RenderEntry(e inventory.Entry, p *inventory.Project) string {
 		b.WriteString("## Code anchors\n")
 		for _, a := range e.CodeAnchors {
 			line := "- `" + a.File + "`"
-			if a.Symbol != "" {
-				line += " " + a.Symbol
-			}
-			if a.Line > 0 {
-				line += fmt.Sprintf(":%d", a.Line)
+			// Render per kind (Phase 3 A1-3): a def anchor shows its symbol at
+			// its definition line; a loc anchor shows the enclosing symbol and
+			// flags that the line is a location inside it (call site / gate),
+			// not a definition — so a reader does not mistake it for the def.
+			if a.ResolvedKind() == inventory.AnchorKindLoc {
+				if a.EnclosingSymbol != "" {
+					line += " in " + a.EnclosingSymbol
+				} else if a.Symbol != "" {
+					line += " in " + a.Symbol
+				}
+				if a.Line > 0 {
+					line += fmt.Sprintf(":%d", a.Line)
+				}
+				line += " (loc)"
+			} else {
+				if a.Symbol != "" {
+					line += " " + a.Symbol
+				}
+				if a.Line > 0 {
+					line += fmt.Sprintf(":%d", a.Line)
+				}
 			}
 			if a.Reason != "" {
 				line += " — " + a.Reason

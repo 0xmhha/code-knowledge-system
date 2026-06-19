@@ -34,6 +34,9 @@ type mockStoreReader struct {
 	symbolErr    error
 	symbolCh     []symbolCall
 
+	canonicalByID map[string]types.Node // when set, FindByCanonicalID returns by exact canonical id
+	canonicalErr  error
+
 	neighOut   []types.Node
 	neighEdges []types.Edge
 	neighErr   error
@@ -118,6 +121,16 @@ func (m *mockStoreReader) FindSymbol(name string, exact bool) ([]types.Node, err
 		return m.symbolByName[name], m.symbolErr
 	}
 	return m.symbolOut, m.symbolErr
+}
+
+// canonicalByID, when set, lets a test return a node for an exact canonical id
+// (ADR-0001). Default zero value => not found, so existing tests are unaffected.
+func (m *mockStoreReader) FindByCanonicalID(canonicalID string) (types.Node, bool, error) {
+	if m.canonicalByID != nil {
+		n, ok := m.canonicalByID[canonicalID]
+		return n, ok, m.canonicalErr
+	}
+	return types.Node{}, false, m.canonicalErr
 }
 func (m *mockStoreReader) ImpactCompute(seedQname, seedFile string, depth int, includeBlobs bool) (map[string]any, error) {
 	m.impactCh = append(m.impactCh, impactCall{seedQname: seedQname, seedFile: seedFile, depth: depth, includeBlobs: includeBlobs})
@@ -753,4 +766,56 @@ func TestReal_ConcurrencyImpact_EmptySymbolErrors(t *testing.T) {
 func TestReal_ImplementsClient(t *testing.T) {
 	t.Parallel()
 	var _ Client = (*Real)(nil)
+}
+
+// TestResolveByCanonicalIDAndAmbiguity covers symbol-identity Phase 3 (ADR-0001):
+// (1) an exact canonical_id resolves directly to its node, and (2) an ambiguous
+// bare name (>1 distinct qname, no exact match) resolves to "" instead of the
+// old silent first-of-N pick.
+func TestResolveByCanonicalIDAndAmbiguity(t *testing.T) {
+	t.Run("canonical id resolves directly", func(t *testing.T) {
+		m := &mockStoreReader{
+			canonicalByID: map[string]types.Node{
+				"example.com/core/vm.(*EVM).Call": {
+					ID: "node-call", QualifiedName: "vm.EVM.Call", FilePath: "core/vm/evm.go",
+				},
+			},
+		}
+		r := newRealWithStore(m)
+		if got := r.resolveQname("example.com/core/vm.(*EVM).Call"); got != "vm.EVM.Call" {
+			t.Errorf("resolveQname(canonical) = %q, want vm.EVM.Call", got)
+		}
+		if got := r.resolveNodeID("example.com/core/vm.(*EVM).Call"); got != "node-call" {
+			t.Errorf("resolveNodeID(canonical) = %q, want node-call", got)
+		}
+		if got := r.resolveSeedFile("example.com/core/vm.(*EVM).Call"); got != "core/vm/evm.go" {
+			t.Errorf("resolveSeedFile(canonical) = %q, want core/vm/evm.go", got)
+		}
+	})
+
+	t.Run("ambiguous bare name does not silently pick", func(t *testing.T) {
+		m := &mockStoreReader{
+			symbolOut: []types.Node{
+				{ID: "a", QualifiedName: "pkga.Size"},
+				{ID: "b", QualifiedName: "pkgb.Size"},
+			},
+		}
+		r := newRealWithStore(m)
+		if got := r.resolveQname("Size"); got != "" {
+			t.Errorf("resolveQname(ambiguous) = %q, want \"\" (no silent defs[0])", got)
+		}
+		if got := r.resolveNodeID("Size"); got != "" {
+			t.Errorf("resolveNodeID(ambiguous) = %q, want \"\"", got)
+		}
+	})
+
+	t.Run("unique suffix still resolves", func(t *testing.T) {
+		m := &mockStoreReader{
+			symbolOut: []types.Node{{ID: "x", QualifiedName: "pkg.OnlyOne"}},
+		}
+		r := newRealWithStore(m)
+		if got := r.resolveQname("OnlyOne"); got != "pkg.OnlyOne" {
+			t.Errorf("resolveQname(unique) = %q, want pkg.OnlyOne", got)
+		}
+	})
 }
