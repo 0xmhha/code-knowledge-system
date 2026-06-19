@@ -65,6 +65,11 @@ type storeReader interface {
 	// result-set-normalized Score in [0,1] plus a backend-native RawScore.
 	SearchFTS(q string, limit int) ([]store.SearchHit, error)
 	FindSymbol(name string, exact bool) ([]types.Node, error)
+	// FindByCanonicalID resolves ckg's globally-unique, import-path-qualified
+	// symbol id (ADR-0001) to its node; found=false (nil error) on miss/empty.
+	// A canonical id cannot collide across packages, so it is the preferred
+	// seed when a CKV hit or domain anchor carries one.
+	FindByCanonicalID(canonicalID string) (types.Node, bool, error)
 	NodesByFilePath(path string) ([]types.Node, error)
 	NeighborhoodByQname(qname string, depth int, reverse bool, edgeTypes ...string) ([]types.Node, []types.Edge, error)
 	SubgraphByQname(qname string, depth int) ([]types.Node, []types.Edge, error)
@@ -102,6 +107,9 @@ func (a *realStoreReader) SearchFTS(q string, limit int) ([]store.SearchHit, err
 }
 func (a *realStoreReader) FindSymbol(name string, exact bool) ([]types.Node, error) {
 	return a.r.FindSymbol(name, exact, store.FindSymbolOptions{})
+}
+func (a *realStoreReader) FindByCanonicalID(canonicalID string) (types.Node, bool, error) {
+	return a.r.FindByCanonicalID(canonicalID)
 }
 func (a *realStoreReader) ImpactCompute(seedQname, seedFile string, depth int, includeBlobs bool) (map[string]any, error) {
 	return impact.Compute(a.r, seedQname, seedFile, impact.Options{Depth: depth, IncludeBlobs: includeBlobs})
@@ -468,59 +476,87 @@ func (r *Real) GetNodePRs(ctx context.Context, qname string, opts PRRefOpts) ([]
 	return out, nil
 }
 
-// resolveSeedFile returns the FilePath of qname's definition node (exact qname
-// match preferred, else first result, else ""). Used to give impact.Compute
-// its second seed arg.
+// uniqueResolved picks the node that `name` resolves to from suffix-match defs
+// WITHOUT ever silently guessing (ADR-0001, Phase 3): an exact qualified_name
+// match wins; otherwise the single distinct match is returned; a multi-match is
+// reported as unresolved (ok=false) so callers fail safe rather than binding to
+// the arbitrary first-of-N (the old `defs[0]`, which could be the wrong symbol).
+func uniqueResolved(defs []types.Node, name string) (types.Node, bool) {
+	for _, d := range defs {
+		if d.QualifiedName == name {
+			return d, true
+		}
+	}
+	seen := map[string]types.Node{}
+	for _, d := range defs {
+		seen[d.QualifiedName] = d
+	}
+	if len(seen) == 1 {
+		for _, d := range seen {
+			return d, true
+		}
+	}
+	return types.Node{}, false
+}
+
+// resolveSeedFile returns the FilePath of qname's definition node. Resolution
+// order: exact canonical_id (ADR-0001) → exact/unique qname; "" when nothing
+// resolves OR the name is ambiguous (no silent first-of-N pick). Used to give
+// impact.Compute its second seed arg.
 func (r *Real) resolveSeedFile(qname string) string {
+	if n, found, _ := r.s.FindByCanonicalID(qname); found {
+		return n.FilePath
+	}
 	defs, err := r.s.FindSymbol(qname, false)
 	if err != nil || len(defs) == 0 {
 		return ""
 	}
-	for _, d := range defs {
-		if d.QualifiedName == qname && d.FilePath != "" {
-			return d.FilePath
-		}
+	if n, ok := uniqueResolved(defs, qname); ok {
+		return n.FilePath
 	}
-	return defs[0].FilePath
+	return ""
 }
 
 // resolveQname normalizes a possibly-partial symbol name to a stored
-// fully-qualified name via the suffix-matching FindSymbol (exact qname match
-// preferred, else first result). Returns "" when the name does not resolve, in
-// which case callers pass the original name through unchanged so the downstream
+// fully-qualified name. Resolution order: exact canonical_id → exact/unique
+// qname. Returns "" when the name does not resolve OR is ambiguous, in which
+// case callers pass the original name through unchanged so the downstream
 // exact-match traversal behaves as before.
 //
 // This closes the seed-resolution gap between the find_symbol/find_callers
 // family (which suffix-match) and the graph-traversal family (GetSubgraph,
 // ImpactOfChange, ConcurrencyImpact) whose ckg backends require an exact
-// qualified_name and otherwise return empty silently.
+// qualified_name and otherwise return empty silently — while never binding an
+// ambiguous bare name to an arbitrary candidate.
 func (r *Real) resolveQname(name string) string {
+	if n, found, _ := r.s.FindByCanonicalID(name); found {
+		return n.QualifiedName
+	}
 	defs, err := r.resolveFlexibleNodes(name)
 	if err != nil || len(defs) == 0 {
 		return ""
 	}
-	for _, d := range defs {
-		if d.QualifiedName == name {
-			return d.QualifiedName
-		}
+	if n, ok := uniqueResolved(defs, name); ok {
+		return n.QualifiedName
 	}
-	return defs[0].QualifiedName
+	return ""
 }
 
-// resolveNodeID returns the node ID of qname's definition (exact qname match
-// preferred, else first result, else ""). Used to bridge qname→nodeID for
-// store.Reader.GetNodePRs.
+// resolveNodeID returns the node ID of qname's definition. Resolution order:
+// exact canonical_id → exact/unique qname; "" when nothing resolves OR the name
+// is ambiguous. Used to bridge qname→nodeID for store.Reader.GetNodePRs.
 func (r *Real) resolveNodeID(qname string) string {
+	if n, found, _ := r.s.FindByCanonicalID(qname); found {
+		return n.ID
+	}
 	defs, err := r.resolveFlexibleNodes(qname)
 	if err != nil || len(defs) == 0 {
 		return ""
 	}
-	for _, d := range defs {
-		if d.QualifiedName == qname && d.ID != "" {
-			return d.ID
-		}
+	if n, ok := uniqueResolved(defs, qname); ok {
+		return n.ID
 	}
-	return defs[0].ID
+	return ""
 }
 
 // impactGroupOrder pins the ckg group key → cks category mapping in a fixed
