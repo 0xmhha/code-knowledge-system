@@ -184,3 +184,32 @@ func TestExport_PrunesStaleEntries(t *testing.T) {
 		t.Errorf("current entry A1.v.md missing after sweep: %v", err)
 	}
 }
+
+// TestRenderEntry_LocAnchorRendersPerKind locks Phase 3 A1-3 rendering: a loc
+// anchor shows its enclosing symbol + "(loc)" so it is not mistaken for a
+// definition, while a def anchor renders the symbol at its definition line.
+func TestRenderEntry_LocAnchorRendersPerKind(t *testing.T) {
+	e := inventory.Entry{
+		ID:      "X1.test.loc",
+		Title:   "loc anchor render",
+		Summary: "x",
+		Status:  "needs_verification",
+		CodeAnchors: []inventory.CodeAnchor{
+			{File: "core/vm/evm.go", Symbol: "vm.EVM.Call", Line: 100, Kind: "def"},
+			{File: "core/state_transition.go", Kind: "loc", EnclosingSymbol: "core.applyMessage", Line: 250, Reason: "Berlin gate"},
+		},
+	}
+	md := RenderEntry(e, &inventory.Project{Subsystems: map[string]inventory.Subsystem{}})
+	for _, want := range []string{
+		"vm.EVM.Call:100",                       // def: symbol at def line, no "(loc)"
+		"in core.applyMessage:250 (loc)",        // loc: enclosing symbol + flag
+		"Berlin gate",                           // reason preserved
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("rendered markdown missing %q\n---\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "vm.EVM.Call:100 (loc)") {
+		t.Error("def anchor must not be tagged (loc)")
+	}
+}
