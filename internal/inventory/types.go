@@ -121,7 +121,34 @@ type CodeAnchor struct {
 	File   string `yaml:"file"`
 	Symbol string `yaml:"symbol,omitempty"`
 	Line   int    `yaml:"line,omitempty"`
-	Reason string `yaml:"reason,omitempty"`
+	// Kind classifies the anchor (symbol-identity Phase 3, A1-3):
+	//   "def" — points at a symbol's definition; Symbol must be uniquely
+	//           resolvable and Line == its definition line (anchor-refresh may
+	//           mechanically refresh the line).
+	//   "loc" — points at an arbitrary Line inside EnclosingSymbol (a call site,
+	//           a gate, a branch); no def-line rule, never repointed.
+	// Empty is treated as "def" for back-compat with pre-kind anchors.
+	Kind string `yaml:"kind,omitempty"`
+	// EnclosingSymbol names the symbol whose range contains Line, for loc
+	// anchors. Used by anchor-refresh (range-containment validation) and
+	// inventory-check. Empty for def anchors.
+	EnclosingSymbol string `yaml:"enclosing_symbol,omitempty"`
+	Reason          string `yaml:"reason,omitempty"`
+}
+
+// AnchorKindDef / AnchorKindLoc are the two CodeAnchor.Kind values; an empty
+// Kind is treated as def. Centralized so tooling agrees on the spelling.
+const (
+	AnchorKindDef = "def"
+	AnchorKindLoc = "loc"
+)
+
+// ResolvedKind returns the anchor's kind, defaulting an empty Kind to def.
+func (a CodeAnchor) ResolvedKind() string {
+	if a.Kind == AnchorKindLoc {
+		return AnchorKindLoc
+	}
+	return AnchorKindDef
 }
 
 // DocRef points at a specific section of an existing project doc.

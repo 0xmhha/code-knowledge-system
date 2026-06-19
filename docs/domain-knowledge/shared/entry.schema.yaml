@@ -68,6 +68,12 @@ properties:
         file:    { type: string, minLength: 1 }
         symbol:  { type: string }
         line:    { type: integer, minimum: 1 }
+        # kind (symbol-identity Phase 3): "def" anchors point at a uniquely
+        # resolvable symbol's definition line; "loc" anchors point at an
+        # arbitrary line inside enclosing_symbol (call site / gate / branch).
+        # Optional — an absent kind is treated as "def" for back-compat.
+        kind:    { type: string, enum: [def, loc] }
+        enclosing_symbol: { type: string }
         reason:  { type: string }
 
   code_keywords:
