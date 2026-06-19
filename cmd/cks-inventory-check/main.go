@@ -73,7 +73,9 @@ func main() {
 	// resolvable symbol; a 0- or multi-match means the symbol is wrong or too
 	// short and would resolve ambiguously at query time.
 	if *graphPath != "" {
-		errCount += checkDefAnchorResolution(os.Stderr, p, *graphPath)
+		de, dw := checkDefAnchorResolution(os.Stderr, p, *graphPath)
+		errCount += de
+		warnCount += dw
 	}
 
 	fmt.Fprintf(os.Stderr, "cks-inventory-check: %d entries, %d errors, %d warnings\n",
@@ -100,16 +102,15 @@ func main() {
 // of errors found (0 when clean or when a symbol is absent — absence is a
 // warning, not a hard error, since the graph may lag the entries). loc anchors
 // are skipped: they intentionally point inside a symbol, not at a definition.
-func checkDefAnchorResolution(w *os.File, p *inventory.Project, graphPath string) int {
+func checkDefAnchorResolution(w *os.File, p *inventory.Project, graphPath string) (errors, warnings int) {
 	cli, err := ckgclient.NewReal(graphPath)
 	if err != nil {
 		fmt.Fprintf(w, "(project): error: : open ckg graph %q: %v\n", graphPath, err)
-		return 1
+		return 1, 0
 	}
 	defer cli.Close()
 	ctx := context.Background()
 
-	errors := 0
 	for _, id := range p.EntryIDsSorted() {
 		e := p.Entries[id]
 		for _, a := range e.CodeAnchors {
@@ -122,22 +123,31 @@ func checkDefAnchorResolution(w *os.File, p *inventory.Project, graphPath string
 				errors++
 				continue
 			}
+			// File-aware: an anchor pins file + symbol + line, so uniqueness is
+			// judged WITHIN the anchor's file. A short symbol like "API.Status"
+			// is globally ambiguous (clique vs wbft backend) but unique in its
+			// file; scoping to a.File avoids that false positive. Distinct
+			// definitions are counted by start line within the file.
 			seen := map[string]struct{}{}
 			for _, c := range cits {
-				seen[fmt.Sprintf("%s:%d", c.File, c.StartLine)] = struct{}{}
+				if c.File != a.File {
+					continue
+				}
+				seen[fmt.Sprintf("%d", c.StartLine)] = struct{}{}
 			}
 			switch len(seen) {
 			case 0:
-				fmt.Fprintf(w, "%s: warning: %s: def anchor symbol %q does not resolve in ckg (graph may lag)\n", a.File, id, a.Symbol)
+				warnings++
+				fmt.Fprintf(w, "%s: warning: %s: def anchor symbol %q does not resolve in its file (renamed/moved, graph lag, or a symbol form ckg does not store)\n", a.File, id, a.Symbol)
 			case 1:
-				// unique — the def contract holds.
+				// unique within the file — the def contract holds.
 			default:
-				fmt.Fprintf(w, "%s: error: %s: def anchor symbol %q resolves to %d definitions; use a fully-qualified or canonical symbol\n", a.File, id, a.Symbol, len(seen))
+				fmt.Fprintf(w, "%s: error: %s: def anchor symbol %q resolves to %d definitions in the same file; qualify it\n", a.File, id, a.Symbol, len(seen))
 				errors++
 			}
 		}
 	}
-	return errors
+	return errors, warnings
 }
 
 // reportIssues prints each issue in compiler-error format
