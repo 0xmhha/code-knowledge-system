@@ -122,17 +122,25 @@ func checkDefAnchorResolution(w *os.File, p *inventory.Project, graphPath string
 				errors++
 				continue
 			}
+			// File-aware: an anchor pins file + symbol + line, so uniqueness is
+			// judged WITHIN the anchor's file. A short symbol like "API.Status"
+			// is globally ambiguous (clique vs wbft backend) but unique in its
+			// file; scoping to a.File avoids that false positive. Distinct
+			// definitions are counted by start line within the file.
 			seen := map[string]struct{}{}
 			for _, c := range cits {
-				seen[fmt.Sprintf("%s:%d", c.File, c.StartLine)] = struct{}{}
+				if c.File != a.File {
+					continue
+				}
+				seen[fmt.Sprintf("%d", c.StartLine)] = struct{}{}
 			}
 			switch len(seen) {
 			case 0:
-				fmt.Fprintf(w, "%s: warning: %s: def anchor symbol %q does not resolve in ckg (graph may lag)\n", a.File, id, a.Symbol)
+				fmt.Fprintf(w, "%s: warning: %s: def anchor symbol %q does not resolve in its file (renamed/moved, graph lag, or a symbol form ckg does not store)\n", a.File, id, a.Symbol)
 			case 1:
-				// unique — the def contract holds.
+				// unique within the file — the def contract holds.
 			default:
-				fmt.Fprintf(w, "%s: error: %s: def anchor symbol %q resolves to %d definitions; use a fully-qualified or canonical symbol\n", a.File, id, a.Symbol, len(seen))
+				fmt.Fprintf(w, "%s: error: %s: def anchor symbol %q resolves to %d definitions in the same file; qualify it\n", a.File, id, a.Symbol, len(seen))
 				errors++
 			}
 		}
