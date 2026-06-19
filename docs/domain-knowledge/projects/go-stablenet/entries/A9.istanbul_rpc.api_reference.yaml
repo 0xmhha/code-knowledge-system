@@ -35,7 +35,7 @@ code_anchors:
     symbol: BlockSigners
     reason: "return type for GetCommitSignersFromBlock"
   - file: consensus/wbft/backend/api.go
-    symbol: Status
+    symbol: backend.Status
     line: 76
     reason: "return type for Status method"
 code_keywords:

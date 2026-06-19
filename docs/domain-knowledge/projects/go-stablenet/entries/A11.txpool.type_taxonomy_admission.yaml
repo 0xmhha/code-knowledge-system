@@ -37,11 +37,11 @@ code_anchors:
     line: 27
     reason: "StableNet-only fee-delegated tx struct: wraps DynamicFeeTx and adds FeePayer + FV/FR/FS feePayer signature"
   - file: core/types/tx_fee_delegation.go
-    symbol: "(*FeeDelegateDynamicFeeTx).txType"
+    symbol: types.FeeDelegateDynamicFeeTx.txType
     line: 116
     reason: "binds the FeeDelegateDynamicFeeTx struct to type byte 0x16"
   - file: core/types/tx_setcode.go
-    symbol: "(*SetCodeTx).txType"
+    symbol: types.SetCodeTx.txType
     line: 186
     reason: "binds the SetCodeTx struct to type byte 0x04 (gated behind Anzeon in the pool)"
   - file: core/txpool/validation.go
@@ -49,29 +49,35 @@ code_anchors:
     line: 55
     reason: "the stateless pool-admission entry point that applies the per-type fork gates and the fee-payer recovery check"
   - file: core/txpool/validation.go
-    symbol: "ValidateTransaction (Berlin gate)"
+    enclosing_symbol: ValidateTransaction
     line: 66
-    reason: "any non-legacy tx type is rejected until Berlin is active"
+    kind: loc
+    reason: "Berlin gate: any non-legacy tx type is rejected until Berlin is active"
   - file: core/txpool/validation.go
-    symbol: "ValidateTransaction (London gate)"
+    enclosing_symbol: ValidateTransaction
     line: 69
-    reason: "DynamicFeeTxType is rejected until London is active"
+    kind: loc
+    reason: "London gate: DynamicFeeTxType is rejected until London is active"
   - file: core/txpool/validation.go
-    symbol: "ValidateTransaction (Applepie gate)"
+    enclosing_symbol: ValidateTransaction
     line: 72
-    reason: "FeeDelegateDynamicFeeTxType is rejected until Applepie (StableNet fee-delegation fork) is active"
+    kind: loc
+    reason: "Applepie gate: FeeDelegateDynamicFeeTxType is rejected until Applepie (StableNet fee-delegation fork) is active"
   - file: core/txpool/validation.go
-    symbol: "ValidateTransaction (Cancun gate)"
+    enclosing_symbol: ValidateTransaction
     line: 75
-    reason: "BlobTxType is rejected until Cancun is active"
+    kind: loc
+    reason: "Cancun gate: BlobTxType is rejected until Cancun is active"
   - file: core/txpool/validation.go
-    symbol: "ValidateTransaction (Anzeon gate)"
+    enclosing_symbol: ValidateTransaction
     line: 78
-    reason: "SetCodeTxType is rejected unless AnzeonEnabled() (a global enable, not a block-number gate)"
+    kind: loc
+    reason: "Anzeon gate: SetCodeTxType is rejected unless AnzeonEnabled() (a global enable, not a block-number gate)"
   - file: core/txpool/validation.go
-    symbol: "ValidateTransaction (fee-payer recovery)"
+    enclosing_symbol: ValidateTransaction
     line: 133
-    reason: "fee-delegated tx must declare a FeePayer and the recovered fee-payer signer must equal it, else ErrInvalidFeePayer"
+    kind: loc
+    reason: "fee-payer recovery: fee-delegated tx must declare a FeePayer and the recovered fee-payer signer must equal it, else ErrInvalidFeePayer"
   - file: core/txpool/errors.go
     symbol: ErrInvalidFeePayer
     line: 69
@@ -81,11 +87,11 @@ code_anchors:
     line: 161
     reason: "recovers the fee-payer address from the FV/FR/FS signature; used by the pool admission fee-payer check"
   - file: params/config.go
-    symbol: "(*ChainConfig).IsApplepie"
+    symbol: params.ChainConfig.IsApplepie
     line: 1038
     reason: "fork predicate gating FeeDelegateDynamicFee admission"
   - file: params/config.go
-    symbol: "(*ChainConfig).AnzeonEnabled"
+    symbol: params.ChainConfig.AnzeonEnabled
     line: 1085
     reason: "global Anzeon enable gating SetCode admission (note: not a block-number predicate)"
 code_keywords:

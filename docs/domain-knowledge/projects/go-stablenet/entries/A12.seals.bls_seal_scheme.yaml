@@ -42,7 +42,7 @@ code_anchors:
     line: 52
     reason: Aggregate seal struct — Sealers (bitpack) + Signature ([96]byte BLS)
   - file: core/types/istanbul.go
-    symbol: WBFTExtra
+    symbol: types.WBFTExtra
     line: 81
     reason: Block-header extradata — embeds PrevPreparedSeal + PrevCommittedSeal
   - file: core/types/istanbul.go
