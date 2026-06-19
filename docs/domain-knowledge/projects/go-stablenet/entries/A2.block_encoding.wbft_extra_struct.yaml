@@ -29,7 +29,7 @@ summary: 'WBFTExtra is the RLP-encoded payload that lives inside every WBFT
 '
 code_anchors:
   - file: core/types/istanbul.go
-    symbol: WBFTExtra
+    symbol: types.WBFTExtra
     line: 81
     reason: main struct definition
   - file: core/types/istanbul.go
@@ -41,7 +41,7 @@ code_anchors:
     line: 290
     reason: bit-packed bitmap; SetSealer / IsSealer / GetSealers helpers
   - file: core/types/istanbul.go
-    symbol: EpochInfo
+    symbol: types.EpochInfo
     line: 99
     reason: next-epoch validator manifest
   - file: core/types/istanbul.go

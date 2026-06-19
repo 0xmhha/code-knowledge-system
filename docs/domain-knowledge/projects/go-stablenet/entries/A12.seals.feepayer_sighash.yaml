@@ -32,7 +32,7 @@ code_anchors:
     line: 147
     reason: "Feepayer signature setter on the outer struct"
   - file: core/types/tx_fee_delegation.go
-    symbol: FeeDelegateDynamicFeeTx.FeePayer
+    symbol: types.FeeDelegateDynamicFeeTx.FeePayer
     line: 29
     reason: "FeePayer field — must be the trailing element in the sigHash payload"
 code_keywords:

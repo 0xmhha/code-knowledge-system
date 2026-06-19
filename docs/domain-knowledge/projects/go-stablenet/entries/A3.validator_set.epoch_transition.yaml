@@ -33,7 +33,7 @@ code_anchors:
     line: 420
     reason: returns (current, previous) sets for cross-epoch boundary verification
   - file: core/types/istanbul.go
-    symbol: EpochInfo
+    symbol: types.EpochInfo
     line: 99
     reason: the manifest written into the last block of each epoch
   - file: params/config_wbft.go
