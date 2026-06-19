@@ -79,3 +79,6 @@ existing_doc_ref:
 risk_level: medium
 source_of_truth: code
 status: verified
+priority: P0
+last_verified_at: "2026-06-19"
+verified_by: mhha
