@@ -525,13 +525,52 @@ func TestReal_Neighbors_CalledByReversesDirection(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// Two calls expected — cks's "called_by" maps to ckg's reverse-direction
-	// traversal of "calls" + "invokes".
-	if len(m.neighCh) != 1 {
-		t.Fatalf("expected 1 ckg call, got %d", len(m.neighCh))
+	// The interface-dispatch bridge first probes the receiver type's
+	// `implements` edges (forward; no interfaces in this fixture so no extra
+	// seed), then walks the reverse "calls"/"invokes" graph from the concrete
+	// seed. Find the reverse call/invokes walk and assert its direction.
+	var walk *neighCall
+	for i := range m.neighCh {
+		for _, et := range m.neighCh[i].etypes {
+			if et == string(types.EdgeCalls) {
+				walk = &m.neighCh[i]
+			}
+		}
 	}
-	if !m.neighCh[0].rev {
+	if walk == nil {
+		t.Fatalf("no calls/invokes walk recorded; calls=%+v", m.neighCh)
+	}
+	if !walk.rev {
 		t.Errorf("reverse should be true for called_by")
+	}
+	if walk.qname != "pkg.X" {
+		t.Errorf("walk qname = %q, want pkg.X", walk.qname)
+	}
+}
+
+// TestReal_interfaceMethodSeeds_bridgesViaImplements verifies the
+// interface-dispatch bridge seed computation: a concrete method pkg.T.M whose
+// receiver type implements interface pkg.I yields the interface method pkg.I.M
+// as an extra find_callers seed. This is what lets callers recorded as `invokes`
+// edges to the interface method be recovered when searching the concrete method.
+func TestReal_interfaceMethodSeeds_bridgesViaImplements(t *testing.T) {
+	t.Parallel()
+	iface := node("ifaceID", "pkg.Hasher", "h.go", 1, 3, types.NodeInterface, "go")
+	m := &mockStoreReader{
+		neighOut:   []types.Node{iface},
+		neighEdges: []types.Edge{{Src: "thingID", Dst: "ifaceID", Type: types.EdgeImplements}},
+	}
+	r := newRealWithStore(m)
+
+	seeds := r.interfaceMethodSeeds("pkg.Thing.Hash")
+	if len(seeds) != 1 || seeds[0] != "pkg.Hasher.Hash" {
+		t.Fatalf("seeds = %v, want [pkg.Hasher.Hash]", seeds)
+	}
+
+	// A top-level function (no Type.Method shape after the package) still has a
+	// dot, so it is probed, but a name with no dot yields no seeds outright.
+	if got := r.interfaceMethodSeeds("BareName"); got != nil {
+		t.Errorf("bare name should yield no seeds, got %v", got)
 	}
 }
 

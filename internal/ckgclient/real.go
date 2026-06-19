@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -356,16 +357,46 @@ func (r *Real) Neighbors(ctx context.Context, src contract.Citation, opts Neighb
 		return nil, err
 	}
 
-	nodes, edges, err := r.s.NeighborhoodByQname(qname, depth, reverse, edgeTypes...)
-	if err != nil {
-		return nil, fmt.Errorf("ckgclient: NeighborhoodByQname: %w", err)
+	// Interface-dispatch bridge: when this is a reverse (callers) walk on a
+	// concrete method pkg.T.M, callers that reach it through an interface are
+	// recorded as `invokes` edges to the INTERFACE method pkg.I.M, not the
+	// concrete method — so a reverse walk from the concrete method alone misses
+	// every interface-dispatched caller. Union the concrete seed with the
+	// same-named method on each interface T implements. Mirrors
+	// ckg/pkg/mcphandlers.reverseCallersUnion; no-op for forward walks and for
+	// seeds with no Type.Method shape / no implements edges.
+	seeds := []string{qname}
+	if reverse {
+		seeds = append(seeds, r.interfaceMethodSeeds(qname)...)
+	}
+	nodeByID := make(map[string]types.Node)
+	edgeSeen := make(map[string]struct{})
+	nodes := make([]types.Node, 0)
+	edges := make([]types.Edge, 0)
+	for _, sd := range seeds {
+		ns, es, err := r.s.NeighborhoodByQname(sd, depth, reverse, edgeTypes...)
+		if err != nil {
+			return nil, fmt.Errorf("ckgclient: NeighborhoodByQname: %w", err)
+		}
+		for _, n := range ns {
+			if _, ok := nodeByID[n.ID]; ok {
+				continue
+			}
+			nodeByID[n.ID] = n
+			nodes = append(nodes, n)
+		}
+		for _, e := range es {
+			k := e.Src + "|" + e.Dst + "|" + string(e.Type)
+			if _, ok := edgeSeen[k]; ok {
+				continue
+			}
+			edgeSeen[k] = struct{}{}
+			edges = append(edges, e)
+		}
 	}
 
 	commit, _ := r.commit()
-	byID := make(map[string]types.Node, len(nodes))
-	for _, n := range nodes {
-		byID[n.ID] = n
-	}
+	byID := nodeByID
 
 	out := make([]contract.Neighbor, 0, len(edges))
 	for _, e := range edges {
@@ -391,6 +422,50 @@ func (r *Real) Neighbors(ctx context.Context, src contract.Citation, opts Neighb
 		})
 	}
 	return out, nil
+}
+
+// interfaceMethodSeeds returns extra find_callers seeds for the
+// interface-dispatch bridge. When methodQname is a concrete method `pkg.T.M`,
+// callers that reach it through an interface are recorded as `invokes` edges to
+// the INTERFACE method node (`pkg.I.M`), not the concrete method — so a reverse
+// walk from the concrete method alone misses every interface-dispatched caller.
+// This returns the same-named method on each interface that T implements, using
+// the `implements` edges already in the graph (no reindex needed). Generalized:
+// a top-level function (no receiver segment) or a type implementing nothing
+// yields no extra seeds. Mirrors ckg/pkg/mcphandlers.interfaceMethodSeeds.
+func (r *Real) interfaceMethodSeeds(methodQname string) []string {
+	dot := strings.LastIndex(methodQname, ".")
+	if dot <= 0 || dot == len(methodQname)-1 {
+		return nil // no `Type.Method` shape → nothing to bridge
+	}
+	typeQname, methodShort := methodQname[:dot], methodQname[dot+1:]
+
+	// Forward `implements` edges from the receiver type → interfaces it satisfies.
+	nodes, edges, err := r.s.NeighborhoodByQname(typeQname, 1, false, string(types.EdgeImplements))
+	if err != nil {
+		return nil
+	}
+	ifaceIDs := make(map[string]struct{})
+	for _, e := range edges {
+		if e.Type == types.EdgeImplements {
+			ifaceIDs[e.Dst] = struct{}{}
+		}
+	}
+	var seeds []string
+	seen := make(map[string]struct{})
+	for _, n := range nodes {
+		if _, ok := ifaceIDs[n.ID]; !ok || n.Type != types.NodeInterface {
+			continue
+		}
+		mq := n.QualifiedName + "." + methodShort
+		if _, dup := seen[mq]; dup {
+			continue
+		}
+		seen[mq] = struct{}{}
+		seeds = append(seeds, mq)
+	}
+	sort.Strings(seeds) // deterministic for prompt-cache stability
+	return seeds
 }
 
 // ImpactOfChange computes the reverse-dependency closure from seedQname via
