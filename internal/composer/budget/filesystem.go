@@ -35,43 +35,58 @@ type FilesystemFetcher struct {
 	// against. When Citation.File is absolute, Root is ignored.
 	// Empty Root keeps citation.File untouched (used by tests).
 	Root string
+
+	// DocsRoots are additional roots tried (in order, after Root) for
+	// citations whose file does not exist under Root — the `ckv build
+	// --docs` corpus dirs (manifest.DocsRoots). Doc/markdown chunks cite
+	// files relative to a corpus dir, not the code Root, so without this
+	// they have no body and Stage 4 skips them. Same escape protection as
+	// Root applies to each.
+	DocsRoots []string
 }
 
 // Fetch implements BodyFetcher. Returns ("", nil) for any "body
-// genuinely unavailable" outcome (missing file, out-of-range line
-// span, escape attempt) — Stage 4 treats those as skip-not-error per
-// the BodyFetcher contract.
+// genuinely unavailable" outcome (missing file in every root,
+// out-of-range line span, escape attempt) — Stage 4 treats those as
+// skip-not-error per the BodyFetcher contract.
 func (f *FilesystemFetcher) Fetch(_ context.Context, c contract.Citation) (string, error) {
-	path, ok := f.resolve(c.File)
-	if !ok {
-		return "", nil
+	roots := append([]string{f.Root}, f.DocsRoots...)
+	if filepath.IsAbs(c.File) {
+		roots = roots[:1] // absolute path ignores root; a single attempt suffices
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return "", nil
+	for _, root := range roots {
+		path, ok := resolveUnder(root, c.File)
+		if !ok {
+			continue
 		}
-		return "", fmt.Errorf("budget: read %q: %w", path, err)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue // try the next root (e.g. a docs corpus)
+			}
+			return "", fmt.Errorf("budget: read %q: %w", path, err)
+		}
+		return extractLines(string(data), c.StartLine, c.EndLine), nil
 	}
-	return extractLines(string(data), c.StartLine, c.EndLine), nil
+	return "", nil
 }
 
-// resolve translates citation.File into an absolute path and rejects
-// any path that would escape Root. The second return is false when
-// the path is rejected; the caller treats that as "body unavailable".
-func (f *FilesystemFetcher) resolve(file string) (string, bool) {
+// resolveUnder translates citation.File into an absolute path under root
+// and rejects any path that would escape it. The second return is false
+// when the path is rejected; the caller treats that as "not in this root".
+func resolveUnder(root, file string) (string, bool) {
 	if filepath.IsAbs(file) {
 		return filepath.Clean(file), true
 	}
-	if f.Root == "" {
+	if root == "" {
 		return filepath.Clean(file), true
 	}
-	joined := filepath.Join(f.Root, file)
-	rel, err := filepath.Rel(f.Root, joined)
+	joined := filepath.Join(root, file)
+	rel, err := filepath.Rel(root, joined)
 	if err != nil {
 		return "", false
 	}
-	// Reject any path that climbs above Root via .. segments.
+	// Reject any path that climbs above root via .. segments.
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", false
 	}

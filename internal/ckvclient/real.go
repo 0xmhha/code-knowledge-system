@@ -163,6 +163,14 @@ func (r *Real) Freshness(ctx context.Context) (FreshnessReport, error) {
 // (ModelReachable, via probeModel). Separating them lets cks.ops.health tell
 // "index loaded but model down" apart from "fully healthy" — the runtime
 // disconnect the old manifest-only Health silently reported as reachable.
+// DocsRoots returns the `ckv build --docs` corpus roots recorded in the
+// index manifest. The composer's body fetcher resolves doc/markdown
+// citations against these — they live outside the code source_root, so
+// without them domain-corpus chunks have no body and get dropped.
+func (r *Real) DocsRoots() []string {
+	return r.eng.Manifest().DocsRoots
+}
+
 func (r *Real) Health(ctx context.Context) (Health, error) {
 	man := r.eng.Manifest()
 	modelUp, reason := r.probeModel(ctx)
