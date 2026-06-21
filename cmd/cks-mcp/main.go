@@ -105,7 +105,14 @@ func run(ctx context.Context, configPath string) error {
 	// the body returned for a citation could differ from what was
 	// indexed. cks does not enforce this; Citation.CommitHash on the
 	// returned EvidencePack is the operator's drift signal.
-	fetcher := &budget.FilesystemFetcher{Root: cfg.Backends.CKG.SourceRoot}
+	// DocsRoots (from the ckv index manifest) let the fetcher resolve
+	// doc/markdown corpus citations, which live outside SourceRoot. Only
+	// the Real ckv backend has a manifest; Dummy/Degraded contribute none.
+	var docsRoots []string
+	if rv, ok := be.ckv.(*ckvclient.Real); ok {
+		docsRoots = rv.DocsRoots()
+	}
+	fetcher := &budget.FilesystemFetcher{Root: cfg.Backends.CKG.SourceRoot, DocsRoots: docsRoots}
 
 	vocabResolver, err := buildVocabResolver(cfg.Vocab.GlossaryPath)
 	if err != nil {

@@ -40,6 +40,38 @@ func TestFilesystemFetcher_ReturnsCitedLineRange(t *testing.T) {
 	}
 }
 
+// TestFilesystemFetcher_DocsRootResolution verifies that a citation whose
+// File lives under a docs corpus root (outside the code Root) is fetched via
+// DocsRoots. Without this, domain-corpus (markdown) chunks have no body and
+// get skipped by Stage 4, so they never reach the EvidencePack.
+func TestFilesystemFetcher_DocsRootResolution(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	docs := t.TempDir()
+	writeFile(t, root, "code.go", "package x\n")
+	writeFile(t, docs, "flows/ep.md", "# Flow\nstep one\nstep two\n")
+
+	// Without DocsRoots: the doc citation resolves under Root only → missing → "".
+	fNoDocs := &FilesystemFetcher{Root: root}
+	if got, err := fNoDocs.Fetch(context.Background(), contract.Citation{File: "flows/ep.md", StartLine: 2, EndLine: 2}); err != nil || got != "" {
+		t.Fatalf("without DocsRoots: want empty body, got %q err=%v", got, err)
+	}
+
+	// With DocsRoots: the body is fetched from the corpus root.
+	f := &FilesystemFetcher{Root: root, DocsRoots: []string{docs}}
+	got, err := f.Fetch(context.Background(), contract.Citation{File: "flows/ep.md", StartLine: 2, EndLine: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "step one\nstep two"; got != want {
+		t.Errorf("with DocsRoots: got %q, want %q", got, want)
+	}
+	// Code citations still resolve under Root.
+	if got, err := f.Fetch(context.Background(), contract.Citation{File: "code.go", StartLine: 1, EndLine: 1}); err != nil || got != "package x" {
+		t.Errorf("code citation under Root: got %q err=%v", got, err)
+	}
+}
+
 func TestFilesystemFetcher_SingleLine(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
