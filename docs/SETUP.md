@@ -55,7 +55,7 @@ SKIP_OLLAMA=1 ./scripts/setup-all.sh
 | 0 | 전제 도구·형제 리포 확인 | — |
 | 1 | Ollama **cask** 설치 → `ollama serve` → `bge-m3` pull → 1024-dim 검증 | — |
 | 2 | 바이너리 빌드: ckg/ckv/cks + domain tools | `STAGE=bins build-stablenet-dataset.sh` |
-| 3 | 도메인 코퍼스(36) + 정책(ckv 14/ckg 36) | `STAGE=domain`, `STAGE=policy` |
+| 3 | 도메인 코퍼스(43개 중 40 verified) + 정책(ckv 14/ckg 40) | `STAGE=domain`, `STAGE=policy` |
 | 4 | ckg 그래프 + ckv 벡터(bge-m3) 빌드 | `STAGE=ckg`, `STAGE=ckv` |
 | 5 | config/env 생성: `cks-stablenet.yaml` + `cks.env` | `gen-cks-config.sh` |
 | 6 | jira-gateway 빌드 | `go build ./cmd/server` |
@@ -182,9 +182,9 @@ code-knowledge-system/
 │   └── cks-health.sh                    # cks.ops.health 체크
 ├── cks-stablenet.yaml                   # ★생성★ 절대경로 cks 설정
 ├── cks.env                              # ★생성★ 경로 export (cks)
-├── data/ckg-stablenet/graph.db          # ckg 그래프 (220,507 노드 / 1.93M 엣지)
-├── ckv-stablenet/{vector.db,manifest}   # ckv 벡터 (19,807 청크, bge-m3 1024d)
-├── generated/{domain-corpus,policies}/  # 채널② 코퍼스 + 정책(ckv14/ckg36)
+├── data/ckg-stablenet/graph.db          # ckg 그래프 (full-source 빌드 ≈220,507 노드 / 1.93M 엣지; gstable-closure 빌드 시 ≈117K 노드 / 975K 엣지)
+├── ckv-stablenet/{vector.db,manifest}   # ckv 벡터 (full-source ≈26,015 청크; gstable-closure ≈10,978 청크, bge-m3 1024d)
+├── generated/{domain-corpus,policies}/  # 채널② 코퍼스 + 정책(ckv14/ckg40)
 └── docs/{SETUP.md, go-stablenet-dataset-build-manual.md}
 
 ~/.config/coding-agent/jira.env          # ★시크릿★ JIRA_* (리포 밖, 600, on-demand)

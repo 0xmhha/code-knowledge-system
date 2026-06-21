@@ -8,8 +8,10 @@ requirement into a verified change, inventories the domain knowledge available
 for decisions, catalogs the review perspectives and where each one's knowledge
 lives, and lists the gaps and risks that still undermine determinism.
 
-Baseline: domain-knowledge anchors verified at go-stablenet commit `9978930ba`;
-live checkout HEAD is `13382ff32` (+18 commits — see Staleness, §6).
+Baseline: domain-knowledge anchors verified at go-stablenet commit `9978930ba` (#84);
+live checkout HEAD is `d7cff3df9` (#86) — see Staleness, §6. (Note: `project.yaml`
+records the baseline as `ec6a4e96b`, which does not resolve in the current checkout —
+reconcile before trusting line numbers.)
 
 ---
 
@@ -21,7 +23,7 @@ live checkout HEAD is `13382ff32` (+18 commits — see Staleness, §6).
         ┌───────────────────┼────────────────────┐
         ▼                   ▼                     ▼
    ckg (graph)         ckv (vector)         domain-knowledge
-   AST→SQLite graph    bge-m3 embeddings    36 verified entries (A1–A14)
+   AST→SQLite graph    bge-m3 embeddings    43 entries / 40 verified (A1–A14)
    symbols + relations semantic recall      invariants/pitfalls/anchors
         └───────────────────┴────────────────────┘
                             │  fused in-process
@@ -114,7 +116,7 @@ the plugin's agents. The point of the datasets is to make that reasoning
   relational tools; evaluator drives chainbench at Stage 4; jira-gateway scrubs inbound
   Jira. Tool surface frozen in `contract/agent-mcp.schema.json`.
 - **Status note:** HANDOFF lists "domain KB empty / 0 verified" as P0 — **this is
-  stale**; the corpus is now 36 verified entries (§5). Real remaining items: a full
+  stale**; the corpus is now 43 entries / 40 verified (§5). Real remaining items: a full
   end-to-end `/work`→`/merge` run has not been executed; retrieval silently degrades
   to a dummy embedder if Ollama/bge-m3 is absent.
 
@@ -169,16 +171,18 @@ the grounding knowledge lives today; "Gap" = what is missing for confident revie
 | **Distributed networking & protocol** | A9 (istanbul subprotocol, RPC ref); ckg Endpoint/MessageType edges | no devp2p/RLPx handshake, peer discovery, gossip fan-out, eclipse/DoS entry |
 | **EVM / state** | A5 (account-extra, native coin), A11 (blacklist check-points) | no EVM execution, gas metering internals, state-trie/commit/snapshot, precompile entry |
 | **Gas / economics** | A6 (Anzeon tip, fee delegation), A14 base-fee redistribution | no full EIP-1559 base-fee math, tx ordering/priority, fee-market invariants |
-| **Governance / system contracts** | A4 (addresses, GovMinter), A10 codegen no-edit-zones; chainbench genesis | no GovValidator/GovMasterMinter/GovCouncil/NativeCoinAdapter internals; no per-contract upgrade storage-slot pitfalls |
+| **Governance / system contracts** | A4 (addresses, GovMinter, GovMasterMinter/mint-proposal, GovValidator genesis+storage, storage-slot helpers), A10 codegen no-edit-zones; chainbench genesis | no GovCouncil / NativeCoinAdapter internals; no per-contract upgrade storage-slot pitfalls |
 | **Security vulnerabilities** | A14 equivocation/justification; ckg Solidity security markers | no reorg-griefing, replay across fee-delegation, blacklist-bypass surface, gas/balance overflow entry |
-| **Testing / validation** | chainbench suites + MCP; coding-agent evaluator §7 | **no domain entry** on how to validate a consensus/state change, regression accounts, or the chainbench harness |
+| **Testing / validation** | chainbench suites + MCP; coding-agent evaluator §7; `A1.testing.consensus_change_validation` (needs_verification) | entry not yet verified → not shipped to the index; no separate regression-account / chainbench-harness reference entry |
 
 ---
 
 ## 5. Domain-knowledge corpus (the "learning" dataset)
 
-- **36 entries**, all `status: verified`, under
+- **43 entries** (40 `status: verified` + 3 `needs_verification`), under
   `code-knowledge-system/docs/domain-knowledge/projects/go-stablenet/entries/`.
+  The 3 unverified (not yet shipped to the index): `A1.testing.consensus_change_validation`,
+  `A4.gov_validator.storage_and_governance`, `A11.txpool.type_taxonomy_admission`.
 - **Schema** (`shared/entry.schema.yaml`): id, subsystem (A1–A14), knowledge_type
   (B1 architecture, B2 data-structure, B3 algorithm/flow, B4 invariant, B5 pitfall,
   B6 procedure, B7 reference), title, summary, status, priority, plus code_anchors,
@@ -187,9 +191,9 @@ the grounding knowledge lives today; "Gap" = what is missing for confident revie
 - **Lifecycle** (`shared/STATUS_LIFECYCLE.md`): needs_author → draft → needs_verification
   → verified; **only verified entries ship to the ckv index**; an anchor file changing
   reverts an entry to needs_verification.
-- **Coverage** (strongest → thinnest): A14 protocol theory (9) and A1 WBFT core (5) and
-  A8 genesis (3) are strong; **A11 tx/state-transition (1), A9 p2p (2), A4 gov contracts
-  (2), A7 hardfork (1)** are thin relative to their scope.
+- **Coverage** (strongest → thinnest): A14 protocol theory (9), A1 WBFT core (6) and
+  A4 gov contracts (6) and A8 genesis (3) are strong; **A11 tx/state-transition (2),
+  A9 p2p (2), A7 hardfork (1), A13 sealing (1)** are thin relative to their scope.
 - **First-party authoritative docs** (cross-referenced, not duplicated): go-stablenet
   `CLAUDE.md` and `.claude/docs/{wbft-consensus, stablenet-features, system-contract-flow,
   build-source-files, review-guide, code-convention, dev-basics, ops-guide}.md`. (Note:
@@ -199,8 +203,10 @@ the grounding knowledge lives today; "Gap" = what is missing for confident revie
 
 ## 6. Cross-cutting risks to determinism (fix these to stop "wrong-direction" work)
 
-1. **Anchor staleness (highest priority).** Entries verified @`9978930ba`; HEAD is
-   `13382ff32` (+18). Per the lifecycle's own rule, any touched anchor file makes a
+1. **Anchor staleness (highest priority).** Entries verified @`9978930ba` (#84); HEAD is
+   `d7cff3df9` (#86). The recorded baseline also conflicts across files (`project.yaml`
+   `ec6a4e96b` is unresolvable; dashboards cite `9978930ba`; the ckg/ckv DBs were built
+   @`c051d50b` #85). Per the lifecycle's own rule, any touched anchor file makes a
    "verified" entry potentially wrong. **Re-verify anchors against current HEAD before
    trusting line numbers**, and re-stamp `code_commit`.
 2. **ckg reverse-edge under-recall.** Suffix-match resolution drops unresolved
@@ -229,16 +235,18 @@ first. Each new entry follows the schema (B-type, anchors against **current HEAD
 invariants/pitfalls, aliases) and must reach `verified` before it ships to the index.
 
 **P0 — integrity first**
-- Re-verify the 36 existing entries' anchors against HEAD `13382ff32`; re-stamp
-  `code_commit`. (Knowledge you already trust must be correct before adding more.)
+- Re-verify the 43 existing entries' anchors against current HEAD; re-stamp
+  `code_commit`. (Knowledge you already trust must be correct before adding more.) Also
+  resolve the 3 `needs_verification` entries (see §5) and the baseline-commit conflict
+  (project.yaml `code_commit` does not resolve in the current checkout).
 
 **P0 — fill decision-blocking gaps**
-- A11 tx/state-transition: tx-type taxonomy & mempool admission; state-transition gas
+- A11 tx/state-transition: tx-type taxonomy & mempool admission *(drafted — `A11.txpool.type_taxonomy_admission`, needs_verification)*; still missing state-transition gas
   flow; intrinsic gas (incl. EIP-3860). (Most under-covered vs scope.)
 - Testing/validation: a B6 entry on validating consensus/state changes with chainbench
-  (which suite, quorum/health assertions, regression-account funding).
-- Governance: GovValidator, GovMasterMinter, GovCouncil, NativeCoinAdapter internals +
-  per-contract upgrade storage-slot pitfalls.
+  *(drafted — `A1.testing.consensus_change_validation`, needs_verification)*.
+- Governance: GovValidator + GovMasterMinter *(now covered, A4)*; still missing GovCouncil,
+  NativeCoinAdapter internals + per-contract upgrade storage-slot pitfalls.
 
 **P1 — perspective completeness**
 - Cryptography: BLS aggregation/verification & rogue-key/PoP defense.
