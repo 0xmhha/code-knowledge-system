@@ -1,7 +1,7 @@
 github.com/0xmhha/code-knowledge-graph v0.0.0-20260619124505-e74ce15610e3 h1:ElU1ISHCS4IMDdCkWkyUN/0mQIo5oZ3bqBx8yoP4xlE=
 github.com/0xmhha/code-knowledge-graph v0.0.0-20260619124505-e74ce15610e3/go.mod h1:yGIY78AloHIzlieuQz6CFjI0LLSpNsPg4/cWdzX8FQY=
-github.com/0xmhha/code-knowledge-vector v0.0.0-20260621103246-b99cd60d49a3 h1:iTyKe9+ppJrbIl4I8jUGxlqQDN6asEiK/FkbuWtfnII=
-github.com/0xmhha/code-knowledge-vector v0.0.0-20260621103246-b99cd60d49a3/go.mod h1:VtWa/s70jlim+WVejV7Ao7SUTXvlA15T4lNkp75g7s8=
+github.com/0xmhha/code-knowledge-vector v0.0.0-20260625064512-485b6446dc06 h1:XDupC5+jKMhqEpi0HpRhNDPUkk/YQXxW9sMtY5S5sb8=
+github.com/0xmhha/code-knowledge-vector v0.0.0-20260625064512-485b6446dc06/go.mod h1:VtWa/s70jlim+WVejV7Ao7SUTXvlA15T4lNkp75g7s8=
 github.com/asg017/sqlite-vec-go-bindings v0.1.6 h1:Nx0jAzyS38XpkKznJ9xQjFXz2X9tI7KqjwVxV8RNoww=
 github.com/asg017/sqlite-vec-go-bindings v0.1.6/go.mod h1:A8+cTt/nKFsYCQF6OgzSNpKZrzNo5gQsXBTfsXHXY0Q=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
