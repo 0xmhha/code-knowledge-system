@@ -4,6 +4,13 @@ GOLANGCI_LINT ?= golangci-lint
 BIN_DIR := bin
 LOG_DIR := logs
 
+# cks-mcp build stamp — injected into main.builderVersion and surfaced via
+# cks_ops_health.builder_version, so a running MCP can be matched to the source
+# commit it was built from ("-dirty" flags an uncommitted build).
+CKS_COMMIT  := $(shell git describe --always --dirty --abbrev=8 2>/dev/null || echo unknown)
+CKS_VERSION := cks-mcp/0.1.0-$(CKS_COMMIT)
+CKS_LDFLAGS := -X main.builderVersion=$(CKS_VERSION)
+
 # Dogfood eval (cks indexing cks itself) — used to produce the retrieval
 # baseline in eval/reports/. Override these to point at a different
 # target repo for cross-repo eval runs.
@@ -74,7 +81,7 @@ build:
 
 build-bins:
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -o $(BIN_DIR)/cks-mcp             ./cmd/cks-mcp
+	$(GO) build -ldflags "$(CKS_LDFLAGS)" -o $(BIN_DIR)/cks-mcp ./cmd/cks-mcp
 	$(GO) build -o $(BIN_DIR)/cks-agent           ./cmd/cks-agent
 	$(GO) build -o $(BIN_DIR)/cks-eval            ./cmd/cks-eval
 	$(GO) build -o $(BIN_DIR)/cks-glossary-gen    ./cmd/cks-glossary-gen
