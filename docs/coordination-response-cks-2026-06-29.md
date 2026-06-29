@@ -179,3 +179,25 @@ config에서 모델을 읽어 **in-process**로 ollama 임베더를 구성한다
 4. **B7 fixture**: cks↔ckg integration fixture 참여(canonical_id join 매칭률, ≥1.19 게이트 +
    `@<line>` 중복 케이스).
 5. CKV 문서 §2의 Q2(6도구 노출)·Q4(query_code 명칭) 정정은 §2-R에 반영됨.
+
+## §3-R-CKV-2 / coding-agent #44 대응 — 언어 스코프 + D-3 범위 (2026-06-29 갱신)
+
+> CKV `§3-R-CKV-2`(CKS §2-R2 수용 → 5세션 수렴 + 언어 스코프 쟁점)와 coding-agent
+> #44(D-1~D-5를 Phase 2 전제로 격상 + D-3 범위 확장)에 대한 CKS 대응. CKV 문서에 `§2-R3`로 반영.
+
+**언어 스코프(proto): ✅ 동의 — CKS 런타임 영향 없음**
+- CKG `LANG=auto`는 sol/proto 포함이나 CKV는 proto 미파싱(go/sol/ts/js/md) → CKG proto 노드는
+  ckv 청크가 설계상 없음. **매칭률 측정은 공유언어(go/sol/ts/js)로 스코프, proto는 분모 제외**에
+  동의(CKV 제안 분모 = 공유언어 CKV청크 총수 수용).
+- **CKS 런타임은 영향 없음**: cks는 canonical_id join(ckg, `FindByCanonicalID`)과 semantic
+  recall(ckv)을 **독립 fan-out → RRF 병합**한다. proto 심볼은 ckg graph 도구로는 잡히고 ckv
+  semantic 기여만 0이 된다 → **graph-only 커버리지로 graceful, join 에러 아님**(by design).
+
+**D-3 범위 확장: ✅ 정렬**
+- coding-agent #44가 D-3(b)를 `flow·invariant·conventions`로 명시 → CKS Phase 2 표면 노출
+  deliverable(D-4)을 **flow-aware 4종 + `get_invariant_enforcement` + `find_invariants` +
+  `get_conventions`** 로 정렬한다(CKV가 안정 인터페이스로 제공하는 분 기준).
+
+**수렴 상태**: CKV가 "5세션 수렴 완료" 선언. CKS 측 미해결 결정 없음 — 남은 건 *실행*(D-1/D-2
+데이터셋 정렬 통지 → config swap, D-4 인터페이스 확정 후 표면 구현). Phase 2 측정은 D-1/D-2
+합의 게이트를 따른다.
