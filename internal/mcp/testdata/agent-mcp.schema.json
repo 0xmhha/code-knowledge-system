@@ -43,6 +43,22 @@
       "description": "PR refs (provenance) and/or BM25-ranked hunk evidence for a symbol or intent.",
       "input": { "properties": { "intent": { "type": "string" }, "symbol": { "type": "string" }, "k": { "type": "number" }, "max_count": { "type": "number" } } }
     },
+    "cks.context.get_flow": {
+      "description": "Return a whole flow as a step sequence in call order. Select by one of flow_id, entry_point, or invariant_id.",
+      "input": { "properties": { "flow_id": { "type": "string" }, "entry_point": { "type": "string" }, "invariant_id": { "type": "string" }, "max_steps": { "type": "number" } } }
+    },
+    "cks.context.expand_flow": {
+      "description": "Return steps adjacent to a step. direction up=callers, down=callees; bounded by hops and limit.",
+      "input": { "properties": { "step_id": { "type": "string" }, "direction": { "type": "string" }, "hops": { "type": "number" }, "limit": { "type": "number" } }, "required": ["step_id"] }
+    },
+    "cks.context.find_branches": {
+      "description": "Map a free-text symptom to ranked when->then@at failure-condition candidates.",
+      "input": { "properties": { "symptom_text": { "type": "string" }, "k": { "type": "number" } }, "required": ["symptom_text"] }
+    },
+    "cks.context.get_invariant_enforcement": {
+      "description": "Enumerate every site that enforces an invariant (H-guardrail enabler).",
+      "input": { "properties": { "inv_id": { "type": "string" }, "max": { "type": "number" } }, "required": ["inv_id"] }
+    },
     "cks.ops.health": {
       "description": "Backend reachability + version pins. Reports degraded when ckv (embedder) is unavailable.",
       "input": { "properties": {} }

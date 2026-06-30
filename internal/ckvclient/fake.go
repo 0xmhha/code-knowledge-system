@@ -36,6 +36,17 @@ type Fake struct {
 	// CloseErr, when non-nil, is returned by Close.
 	CloseErr error
 
+	// Flow* back the FlowClient methods (Phase D). Each *Val is returned on
+	// success; the matching *Err takes precedence when non-nil.
+	FlowVal                    Flow
+	GetFlowErr                 error
+	ExpandVal                  FlowExpansion
+	ExpandFlowErr              error
+	BranchMatches              []BranchMatch
+	FindBranchesErr            error
+	EnforcementVal             InvariantEnforcement
+	GetInvariantEnforcementErr error
+
 	// Calls records every method invocation for test assertions.
 	Calls FakeCalls
 
@@ -46,16 +57,33 @@ type Fake struct {
 
 // FakeCalls records the methods invoked on a Fake and their arguments.
 type FakeCalls struct {
-	SemanticSearch []SemanticSearchCall
-	Freshness      int
-	Health         int
-	Close          int
+	SemanticSearch          []SemanticSearchCall
+	Freshness               int
+	Health                  int
+	Close                   int
+	GetFlow                 []FlowQuery
+	ExpandFlow              []ExpandFlowQuery
+	FindBranches            []FindBranchesCall
+	GetInvariantEnforcement []GetInvariantEnforcementCall
 }
 
 // SemanticSearchCall captures the arguments of one SemanticSearch invocation.
 type SemanticSearchCall struct {
 	Query string
 	Opts  SearchOpts
+}
+
+// FindBranchesCall captures the arguments of one FindBranches invocation.
+type FindBranchesCall struct {
+	Symptom string
+	K       int
+}
+
+// GetInvariantEnforcementCall captures the arguments of one
+// GetInvariantEnforcement invocation.
+type GetInvariantEnforcementCall struct {
+	InvID string
+	Max   int
 }
 
 // Reset clears all recorded calls. Useful between test sub-cases.

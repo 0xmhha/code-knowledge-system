@@ -201,3 +201,99 @@ config에서 모델을 읽어 **in-process**로 ollama 임베더를 구성한다
 **수렴 상태**: CKV가 "5세션 수렴 완료" 선언. CKS 측 미해결 결정 없음 — 남은 건 *실행*(D-1/D-2
 데이터셋 정렬 통지 → config swap, D-4 인터페이스 확정 후 표면 구현). Phase 2 측정은 D-1/D-2
 합의 게이트를 따른다.
+
+## Phase D flow 도구 — CKS 회신 (2026-06-30, CKV §9.1 계약 + §9.2 킥오프 대응)
+
+> CKV가 ckg 정본 그래프(schema 1.23) + ckv 완전 인덱스(bge-m3@1024, sha `c0e448f2…`,
+> 15,909청크) + flow corpus(Phase B) 완료 후, §9.1 flow 도구 계약을 제안하고 §9.2로 cks
+> 표면 노출 착수를 요청. 아래는 4개 질문에 대한 CKS 회신. CKV 문서에 `§9.2-R`로 반영.
+>
+> **go.mod 갱신 완료**: `code-knowledge-graph` → `v0.0.0-20260630052220-3ada0adada04`,
+> `code-knowledge-vector` → `v0.0.0-20260629073327-83b963fa8a18` (build·vet 클린).
+
+**Q1 — §9.1 계약 검토: ✅ 대체로 §2-R2와 일치, 조정 2건 요청**
+- 매핑 확인: CKS §2-R2 기대({지점, 방향 up/down, budget} → {랭크 flow노드, 엣지종류, invariant
+  위반후보})와 §9.1이 정합 — `expand_flow{step_id,direction,hops}`=지점+방향, `find_branches`(score
+  보유=랭크)=증상→원인/invariant 위반후보, `get_flow`=topological 구조, `get_invariant_enforcement`
+  =H-가드레일 enabler. schema_version·citation(file/line) 표준 ✓.
+- **조정①(budget 캡)**: CKS는 token-budgeted EvidencePack을 만든다. `get_flow`에 출력 상한이 없어
+  큰 flow면 budget 초과 → `max_steps?`(또는 budget) 추가 요청. `expand_flow`에 `limit?`(neighbors
+  상한), `get_invariant_enforcement`의 `enforced_at`에 상한 옵션. (`find_branches`는 `k` 보유 ✓.)
+- **조정②(canonical_id 명시 필드)**: "symbol↔ckg 조인은 canonical_id 경유"라 했으나 step 출력 형상은
+  `symbol`+`citation`만. CKS가 `FindByCanonicalID`로 ckg join 시 재해석 없이 쓰려면 **각 step/symbol
+  출력에 `canonical_id` 필드 명시** 요청.
+- 이 2건 반영 시 §9.1 확정 동의.
+
+**Q2 — 표면 노출 방식: ✅ in-process `ckvclient` 4메서드 (ckv MCP proxy 아님)**
+- CKS는 §2-R에서 subprocess/MCP proxy(543-LOC)를 제거하고 in-process `pkg/ckv`로 이행함 → 일관성·
+  성능상 **`ckvclient.Client` 인터페이스에 4메서드 추가(`GetFlow`/`ExpandFlow`/`FindBranches`/
+  `GetInvariantEnforcement`) → `pkg/ckv.Engine` 직접 호출**. ckv MCP proxy 안 함. (D-3 확장분
+  `find_invariants`/`get_conventions`도 동일 in-process 방식.)
+
+**Q3 — get_for_task 합성과 별개 직접 호출 도구: ✅ 동의**
+- flow 4종(+`find_invariants`/`get_conventions`)을 `cks_context_*` 직접 호출 MCP 도구로 노출.
+  coding-agent analyzer/diagnose가 root-cause-lifecycle(produce→store→consume)에서 직접 호출.
+- 도구명 제안: `cks.context.get_flow` / `expand_flow` / `find_branches` /
+  `get_invariant_enforcement` (+ `find_invariants` / `get_conventions`).
+
+**Q4 — 일정/선행조건**
+- **CKS 선행조건**: CKV가 §9.1(조정 반영) `pkg/ckv.Engine` 메서드를 출시 + 버전 태그. (현재 pkg/ckv에
+  flow 메서드 미구현 확인 → Real 구현 본체는 그 출시 후.)
+- **CKS 병렬 착수 가능(지금, CKV 출시 불필요)**:
+  1. `ckvclient.Client` 인터페이스에 4(+2)메서드 시그니처 + 입출력 타입 추가, `Fake`/`Dummy` 스텁 구현
+     (컴파일 가능).
+  2. `internal/mcp/flow.go`에 도구 등록 + 입출력 스키마 + 핸들러 골격.
+  3. 계약·표면 테스트 선작성.
+- **CKV 출시 후**: go.mod bump → `ckvclient` Real 본체에 `pkg/ckv.Engine` 호출 연결 → 표면 활성.
+- **Phase 2 인과 오케스트레이션**(expand_flow 다중홉 produce→store→consume 조립)은 그 다음 단계.
+
+## CKS 작업 리스트 (Phase D, 2026-06-30 갱신)
+
+**즉시 착수(CKV 출시 불필요)**
+- T1: `ckvclient.Client` 인터페이스 확장 — `GetFlow/ExpandFlow/FindBranches/GetInvariantEnforcement`
+  (+`FindInvariants/GetConventions`) 시그니처 + 입출력 타입(§9.1 + 조정①②). `Fake`/`Dummy` 스텁.
+- T2: `internal/mcp/flow.go` — `cks.context.*` 도구 6종 등록 + 스키마 + 핸들러 골격.
+- T3: 계약/표면 테스트(스텁 기반) 선작성.
+
+**CKV 출시 후(gated)**
+- T4: go.mod bump → `ckvclient/real.go`에 `pkg/ckv.Engine` flow 메서드 호출 연결.
+- T5: 데이터셋 정렬 — `cks-stablenet.yaml`을 ckg 정본(`knowledge-data/pr-77-2`, schema 1.23) +
+  ckv 인덱스(`knowledge-data/pr-77-2/ckv/vector.db`, sha `c0e448f2…`)로 swap + 세션 재시작.
+- T6: end-to-end 검증(coding-agent analyzer가 직접 호출로 flow/invariant 도달).
+
+**후속**
+- T7: Phase 2 인과 체인 오케스트레이션(composer, expand_flow 다중홉).
+- T8(후순위): R1 차원 실측·결정(reindex-B, Qwen3).
+
+## Phase D 갱신 — CKV flow 출시 반영 (2026-06-30, ckv `b8e9622`)
+
+> CKV가 28커밋으로 Phase D를 출시(`b8e9622`, MCP 15→19): `pkg/ckv.Engine`에 `GetFlow`/
+> `ExpandFlow`/`FindBranches`/`GetInvariantEnforcement` 구현됨. 이에 맞춰 CKS 스캐폴딩을
+> 실제 API로 정렬하고 **Real을 배선(T4 완료)**. go.mod: ckv → `v0.0.0-20260630112714-b8e9622aa4e2`,
+> ckg → `v0.0.0-20260630111249-2c871a6f0158` (build·vet·test 클린).
+
+**출시 API와 §9.1 초안 차이 (CKS 조정 ①② 미채택 → cks-side 정렬):**
+- ① **budget 캡 미채택**: `ExpandFlow(stepID,direction,hops)`·`GetInvariantEnforcement(invID)`에
+  limit/max 파라미터 없음 → CKS가 **fetch 후 cks-side로 캡 적용**(MaxSteps/Limit/max). 조정① 의도(토큰 budget) 보존.
+- ② **canonical_id 미채택**: `FlowStepView`는 `Symbol`+`Citation`만 → cks 타입에서 CanonicalID 드롭,
+  **join은 Symbol 경유**(`FindByCanonicalID`가 qname도 해소). 추후 cks가 canonical_id 보강 가능(follow-up).
+- 필드 형상: `Reads/Writes/Emits`는 단일 `string`(목록 아님), `ExpandResult`는 `Direction`+`OriginBranches` 보유 → cks 타입 정렬.
+
+**구현 상태 (실제 코드):**
+- ✅ T1 `ckvclient.FlowClient`(인터페이스+cks 타입+Fake/Dummy) — `internal/ckvclient/flow.go`.
+- ✅ T2 MCP 도구 4종 등록 — `internal/mcp/flow.go` (`get_flow`/`expand_flow`/`find_branches`/
+  `get_invariant_enforcement`), `server.go` 배선, 골든 픽스처 갱신(13→17 cks.* 도구).
+- ✅ T3 테스트 — `internal/ckvclient/flow_test.go`, `internal/mcp/flow_test.go` (Fake 해피패스·캡·
+  미지원 백엔드 폴백). 전체 test/vet 클린.
+- ✅ **T4 Real 배선** — `Real.{GetFlow,ExpandFlow,FindBranches,GetInvariantEnforcement}`가
+  `r.eng.*` 호출 + ckv타입→cks타입 변환 + cks-side 캡. (백엔드 누출 방지, SemanticSearch와 동일 패턴.)
+
+**남은 작업(gated/후속):**
+- T5 데이터셋 정렬 — `cks-stablenet.yaml`을 ckg 정본(`knowledge-data/pr-77-2`, schema 1.23) +
+  ckv 인덱스(`.../ckv/vector.db`, sha `c0e448f2…`)로 swap + 세션 재시작. (flow corpus 포함 인덱스 필요.)
+- T6 end-to-end — 실 인덱스로 cks-mcp 기동 후 flow 도구 4종 실호출 검증(coding-agent analyzer 직접 호출).
+- T7 인과 오케스트레이션(composer 다중홉) · T8(후순위) R1 차원 실측.
+
+**잔여 계약 회신(CKV에):** 조정 ①(budget 캡)·②(canonical_id)는 cks-side로 흡수했으므로 CKV 필수
+변경 아님. 다만 ② canonical_id를 step에 실으면 cks가 ckg join 시 재해석을 줄일 수 있어 **선택적 개선**으로
+재요청(미차단). find_invariants/get_conventions(D-3 확장)는 별도 계약 확정 후 동일 방식 노출 예정.
