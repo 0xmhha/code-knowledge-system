@@ -288,11 +288,19 @@ config에서 모델을 읽어 **in-process**로 ollama 임베더를 구성한다
 - ✅ **T4 Real 배선** — `Real.{GetFlow,ExpandFlow,FindBranches,GetInvariantEnforcement}`가
   `r.eng.*` 호출 + ckv타입→cks타입 변환 + cks-side 캡. (백엔드 누출 방지, SemanticSearch와 동일 패턴.)
 
-**남은 작업(gated/후속):**
-- T5 데이터셋 정렬 — `cks-stablenet.yaml`을 ckg 정본(`knowledge-data/pr-77-2`, schema 1.23) +
-  ckv 인덱스(`.../ckv/vector.db`, sha `c0e448f2…`)로 swap + 세션 재시작. (flow corpus 포함 인덱스 필요.)
-- T6 end-to-end — 실 인덱스로 cks-mcp 기동 후 flow 도구 4종 실호출 검증(coding-agent analyzer 직접 호출).
-- T7 인과 오케스트레이션(composer 다중홉) · T8(후순위) R1 차원 실측.
+**완료 (2026-07-01, 라이브 검증):**
+- ✅ T5 데이터셋 정렬 — `cks-stablenet.yaml`(gitignored)의 ckg/ckv 경로를 `knowledge-data/pr-77-2`
+  (graph.db schema 1.23 + ckv/vector.db, indexed_head `0bf2f4d1b`)로 swap. ⚠️ 실행 중 cks-mcp는
+  **세션 재시작 필요**(`/reload-plugins` 불가 — 메모리 cc-reload-plugins-no-mcp-restart).
+- ✅ T6 end-to-end — 두 경로로 검증:
+  - `ckvclient.Real` 직접(env-gated 통합테스트 `flow_live_test.go`, ollama bge-m3@1024):
+    GetFlow `ep-cli-init`=5 steps(root main.initGenesis@chaincmd.go:191), GetInvariantEnforcement
+    `INV-CONSENSUS-01`=4 sites(commit.go:123 등), ExpandFlow=1 neighbor+2 branches, FindBranches
+    "정족수 부족"=9 matches. **CKV §9-R 라이브 케이스와 일치.**
+  - 실 `cks-mcp` 서버(stdio): tools/list=17 cks 도구(flow 4종 광고), tools/call get_flow
+    (max_steps 캡 적용)·get_invariant_enforcement(4 sites) 정상.
+
+**후속:** T7 인과 오케스트레이션(composer 다중홉) · T8(후순위) R1 차원 실측.
 
 **잔여 계약 회신(CKV에):** 조정 ①(budget 캡)·②(canonical_id)는 cks-side로 흡수했으므로 CKV 필수
 변경 아님. 다만 ② canonical_id를 step에 실으면 cks가 ckg join 시 재해석을 줄일 수 있어 **선택적 개선**으로
