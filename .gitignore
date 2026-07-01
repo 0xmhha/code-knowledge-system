@@ -56,3 +56,7 @@ docs/_generated/
 /ckv-stablenet/
 /cks-stablenet.yaml
 /cks.env
+
+# cks-mcp http server runtime (serve-cks-http.sh)
+/run/cks-mcp.pid
+/run/cks-mcp.log
