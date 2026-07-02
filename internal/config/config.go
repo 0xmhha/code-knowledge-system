@@ -29,13 +29,21 @@ const configVersion = 1
 
 // Config is the top-level cks settings root.
 type Config struct {
-	Version  int            `yaml:"version"`
-	Backends BackendsConfig `yaml:"backends"`
-	Listen   ListenConfig   `yaml:"listen"`
-	Logging  LoggingConfig  `yaml:"logging"`
-	Sanitize SanitizeConfig `yaml:"sanitize"`
-	Vocab    VocabConfig    `yaml:"vocab"`
-	Domain   DomainConfig   `yaml:"domain"`
+	Version int `yaml:"version"`
+	// Name identifies this cks-mcp instance. It becomes the MCP server name in
+	// the handshake and is echoed in cks.ops.health, so a caller connecting by
+	// ip:port can tell WHICH instance it reached when several run side by side
+	// (one per dataset/index) on different ports. Empty defaults to "cks".
+	Name string `yaml:"name"`
+	// Description is optional human-facing metadata (e.g. "go-stablenet pr-77-2
+	// flow index") surfaced in cks.ops.health alongside Name.
+	Description string         `yaml:"description"`
+	Backends    BackendsConfig `yaml:"backends"`
+	Listen      ListenConfig   `yaml:"listen"`
+	Logging     LoggingConfig  `yaml:"logging"`
+	Sanitize    SanitizeConfig `yaml:"sanitize"`
+	Vocab       VocabConfig    `yaml:"vocab"`
+	Domain      DomainConfig   `yaml:"domain"`
 }
 
 // DomainConfig configures channel ② (domain-knowledge embedding). Empty

@@ -1,106 +1,101 @@
 #!/usr/bin/env bash
 #
-# serve-cks-http.sh — start/stop the standalone cks-mcp HTTP server ON DEMAND.
+# serve-cks-http.sh — start/stop cks-mcp HTTP instances ON DEMAND.
 #
-# This is NOT a boot service. The server runs only between `start` and `stop`;
-# it does not auto-start at login/reboot and does not respawn on its own. You
-# control it explicitly:
+# This is NOT a boot service. An instance runs only between `start` and `stop`;
+# it does not auto-start at login/reboot and does not respawn on its own.
 #
-#   scripts/serve-cks-http.sh start      # launch (detached) and write a pidfile
-#   scripts/serve-cks-http.sh stop       # terminate the running server
-#   scripts/serve-cks-http.sh restart    # stop then start (e.g. after `make build-bins`)
-#   scripts/serve-cks-http.sh status     # running? which pid / config / addr
-#   scripts/serve-cks-http.sh logs [N]   # tail -f the last N (default 40) log lines
+# Several instances can run side by side, each with its own NAME and PORT
+# (one per dataset/index). A caller connects by ip:port and can confirm which
+# instance it reached via cks.ops.health (name + description + indexed_head).
 #
-# Override via env (defaults shown):
+#   serve-cks-http.sh start   [name] [http_addr] [config]
+#   serve-cks-http.sh stop     [name]
+#   serve-cks-http.sh restart [name] [http_addr] [config]
+#   serve-cks-http.sh status  [name]      # (no name → list all managed instances)
+#   serve-cks-http.sh logs    [name] [N]
+#
+# Defaults (also overridable by env):
+#   name       = cks-stablenet                         (or $CKS_NAME)
+#   http_addr  = (from config's listen.http_addr)      (or $CKS_HTTP_ADDR)
+#   config     = <repo>/cks-stablenet.yaml             (or $CKS_HTTP_CONFIG)
 #   CKS_MCP_BIN          = <repo>/bin/cks-mcp
-#   CKS_HTTP_CONFIG      = <repo>/cks-stablenet.yaml   (must be transport: http)
 #   CKV_OLLAMA_ENDPOINT  = http://localhost:11434
-#   CKS_RUNDIR           = <repo>/run                  (pidfile + log live here)
+#   CKS_RUNDIR           = <repo>/run
 #
-# NOTE: this uses CKS_HTTP_CONFIG, NOT the ambient CKS_CONFIG. CKS_CONFIG is
-# injected globally (settings.json) for the plugin/launcher context and may
-# point elsewhere; the HTTP server config is decided here so `start` is
+# Per-instance pidfile/log are keyed by name: run/cks-<name>.{pid,log}.
+# NOTE: uses CKS_HTTP_CONFIG, NOT the ambient CKS_CONFIG (which targets a
+# different consumer); the served config is decided here so `start` is
 # deterministic regardless of the surrounding shell env.
-#
-# The HTTP bind address + allow_remote come from the config's `listen:` block,
-# so multi-machine access is governed there (bind a LAN IP / 0.0.0.0, allow_remote: true).
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="${CKS_MCP_BIN:-$ROOT/bin/cks-mcp}"
-CONFIG="${CKS_HTTP_CONFIG:-$ROOT/cks-stablenet.yaml}"
 RUNDIR="${CKS_RUNDIR:-$ROOT/run}"
-PIDFILE="$RUNDIR/cks-mcp.pid"
-LOGFILE="$RUNDIR/cks-mcp.log"
 OLLAMA="${CKV_OLLAMA_ENDPOINT:-http://localhost:11434}"
-
 mkdir -p "$RUNDIR"
+
+cmd="${1:-}"
+name="${2:-${CKS_NAME:-cks-stablenet}}"
+PIDFILE="$RUNDIR/$name.pid"
+LOGFILE="$RUNDIR/$name.log"
 
 is_running() { [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null; }
 
-addr_from_config() {
-  # best-effort: echo the http_addr for status output
-  grep -E '^[[:space:]]*http_addr:' "$CONFIG" 2>/dev/null | head -1 | sed -E 's/.*http_addr:[[:space:]]*"?([^"#]+)"?.*/\1/' | tr -d ' '
+do_start() {
+  local addr="${3:-${CKS_HTTP_ADDR:-}}"
+  local config="${4:-${CKS_HTTP_CONFIG:-$ROOT/cks-stablenet.yaml}}"
+  if is_running; then echo "[$name] already running (pid $(cat "$PIDFILE"))"; return 0; fi
+  [ -x "$BIN" ]    || { echo "error: binary not executable: $BIN (run 'make build-bins')"; exit 1; }
+  [ -f "$config" ] || { echo "error: config not found: $config"; exit 1; }
+  local args=(--config "$config" --name "$name")
+  [ -n "$addr" ] && args+=(--http-addr "$addr")
+  CKV_OLLAMA_ENDPOINT="$OLLAMA" CKS_OLLAMA_ENDPOINT="$OLLAMA" \
+    nohup "$BIN" "${args[@]}" >>"$LOGFILE" 2>&1 &
+  echo $! > "$PIDFILE"
+  sleep 1
+  if is_running; then
+    echo "[$name] started (pid $(cat "$PIDFILE"))  config=$config${addr:+  addr=$addr}"
+    echo "log: $LOGFILE"
+  else
+    echo "[$name] failed to start — last log lines:"; tail -n 8 "$LOGFILE" 2>/dev/null || true
+    rm -f "$PIDFILE"; exit 1
+  fi
 }
 
-cmd="${1:-}"
+do_stop() {
+  if is_running; then
+    local pid; pid="$(cat "$PIDFILE")"
+    kill "$pid" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PIDFILE"; echo "[$name] stopped (pid $pid)"
+  else
+    rm -f "$PIDFILE"; echo "[$name] not running"
+  fi
+}
+
 case "$cmd" in
-  start)
-    if is_running; then
-      echo "already running (pid $(cat "$PIDFILE"))"
-      exit 0
-    fi
-    [ -x "$BIN" ]   || { echo "error: binary not executable: $BIN (run 'make build-bins')"; exit 1; }
-    [ -f "$CONFIG" ] || { echo "error: config not found: $CONFIG"; exit 1; }
-    CKV_OLLAMA_ENDPOINT="$OLLAMA" CKS_OLLAMA_ENDPOINT="$OLLAMA" \
-      nohup "$BIN" --config "$CONFIG" >>"$LOGFILE" 2>&1 &
-    echo $! > "$PIDFILE"
-    sleep 1
-    if is_running; then
-      echo "started (pid $(cat "$PIDFILE"))  addr=$(addr_from_config)  config=$CONFIG"
-      echo "log: $LOGFILE"
-    else
-      echo "error: failed to start — last log lines:"
-      tail -n 8 "$LOGFILE" 2>/dev/null || true
-      rm -f "$PIDFILE"
-      exit 1
-    fi
-    ;;
-  stop)
-    if is_running; then
-      pid="$(cat "$PIDFILE")"
-      kill "$pid" 2>/dev/null || true
-      for _ in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
-      kill -9 "$pid" 2>/dev/null || true
-      rm -f "$PIDFILE"
-      echo "stopped (pid $pid)"
-    else
-      rm -f "$PIDFILE"
-      echo "not running"
-    fi
-    ;;
-  restart)
-    "$0" stop || true
-    sleep 1
-    "$0" start
-    ;;
+  start)   do_start "$@" ;;
+  stop)    do_stop ;;
+  restart) do_stop; sleep 1; do_start "$@" ;;
   status)
-    if is_running; then
-      echo "running (pid $(cat "$PIDFILE"))  addr=$(addr_from_config)  config=$CONFIG"
+    if [ -n "${2:-}" ]; then
+      is_running && echo "[$name] running (pid $(cat "$PIDFILE"))" || echo "[$name] stopped"
     else
-      echo "stopped"
+      shopt -s nullglob
+      found=0
+      for pf in "$RUNDIR"/*.pid; do
+        found=1; n="$(basename "$pf" .pid)"
+        if kill -0 "$(cat "$pf" 2>/dev/null)" 2>/dev/null; then echo "[$n] running (pid $(cat "$pf"))"; else echo "[$n] stale pidfile"; fi
+      done
+      [ "$found" -eq 0 ] && echo "(no managed instances)"
     fi
     ;;
-  logs)
-    n="${2:-40}"
-    tail -n "$n" -f "$LOGFILE"
-    ;;
+  logs)    tail -n "${3:-40}" -f "$LOGFILE" ;;
   *)
-    echo "usage: $0 {start|stop|restart|status|logs [N]}"
-    echo "  config: $CONFIG"
-    echo "  binary: $BIN"
+    echo "usage: $0 {start|stop|restart|status|logs} [name] [http_addr] [config]"
     exit 2
     ;;
 esac

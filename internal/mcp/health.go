@@ -15,7 +15,11 @@ import (
 // remote Claude Code talking to one of several MCP instances — can tell
 // WHICH instance it reached and WHAT code state / model that instance serves.
 type healthResponse struct {
-	Status string `json:"status"`
+	// Name/Description identify this instance (from config) so a caller
+	// connecting by ip:port knows which of several cks-mcp servers it reached.
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Status      string `json:"status"`
 	// Serviceable is the single gate the query path honors. It is true only
 	// when status == "ok": both ckg AND ckv (semantic retrieval, model up)
 	// are usable. "degraded" and "down" are BOTH non-serviceable — per the
@@ -94,6 +98,8 @@ func handleHealth(ctx context.Context, d Deps, _ mcpgo.CallToolRequest) (*mcpgo.
 	status := aggregateHealthStatus(ckg.Reachable, ckvUsable)
 
 	out := healthResponse{
+		Name:           d.InstanceName,
+		Description:    d.InstanceDescription,
 		Status:         status,
 		Serviceable:    status == "ok",
 		BuilderVersion: d.BuilderVersion,

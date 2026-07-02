@@ -65,21 +65,33 @@ var builderVersion = "cks-mcp/0.0.1-dev"
 
 func main() {
 	configPath := flag.String("config", "", "path to cks.yaml (optional; falls back to defaults)")
+	nameOverride := flag.String("name", "", "override config name (MCP instance name) — for running several instances")
+	httpAddrOverride := flag.String("http-addr", "", "override config listen.http_addr (host:port) — for running several instances on different ports")
 	flag.Parse()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	if err := run(ctx, *configPath); err != nil {
+	if err := run(ctx, *configPath, *nameOverride, *httpAddrOverride); err != nil {
 		log.Printf("cks-mcp: %v", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, configPath string) error {
+func run(ctx context.Context, configPath, nameOverride, httpAddrOverride string) error {
 	cfg, err := loadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
+	}
+	// Launch-time overrides let one dataset config back several instances,
+	// each on its own port + name, without editing the file. The effective
+	// name is always echoed in cks.ops.health, so which instance a caller
+	// reached stays unambiguous.
+	if nameOverride != "" {
+		cfg.Name = nameOverride
+	}
+	if httpAddrOverride != "" {
+		cfg.Listen.HTTPAddr = httpAddrOverride
 	}
 
 	ruleset, err := loadRuleset(cfg.Sanitize.RulesPath)
@@ -128,9 +140,11 @@ func run(ctx context.Context, configPath string) error {
 		Composer:       c,
 		CKG:            be.ckg,
 		CKV:            be.ckv,
-		Vocab:          vocabResolver,
-		BuilderVersion: builderVersion,
-		Embed:          be.cap,
+		Vocab:               vocabResolver,
+		BuilderVersion:      builderVersion,
+		InstanceName:        cfg.Name,
+		InstanceDescription: cfg.Description,
+		Embed:               be.cap,
 		Index: cksmcp.IndexConfig{
 			CKVBinary:        cfg.Backends.CKV.BinaryPath,
 			CKGBinary:        cfg.Backends.CKG.BinaryPath,
@@ -145,8 +159,12 @@ func run(ctx context.Context, configPath string) error {
 		},
 	}
 	if cfg.Listen.ResolvedTransport() == "http" {
-		log.Printf("cks-mcp: serving Streamable HTTP on %s (allow_remote=%v, allowed_cidrs=%v)",
-			cfg.Listen.HTTPAddr, cfg.Listen.AllowRemote, cfg.Listen.AllowedCIDRs)
+		name := cfg.Name
+		if name == "" {
+			name = "cks"
+		}
+		log.Printf("cks-mcp[%s]: serving Streamable HTTP on %s (allow_remote=%v, allowed_cidrs=%v)",
+			name, cfg.Listen.HTTPAddr, cfg.Listen.AllowRemote, cfg.Listen.AllowedCIDRs)
 		return cksmcp.RunHTTP(ctx, deps, cfg.Listen.HTTPAddr, cksmcp.HTTPPolicy{
 			AllowRemote:  cfg.Listen.AllowRemote,
 			AllowedCIDRs: cfg.Listen.AllowedCIDRs,

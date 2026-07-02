@@ -58,6 +58,15 @@ type Deps struct {
 	// Empty string is acceptable; the field is informational, not load-bearing.
 	BuilderVersion string
 
+	// InstanceName is this server's identity (MCP handshake name + echoed in
+	// cks.ops.health). When several cks-mcp instances run on different ports
+	// (one per dataset), it tells a caller connecting by ip:port which one it
+	// reached. Empty defaults to "cks".
+	InstanceName string
+	// InstanceDescription is optional human-facing metadata surfaced in
+	// cks.ops.health alongside InstanceName.
+	InstanceDescription string
+
 	// Embed describes the embedding backend this instance serves (provider,
 	// model, endpoint, dimension). Surfaced by cks.ops.health so a caller can
 	// tell which model + instance it reached. Filled from config, so it
@@ -116,16 +125,20 @@ func Register(s *mcpserver.MCPServer, d Deps) error {
 	return nil
 }
 
-// build constructs an MCP server named "cks" (version v from BuilderVersion
-// or a fallback) with all tools registered. Shared by the stdio (Run) and
-// Streamable-HTTP (RunHTTP) entry points so the registered surface is
-// identical across transports.
+// build constructs an MCP server (name from InstanceName, default "cks";
+// version v from BuilderVersion or a fallback) with all tools registered.
+// Shared by the stdio (Run) and Streamable-HTTP (RunHTTP) entry points so the
+// registered surface is identical across transports.
 func build(d Deps) (*mcpserver.MCPServer, error) {
 	v := d.BuilderVersion
 	if v == "" {
 		v = "0.0.0"
 	}
-	s := mcpserver.NewMCPServer("cks", v)
+	name := d.InstanceName
+	if name == "" {
+		name = "cks"
+	}
+	s := mcpserver.NewMCPServer(name, v)
 	if err := Register(s, d); err != nil {
 		return nil, fmt.Errorf("mcp: register: %w", err)
 	}
