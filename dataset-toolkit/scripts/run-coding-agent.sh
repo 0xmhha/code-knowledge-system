@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # run-coding-agent.sh — launch Claude Code with the coding-agent plugin's cks MCP
-# server pointed at a specific dataset (NOT the global default).
+# pointed at a specific dataset INSTANCE (NOT the global default).
 #
-# Why a launcher: Claude Code interpolates ${CKS_CONFIG} in the plugin's
-# .mcp.json from the SHELL ENVIRONMENT, and shell env WINS over settings.json. So
-# to switch datasets reliably we export the dataset's paths in the shell *before*
-# launching, AFTER any activate.sh (so our override is last-write-wins).
+# Why a launcher: the plugin's cks entry is HTTP-only ({"type":"http","url":
+# "${CKS_MCP_URL}"}), and Claude Code interpolates ${CKS_MCP_URL} from the SHELL
+# ENVIRONMENT, which WINS over settings.json. So to target a dataset reliably we
+# export its instance URL in the shell *before* launching, AFTER any activate.sh
+# (so our override is last-write-wins). The dataset's ENV_FILE must export
+# CKS_MCP_URL=http://<ip>:<port>/mcp for a cks-mcp instance already serving that
+# dataset (start one with code-knowledge-system/scripts/serve-cks-http.sh; verify
+# which index it serves via cks.ops.health name/indexed_head).
 #
 # Generalized from knowledge-data/pr-14/run-coding-agent-pr14.sh.
 #
@@ -35,10 +39,11 @@ if [ -n "$CKS_ROOT" ] && [ -f "$CKS_ROOT/activate.sh" ]; then
   source "$CKS_ROOT/activate.sh" || true
 fi
 
-# 2. Override cks → target dataset (sourced LAST so these shell exports win).
+# 2. Override cks → target dataset instance (sourced LAST so these win).
 # shellcheck disable=SC1091
 source "$ENV_FILE"
-echo "coding-agent: CKS_CONFIG=$CKS_CONFIG"
+[ -n "${CKS_MCP_URL:-}" ] || { echo "ERROR: ENV_FILE must export CKS_MCP_URL (http://<ip>:<port>/mcp of the instance serving this dataset)" >&2; exit 1; }
+echo "coding-agent: CKS_MCP_URL=$CKS_MCP_URL"
 
 command -v claude >/dev/null 2>&1 || { echo "ERROR: 'claude' not on PATH" >&2; exit 1; }
 cd "$CODE"

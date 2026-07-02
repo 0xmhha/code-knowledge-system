@@ -21,7 +21,7 @@ source "$CKS_ROOT/activate.sh" >/dev/null 2>&1 || true
 SETTINGS="$HOME/.claude/settings.json"
 mkdir -p "$HOME/.claude"
 
-CKS_MCP_BIN="${CKS_MCP_BIN:-}" CKS_CONFIG="${CKS_CONFIG:-}" \
+CKS_MCP_BIN="${CKS_MCP_BIN:-}" CKS_MCP_URL="${CKS_MCP_URL:-}" \
 JIRA_GATEWAY_BIN="${JIRA_GATEWAY_BIN:-}" JIRA_BASE_URL="${JIRA_BASE_URL:-}" \
 JIRA_USER_EMAIL="${JIRA_USER_EMAIL:-}" JIRA_API_TOKEN="${JIRA_API_TOKEN:-}" \
 CHAINBENCH_DIR="${CHAINBENCH_DIR:-}" SETTINGS="$SETTINGS" \
@@ -29,8 +29,12 @@ python3 - <<'PY'
 import json, os, sys
 
 path = os.environ["SETTINGS"]
-keys = ["CKS_MCP_BIN", "CKS_CONFIG", "JIRA_GATEWAY_BIN", "JIRA_BASE_URL",
+# CKS_CONFIG is gone: the plugin's cks entry is HTTP-only (${CKS_MCP_URL}) and
+# the bench connects over HTTP too, so nothing resolves CKS_CONFIG anymore.
+keys = ["CKS_MCP_BIN", "CKS_MCP_URL", "JIRA_GATEWAY_BIN", "JIRA_BASE_URL",
         "JIRA_USER_EMAIL", "JIRA_API_TOKEN", "CHAINBENCH_DIR"]
+# Drop the stale key from existing settings on re-run.
+stale = ["CKS_CONFIG"]
 
 try:
     with open(path) as f:
@@ -50,6 +54,9 @@ for k in keys:
     if v:
         env[k] = v
         written.append(k)
+for k in stale:
+    if env.pop(k, None) is not None:
+        print(f"  removed stale env.{k}")
 data["env"] = env
 
 with open(path, "w") as f:
