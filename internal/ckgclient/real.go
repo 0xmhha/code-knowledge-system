@@ -280,6 +280,15 @@ func matchesFilter(n types.Node, f SearchFilter) bool {
 // as given, then progressively drop leading dot-segments until the store resolves
 // it. Bare/exact names hit on the first try, so existing behaviour is unchanged.
 func (r *Real) resolveFlexibleNodes(name string) ([]types.Node, error) {
+	// Canonical-first (B7 join key): a ckg canonical_id (ADR-0001) is globally
+	// unique and is what ckv chunks / domain anchors carry, so it wins over
+	// qname matching. This keeps the public find_symbol / find_callers /
+	// find_callees surface honest about the canonical-id support its tool docs
+	// advertise, including "@<line>"-suffixed same-file duplicates (refinement
+	// B3) that qname suffix matching can never resolve.
+	if n, found, err := r.s.FindByCanonicalID(name); err == nil && found {
+		return []types.Node{n}, nil
+	}
 	nodes, err := r.s.FindSymbol(name, false)
 	if err != nil || len(nodes) > 0 {
 		return nodes, err

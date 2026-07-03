@@ -117,12 +117,14 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 	}
 	out := make([]contract.Hit, 0, len(resp.Hits))
 	for i, h := range resp.Hits {
-		// Symbol and CKGNodeID are the composer's bridge to ckg: Stage 1
-		// extracts hit.Symbol as a candidate keyword (instead of the
-		// file basename — the basename fallback survives in
-		// extractKeywords for hits with empty Symbol), and Stage 2 can
-		// short-circuit FindSymbol when CKGNodeID is populated. Empty
-		// values are fine (omitempty on the wire); they only mean the
+		// Symbol / CKGNodeID / CanonicalID are the composer's bridge to ckg:
+		// Stage 1 extracts hit.Symbol as a candidate keyword (instead of the
+		// file basename — the basename fallback survives in extractKeywords
+		// for hits with empty Symbol); CanonicalID is the build-stable B7
+		// join key (ADR-0001) the chunk inherited from the aligned ckg node,
+		// resolvable via ckg's canonical-first FindSymbol; CKGNodeID is the
+		// positional node id valid only within the aligned graph build.
+		// Empty values are fine (omitempty on the wire); they only mean the
 		// ckv chunk lacked the metadata (e.g. doc/header chunks).
 		out = append(out, contract.Hit{
 			Citation: contract.Citation{
@@ -131,11 +133,12 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 				EndLine:    h.Citation.EndLine,
 				CommitHash: h.Citation.CommitHash,
 			},
-			Rank:      i + 1,
-			Score:     h.Score.Normalized,
-			Source:    contract.HitSourceCKV,
-			Symbol:    h.Symbol,
-			CKGNodeID: h.CKGNodeID,
+			Rank:        i + 1,
+			Score:       h.Score.Normalized,
+			Source:      contract.HitSourceCKV,
+			Symbol:      h.Symbol,
+			CKGNodeID:   h.CKGNodeID,
+			CanonicalID: h.CanonicalID,
 		})
 	}
 	return out, nil
