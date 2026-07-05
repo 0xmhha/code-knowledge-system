@@ -15,9 +15,10 @@
 # and settings overrides live in ~/.claude/settings.json / .claude/settings.local.json.
 #
 # Usage:
-#   ./scripts/gen-cks-config.sh
-#   CKS_HTTP_ADDR=172.20.82.90:8080 ./scripts/gen-cks-config.sh   # LAN-reachable instance
-#   CKS_DATASET_DIR=/abs/knowledge-data/pr-77-2 ./scripts/gen-cks-config.sh
+#   ./scripts/gen-cks-config.sh                                   # auto-detects this machine's LAN ip
+#   CKS_HTTP_ADDR=127.0.0.1:8080 ./scripts/gen-cks-config.sh      # loopback-only instance
+#   CKS_HTTP_ADDR=<ip>:8080 ./scripts/gen-cks-config.sh           # explicit ip:port
+#   CKS_DATASET_DIR=/abs/knowledge-data/pr-77 ./scripts/gen-cks-config.sh
 #
 # Then either `source cks.env` in your shell, or run scripts/apply-cc-settings.sh
 # to merge the env into ~/.claude/settings.json.
@@ -37,13 +38,37 @@ EMBED_MODEL="${EMBED_MODEL:-bge-m3}"
 CKS_NAME="${CKS_NAME:-cks-stablenet}"
 CKS_DESCRIPTION="${CKS_DESCRIPTION:-go-stablenet dataset ($EMBED_MODEL)}"
 
-# Dataset: one directory holding graph.db (ckg) + ckv/ (vector index).
-# Defaults to the canonical pr-77-2 build; override per dataset.
-DATASET_DIR="$(abs "${CKS_DATASET_DIR:-$CKS_ROOT/../knowledge-data/pr-77-2}")"
+# Dataset: one directory holding graph-db/ (ckg graph.db) + vector-db/ (ckv
+# vector index). Defaults to the canonical pr-77 build; override per dataset.
+DATASET_DIR="$(abs "${CKS_DATASET_DIR:-$CKS_ROOT/../knowledge-data/pr-77}")"
 
-# HTTP listen address. Loopback by default; set a LAN IP (e.g. 172.20.x.x:8080)
-# to serve other machines — allow_remote is derived from the address.
-HTTP_ADDR="${CKS_HTTP_ADDR:-127.0.0.1:8080}"
+# HTTP listen address. Default = this machine's LAN IP, detected at generation
+# time (so other machines can connect without hand-editing an ip). Override
+# with CKS_HTTP_ADDR (e.g. CKS_HTTP_ADDR=127.0.0.1:8080 for loopback-only, or
+# an explicit ip:port). allow_remote is derived from the address.
+detect_lan_ip() {
+  local ip=""
+  if command -v ipconfig >/dev/null 2>&1; then           # macOS: primary iface first
+    local iface
+    iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')"
+    [ -n "$iface" ] && ip="$(ipconfig getifaddr "$iface" 2>/dev/null || true)"
+    [ -z "$ip" ] && ip="$(ipconfig getifaddr en0 2>/dev/null || true)"
+    [ -z "$ip" ] && ip="$(ipconfig getifaddr en1 2>/dev/null || true)"
+  fi
+  [ -z "$ip" ] && ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"  # Linux
+  echo "$ip"
+}
+if [ -n "${CKS_HTTP_ADDR:-}" ]; then
+  HTTP_ADDR="$CKS_HTTP_ADDR"
+else
+  LAN_IP="$(detect_lan_ip)"
+  if [ -n "$LAN_IP" ]; then
+    HTTP_ADDR="$LAN_IP:8080"
+  else
+    echo "WARN: could not detect a LAN ip — falling back to loopback (127.0.0.1:8080)" >&2
+    HTTP_ADDR="127.0.0.1:8080"
+  fi
+fi
 case "$HTTP_ADDR" in
   127.*|localhost*) ALLOW_REMOTE=false ;;
   *)                ALLOW_REMOTE=true ;;
@@ -64,13 +89,13 @@ description: "$CKS_DESCRIPTION"
 
 backends:
   ckg:
-    path: "$DATASET_DIR/graph.db"
+    path: "$DATASET_DIR/graph-db/graph.db"
     source_root: "$GSN"
     binary_path: "$CKG_BIN"
     policy_file: "$CKS_ROOT/generated/policies/stablenet-ckg-policy.yaml"
     timeout_ms: 5000
   ckv:
-    path: "$DATASET_DIR/ckv"
+    path: "$DATASET_DIR/vector-db"
     timeout_ms: 3000
     embed_model: "$EMBED_MODEL"
     ollama_url: "$OLLAMA_URL"
@@ -117,8 +142,8 @@ echo "  $ENVFILE"
 [ -x "$CKS_MCP_BIN" ] || echo "  WARN: cks-mcp not built yet ($CKS_MCP_BIN) — run 'make build-bins'"
 [ -x "$CKG_BIN" ]     || echo "  WARN: ckg not built ($CKG_BIN)"
 [ -x "$CKV_BIN" ]     || echo "  WARN: ckv not built ($CKV_BIN)"
-[ -f "$DATASET_DIR/graph.db" ] || echo "  WARN: dataset graph.db missing ($DATASET_DIR/graph.db)"
-[ -d "$DATASET_DIR/ckv" ]      || echo "  WARN: dataset ckv index missing ($DATASET_DIR/ckv)"
+[ -f "$DATASET_DIR/graph-db/graph.db" ] || echo "  WARN: dataset graph.db missing ($DATASET_DIR/graph-db/graph.db)"
+[ -d "$DATASET_DIR/vector-db" ]         || echo "  WARN: dataset vector index missing ($DATASET_DIR/vector-db)"
 echo ""
 echo "serve:     scripts/serve-cks-http.sh start   # on-demand HTTP instance"
 echo "activate:  source \"$ENVFILE\"     # or run scripts/apply-cc-settings.sh"

@@ -50,13 +50,16 @@ cat > "$CONFIG" <<YAML
 version: 1
 
 backends:
+  # ckg.path is a FILE (single sqlite graph.db); ckv.path is a DIRECTORY —
+  # ckv.Open requires the dir holding vector.db + manifest.json (the manifest
+  # carries the embedding identity checked at open). Not an inconsistency.
   ckg:
-    path: "$DATASET/ckg/graph.db"
+    path: "$DATASET/graph-db/graph.db"
     source_root: "$SRC_ROOT"
     binary_path: "$CKG_REPO/bin/ckg"
     timeout_ms: 5000
   ckv:
-    path: "$DATASET/ckv"
+    path: "$DATASET/vector-db"
     timeout_ms: 3000
     embed_model: "$EMBED_MODEL"
     ollama_url: "$OLLAMA_URL"
