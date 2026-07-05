@@ -42,6 +42,53 @@ CKS_DESCRIPTION="${CKS_DESCRIPTION:-go-stablenet dataset ($EMBED_MODEL)}"
 # vector index). Defaults to the canonical pr-77 build; override per dataset.
 DATASET_DIR="$(abs "${CKS_DATASET_DIR:-$CKS_ROOT/../knowledge-data/pr-77}")"
 
+# ---- source-consistency assertion (fail loud, before writing anything) -----
+# The generated config's source_root MUST be the same checkout the dataset was
+# indexed from, or cks silently serves snippets/freshness from the wrong tree
+# (GO_STABLENET_ROOT unset falls back to ../go-stablenet, which may not be the
+# indexed checkout). A stale HEAD is legitimate (freshness reports it) → WARN;
+# a different checkout or a graph/vector commit split is not → ERROR.
+# Override only if the checkout was intentionally moved: CKS_ALLOW_SRC_MISMATCH=1
+if ! python3 - "$DATASET_DIR" "$GSN" <<'PY'
+import json, subprocess, sys
+dataset, gsn = sys.argv[1], sys.argv[2]
+errors, commits = [], {}
+for kind in ("graph-db", "vector-db"):
+    mf = f"{dataset}/{kind}/manifest.json"
+    try:
+        m = json.load(open(mf))
+    except FileNotFoundError:
+        continue  # dataset not built yet — the existing WARNs below cover this
+    src_root, src_commit = m.get("src_root", ""), m.get("src_commit", "")
+    if src_root and src_root != gsn:
+        errors.append(f"{kind}: indexed from {src_root}\n           config source_root = {gsn}")
+    if src_commit:
+        commits[kind] = src_commit
+if len(set(commits.values())) > 1:
+    errors.append(f"graph/vector built from different commits: {commits}")
+if errors:
+    print("ERROR: dataset/source_root mismatch — refusing to generate a config", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    print("  fix: GO_STABLENET_ROOT=<indexed checkout> scripts/gen-cks-config.sh", file=sys.stderr)
+    print("  override (checkout intentionally moved): CKS_ALLOW_SRC_MISMATCH=1", file=sys.stderr)
+    sys.exit(1)
+if commits:
+    head = subprocess.run(["git", "-C", gsn, "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    indexed = next(iter(commits.values()))
+    if head and head != indexed:
+        print(f"WARN: {gsn} HEAD ({head[:9]}) != indexed src_commit ({indexed[:9]}) — "
+              "index is stale (ok if this base is intended)", file=sys.stderr)
+PY
+then
+  if [ "${CKS_ALLOW_SRC_MISMATCH:-0}" = "1" ]; then
+    echo "WARN: source-consistency assertion OVERRIDDEN (CKS_ALLOW_SRC_MISMATCH=1)" >&2
+  else
+    exit 1
+  fi
+fi
+
 # HTTP listen address. Default = this machine's LAN IP, detected at generation
 # time (so other machines can connect without hand-editing an ip). Override
 # with CKS_HTTP_ADDR (e.g. CKS_HTTP_ADDR=127.0.0.1:8080 for loopback-only, or
