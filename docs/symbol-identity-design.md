@@ -4,6 +4,11 @@ Status: design (Phase 0). This document is the authoritative contract the three
 backends (ckg graph, ckv vector, cks composer) and the domain-knowledge anchors
 must conform to. Implementation is phased (§7).
 
+> **Follow-up (2026-07-08)**: the `ckg_node_id` shared field is retired in favor of
+> `canonical_id` as the sole cross-repo join key (finishes this ADR's migration).
+> See [`retire-ckg-node-id.md`](./retire-ckg-node-id.md) for the cross-repo plan,
+> the dead-code verdict, and the per-repo checklist.
+
 ## 1. Problem
 
 "Symbol" is used inconsistently across the system, with two distinct defects:
