@@ -58,9 +58,12 @@ type searchResponse struct {
 func registerSemanticSearch(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameSemanticSearch,
 		mcpgo.WithDescription(
-			"Vector-similarity search over the ckv index. Use this when the query is a "+
-				"natural-language description and you want chunks whose meaning matches, not just "+
-				"chunks whose tokens overlap. For exact-keyword lookups use search_text.",
+			"Vector-similarity search over the ckv index (bge-m3). Use for "+
+				"natural-language symptoms or intent ('restore proposal stuck pending') where "+
+				"wording differs from code tokens. Similar is NOT correct: hits are entry "+
+				"points, not causes -- confirm by traversing relations "+
+				"(find_callers/find_callees) from a hit. For exact identifiers prefer "+
+				"search_text or find_symbol.",
 		),
 		mcpgo.WithString("query", mcpgo.Required(),
 			mcpgo.Description("Natural-language query (e.g., \"validator quorum check at finalize\").")),
@@ -117,9 +120,11 @@ func handleSemanticSearch(ctx context.Context, d Deps, req mcpgo.CallToolRequest
 func registerSearchText(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameSearchText,
 		mcpgo.WithDescription(
-			"BM25 keyword search over the ckg full-text index. Use this when the query terms "+
-				"should match exactly (function names, identifiers, error strings). For meaning-"+
-				"based retrieval use semantic_search.",
+			"BM25 keyword search over the ckg full-text index (code-aware tokenizer). Use "+
+				"when terms must match exactly: function names, identifiers, error strings. "+
+				"Anti-pattern: stacking searches to 'find the cause' -- a text hit is a "+
+				"location, not a cause. After locating, traverse toward the value's producer "+
+				"with find_callers/find_callees instead of searching again.",
 		),
 		mcpgo.WithString("query", mcpgo.Required(),
 			mcpgo.Description("Keyword query (terms joined as OR by default).")),

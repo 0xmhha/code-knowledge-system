@@ -69,10 +69,10 @@ type opsIndexResponse struct {
 func registerOpsIndex(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameOpsIndex,
 		mcpgo.WithDescription(
-			"Refresh the ckv (vector) and ckg (graph) indexes for the configured source tree. "+
-				"Use AFTER cks.ops.freshness reports the index is stale. mode=incremental reindexes "+
-				"only files changed since the indexed head (fast); mode=full rebuilds from scratch. "+
-				"This is a maintenance op: it shells out to the ckv/ckg binaries and may take a while.",
+			"Refresh the ckv (vector) and ckg (graph) indexes for the configured source "+
+				"tree. Use ONLY after cks.ops.freshness reports stale. mode=incremental "+
+				"reindexes files changed since the indexed commit; mode=full rebuilds "+
+				"everything (slow).",
 		),
 		mcpgo.WithString("mode",
 			mcpgo.Description("\"incremental\" (default) or \"full\".")),

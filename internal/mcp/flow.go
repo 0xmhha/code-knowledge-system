@@ -53,9 +53,11 @@ func flowErrResult(toolName string, err error) *mcpgo.CallToolResult {
 func registerGetFlow(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameGetFlow,
 		mcpgo.WithDescription(
-			"Return a whole flow as a topological step sequence (cycle-safe). Each step carries "+
-				"its symbol, canonical_id, citation, calls/reads/writes/emits, branches, and "+
-				"invariants. Select the flow by exactly one of flow_id, entry_point, or invariant_id.",
+			"Return a curated flow as a topological step sequence (cycle-safe): symbol, "+
+				"citation, calls/reads/writes/emits, branches, invariants per step. Select by "+
+				"flow_id / entry-point ID / invariant_id -- these are curated IDs matched "+
+				"exactly, NOT code symbols. From a natural-language symptom, call "+
+				"find_branches first, then get_flow(flow_id).",
 		),
 		mcpgo.WithString("flow_id", mcpgo.Description("Flow identifier.")),
 		mcpgo.WithString("entry_point", mcpgo.Description("Entry-point symbol of the flow.")),
@@ -92,9 +94,9 @@ func handleGetFlow(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*mcp
 func registerExpandFlow(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameExpandFlow,
 		mcpgo.WithDescription(
-			"Return the steps adjacent to a step. direction \"up\" walks producers, \"down\" walks "+
-				"consumers. Bounded by hops and limit. Use to trace a value's produce→store→consume "+
-				"lifecycle one hop at a time.",
+			"Steps adjacent to a flow step: direction 'up' traverses producers, 'down' "+
+				"traverses consumers. Use to trace a value's produce->store->consume "+
+				"lifecycle one hop at a time when the whole flow is too large.",
 		),
 		mcpgo.WithString("step_id", mcpgo.Required(), mcpgo.Description("Origin step id.")),
 		mcpgo.WithString("direction", mcpgo.Description("\"up\" (producers) or \"down\" (consumers). Default \"down\".")),
@@ -140,9 +142,9 @@ type findBranchesResponse struct {
 func registerFindBranches(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameFindBranches,
 		mcpgo.WithDescription(
-			"Map a free-text symptom to ranked when→then@at failure-condition candidates "+
-				"(branch.when is part of the flow embedding). Use to go from an observed symptom "+
-				"to the branch/condition that produces it.",
+			"Map a free-text symptom to ranked when->then@at failure-condition candidates "+
+				"from the flow corpus. This is the natural-language ENTRY POINT into flows -- "+
+				"use it before get_flow when all you have is a symptom.",
 		),
 		mcpgo.WithString("symptom_text", mcpgo.Required(), mcpgo.Description("Free-text symptom description.")),
 		mcpgo.WithNumber("k", mcpgo.Description("Max matches to return (default 10).")),
@@ -172,9 +174,9 @@ func handleFindBranches(ctx context.Context, d Deps, req mcpgo.CallToolRequest) 
 func registerGetInvariantEnforcement(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameGetInvariantEnforcement,
 		mcpgo.WithDescription(
-			"Enumerate every site that enforces an invariant (the H-guardrail enabler: a "+
-				"code-derived implementation invariant and the places that must uphold it). "+
-				"Use to check whether a change preserves an invariant at all enforcement points.",
+			"Enumerate every site that enforces a curated invariant. Use to check a "+
+				"planned change against domain rules (the 'empty block implies same state "+
+				"root' class) before implementing.",
 		),
 		mcpgo.WithString("inv_id", mcpgo.Required(), mcpgo.Description("Invariant identifier.")),
 		mcpgo.WithNumber("max", mcpgo.Description("Cap on enforcement sites (0 = backend default).")),
