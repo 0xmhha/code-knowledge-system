@@ -209,9 +209,10 @@ func TestExpand_RespectsMaxSeedsToExpand(t *testing.T) {
 	if len(out.Seeds) != 5 {
 		t.Errorf("Seeds count = %d, want 5 (all passthrough)", len(out.Seeds))
 	}
-	// ckg.Neighbors should have been called exactly twice (for top 2).
-	if len(ckg.Calls.Neighbors) != 2 {
-		t.Errorf("ckg.Neighbors called %d times, want 2", len(ckg.Calls.Neighbors))
+	// ckg.Neighbors runs once per direction group per expanded seed.
+	// BugFix splits into [calls] + [called_by], so 2 seeds -> 4 calls.
+	if len(ckg.Calls.Neighbors) != 4 {
+		t.Errorf("ckg.Neighbors called %d times, want 4 (2 seeds x 2 direction groups)", len(ckg.Calls.Neighbors))
 	}
 }
 
@@ -342,10 +343,27 @@ func TestExpand_PassesIntentRelationsToCKG(t *testing.T) {
 	}
 	e, _ := New(ckg)
 	_, _ = e.Expand(context.Background(), seeds, contract.IntentBugFix)
-	if len(ckg.Calls.Neighbors) != 1 {
-		t.Fatalf("ckg.Neighbors called %d times, want 1", len(ckg.Calls.Neighbors))
+	// BugFix's relation set mixes directions, so the expander issues one
+	// direction-homogeneous call per group (ckgclient rejects mixed sets).
+	if len(ckg.Calls.Neighbors) != 2 {
+		t.Fatalf("ckg.Neighbors called %d times, want 2 direction groups", len(ckg.Calls.Neighbors))
 	}
-	opts := ckg.Calls.Neighbors[0].Opts
+	var gotRels []contract.Relation
+	for _, call := range ckg.Calls.Neighbors {
+		hasFwd, hasRev := false, false
+		for _, r := range call.Opts.Relations {
+			if r == contract.RelationCalledBy {
+				hasRev = true
+			} else {
+				hasFwd = true
+			}
+		}
+		if hasFwd && hasRev {
+			t.Fatalf("mixed-direction call leaked: %v", call.Opts.Relations)
+		}
+		gotRels = append(gotRels, call.Opts.Relations...)
+	}
+	opts := ckgclient.NeighborsOpts{Relations: gotRels, Hops: ckg.Calls.Neighbors[0].Opts.Hops}
 	wantRels := intentToRelations(contract.IntentBugFix)
 	if len(opts.Relations) != len(wantRels) {
 		t.Errorf("Relations passed = %v, want %v", opts.Relations, wantRels)

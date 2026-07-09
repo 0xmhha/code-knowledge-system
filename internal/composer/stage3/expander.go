@@ -182,18 +182,46 @@ func (e *Expander) Expand(ctx context.Context, seeds []stage2.ScoredCitation, in
 	relations := intentToRelations(intent)
 	hops := intentToHops(intent)
 
+	// ckgclient.Neighbors traverses one direction per call (mixed
+	// forward+reverse relation sets are rejected), but several Intents
+	// legitimately want both — BugFix wants calls AND called_by. Split
+	// the relation set into per-direction groups and traverse each;
+	// the aggregator dedups targets across groups. nil relations (the
+	// Unknown broad fan-out) stays a single forward pass.
+	relationGroups := splitByDirection(relations)
+
 	seedKeys := buildSeedKeys(seeds)
 	agg := newNeighborAggregator()
 	failedCount := 0
 
 	for _, seed := range toExpand {
-		nopts := ckgclient.NeighborsOpts{
-			Relations: relations,
-			Hops:      hops,
-			MaxTotal:  e.config.NeighborsPerSeed,
+		var neighbors []contract.Neighbor
+		var seedErr error
+		edgeSeen := make(map[string]struct{})
+		for _, group := range relationGroups {
+			nopts := ckgclient.NeighborsOpts{
+				Relations: group,
+				Hops:      hops,
+				MaxTotal:  e.config.NeighborsPerSeed,
+			}
+			ns, err := e.ckg.Neighbors(ctx, seed.Citation, nopts)
+			if err != nil {
+				seedErr = err
+				continue
+			}
+			// Dedup identical edges across direction groups — a backend
+			// that ignores the Relations filter (or overlapping groups)
+			// must not double-count an edge's score/coverage.
+			for _, n := range ns {
+				k := n.Source.Key() + "|" + n.Target.Key() + "|" + string(n.Relation)
+				if _, ok := edgeSeen[k]; ok {
+					continue
+				}
+				edgeSeen[k] = struct{}{}
+				neighbors = append(neighbors, n)
+			}
 		}
-		neighbors, err := e.ckg.Neighbors(ctx, seed.Citation, nopts)
-		if err != nil {
+		if seedErr != nil && len(neighbors) == 0 {
 			out.FailedSeeds = append(out.FailedSeeds, seed.Citation)
 			failedCount++
 			continue
@@ -249,6 +277,32 @@ func (e *Expander) emitFootprint(ctx context.Context, intent contract.Intent, ou
 		)
 	}
 	e.fp.Event(ctx, "composer.stage3_expanded", fields...)
+}
+
+// splitByDirection partitions a relation set into direction-homogeneous
+// groups for ckgclient.Neighbors, which traverses one direction per call.
+// called_by is the only reverse relation in the contract. nil input (the
+// broad Unknown fan-out) passes through as a single nil group.
+func splitByDirection(rels []contract.Relation) [][]contract.Relation {
+	if len(rels) == 0 {
+		return [][]contract.Relation{nil}
+	}
+	var forward, reverse []contract.Relation
+	for _, r := range rels {
+		if r == contract.RelationCalledBy {
+			reverse = append(reverse, r)
+		} else {
+			forward = append(forward, r)
+		}
+	}
+	groups := make([][]contract.Relation, 0, 2)
+	if len(forward) > 0 {
+		groups = append(groups, forward)
+	}
+	if len(reverse) > 0 {
+		groups = append(groups, reverse)
+	}
+	return groups
 }
 
 // buildSeedKeys returns the dedup set of seed citation keys for fast
