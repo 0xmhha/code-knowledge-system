@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -31,6 +32,24 @@ const (
 	// keeps packs focused. The agent overrides via the budget/depth knobs.
 	// 0 means "no cap" (token budget is the only gate).
 	DefaultMaxCitations = 12
+
+	// DefaultNeighborReserve is how many of the MaxCitations body slots
+	// are held back for neighbor-origin candidates. Seeds outrank
+	// distance-discounted neighbors by construction, so without a
+	// reserve the citation cap starves graph-expansion bodies entirely
+	// (the same failure mode the edge-only pack fix addresses at the
+	// edge level). 0 disables the reserve.
+	DefaultNeighborReserve = 4
+
+	// DefaultSnippetLines is the head-snippet length used when a full
+	// body does not fit the remaining budget: instead of dropping the
+	// candidate, the allocator degrades it to its first N lines
+	// (signature + doc comment territory) and marks it Degraded.
+	DefaultSnippetLines = 8
+
+	// OriginSeed / OriginNeighbor label a candidate's provenance.
+	OriginSeed     = "seed"
+	OriginNeighbor = "neighbor"
 )
 
 // Config tunes the allocator's budget and reserve.
@@ -46,6 +65,14 @@ type Config struct {
 	// MaxCitations caps the number of selected bodies regardless of the
 	// token budget (0 = no cap). Defaults to DefaultMaxCitations.
 	MaxCitations int
+
+	// NeighborReserve holds back this many MaxCitations slots for
+	// neighbor-origin candidates. See DefaultNeighborReserve.
+	NeighborReserve int
+
+	// SnippetLines is the degraded-body head length. See
+	// DefaultSnippetLines. 0 disables degradation (fit-or-drop).
+	SnippetLines int
 }
 
 // DefaultConfig returns the Phase-0 tuning baseline.
@@ -54,6 +81,8 @@ func DefaultConfig() Config {
 		MaxTokens:       DefaultMaxTokens,
 		OverheadReserve: DefaultOverheadReserve,
 		MaxCitations:    DefaultMaxCitations,
+		NeighborReserve: DefaultNeighborReserve,
+		SnippetLines:    DefaultSnippetLines,
 	}
 }
 
@@ -72,7 +101,10 @@ type SelectedItem struct {
 	Body          string
 	TokenEstimate int
 	Score         float64
-	// Origin is "seed" (from Stage 2) or "neighbor" (from Stage 3).
+	// Degraded marks a body truncated to a head snippet to fit budget.
+	Degraded bool
+
+	// Origin is OriginSeed (from Stage 2) or OriginNeighbor (from Stage 3).
 	Origin string
 	// Sources is copied from the originating ScoredCitation/ScoredNeighbor
 	// for full evidence-trail preservation.
@@ -107,6 +139,13 @@ type Stage4Output struct {
 	// EmptyBodies counts how many Fetch calls returned ("", nil) — the
 	// "available but vanished" signal (deleted file, missing chunk, etc.).
 	EmptyBodies int
+
+	// CapTruncated counts candidates never processed because the
+	// MaxCitations cap ended the selection loop early. Distinct from
+	// Skipped: these were not evaluated at all. Exposed so operators can
+	// see when the citation cap — not the token budget — is the binding
+	// constraint (the neighbor-starvation failure mode).
+	CapTruncated int
 }
 
 // Allocator runs Stage 4 of the composer pipeline.
@@ -169,8 +208,29 @@ func (a *Allocator) Allocate(ctx context.Context, seeds []stage2.ScoredCitation,
 		BudgetTokens: bodyBudget,
 	}
 
+	// Slot accounting: seeds may not exhaust the citation cap when a
+	// neighbor reserve is configured — distance-discounted neighbors
+	// never outscore their seeds, so without a reserve the cap starves
+	// them (fit-or-drop starvation, 2026-07 postmortem).
+	seedCap := a.config.MaxCitations
+	if a.config.MaxCitations > 0 && a.config.NeighborReserve > 0 {
+		seedCap = a.config.MaxCitations - a.config.NeighborReserve
+		if seedCap < 1 {
+			seedCap = 1
+		}
+	}
+	seedSelected := 0
+
 	used := 0
+	processed := 0
 	for _, c := range candidates {
+		processed++
+		if c.Origin == OriginSeed && seedCap > 0 && seedSelected >= seedCap {
+			// Seed slots exhausted; leave room for neighbor-origin
+			// candidates. Not a Skip: the candidate lost to the quota,
+			// not to budget or fetch.
+			continue
+		}
 		body, err := a.fetcher.Fetch(ctx, c.Citation)
 		if err != nil {
 			out.FetchErrors++
@@ -183,19 +243,35 @@ func (a *Allocator) Allocate(ctx context.Context, seeds []stage2.ScoredCitation,
 			continue
 		}
 		tokens := EstimateTokens(body)
+		degraded := false
 		if used+tokens > bodyBudget {
-			out.Skipped = append(out.Skipped, c.Citation)
-			continue
+			// Fit-or-degrade: try the head snippet before dropping.
+			if a.config.SnippetLines > 0 {
+				if snip := headSnippet(body, a.config.SnippetLines); snip != "" {
+					st := EstimateTokens(snip)
+					if used+st <= bodyBudget {
+						body, tokens, degraded = snip, st, true
+					}
+				}
+			}
+			if !degraded {
+				out.Skipped = append(out.Skipped, c.Citation)
+				continue
+			}
 		}
 		out.Selected = append(out.Selected, SelectedItem{
 			Citation:      c.Citation,
 			Body:          body,
 			TokenEstimate: tokens,
 			Score:         c.Score,
+			Degraded:      degraded,
 			Origin:        c.Origin,
 			Sources:       c.Sources,
 		})
 		used += tokens
+		if c.Origin == OriginSeed {
+			seedSelected++
+		}
 
 		// Citation cap: stop once we've selected MaxCitations bodies, even
 		// if the token budget has room. Candidates are merged in descending
@@ -207,6 +283,7 @@ func (a *Allocator) Allocate(ctx context.Context, seeds []stage2.ScoredCitation,
 		}
 	}
 
+	out.CapTruncated = len(candidates) - processed
 	out.UsedTokens = used
 	if bodyBudget > 0 {
 		out.Utilization = float64(used) / float64(bodyBudget)
@@ -214,6 +291,16 @@ func (a *Allocator) Allocate(ctx context.Context, seeds []stage2.ScoredCitation,
 
 	a.emitFootprint(ctx, out, len(candidates))
 	return out, nil
+}
+
+// headSnippet returns the first n lines of body plus a truncation marker,
+// or "" when body already fits in n lines (degrading would gain nothing).
+func headSnippet(body string, n int) string {
+	lines := strings.Split(body, "\n")
+	if len(lines) <= n {
+		return ""
+	}
+	return strings.Join(lines[:n], "\n") + "\n// … cks: truncated to head snippet (degraded); read the file for full text"
 }
 
 func (a *Allocator) emitFootprint(ctx context.Context, out Stage4Output, candidateCount int) {
@@ -229,6 +316,8 @@ func (a *Allocator) emitFootprint(ctx context.Context, out Stage4Output, candida
 		zap.Float64("utilization", out.Utilization),
 		zap.Int("fetch_errors", out.FetchErrors),
 		zap.Int("empty_bodies", out.EmptyBodies),
+		zap.Int("cap_truncated", out.CapTruncated),
+		zap.Int("degraded_count", countDegraded(out)),
 	}
 	if len(out.Selected) > 0 {
 		fields = append(fields,
@@ -237,6 +326,16 @@ func (a *Allocator) emitFootprint(ctx context.Context, out Stage4Output, candida
 		)
 	}
 	a.fp.Event(ctx, "composer.stage4_allocated", fields...)
+}
+
+func countDegraded(out Stage4Output) int {
+	n := 0
+	for _, it := range out.Selected {
+		if it.Degraded {
+			n++
+		}
+	}
+	return n
 }
 
 // candidate is the unified shape used by greedy allocation. Either
@@ -260,7 +359,7 @@ func mergeCandidates(seeds []stage2.ScoredCitation, neighbors []stage3.ScoredNei
 		out = append(out, candidate{
 			Citation: s.Citation,
 			Score:    s.Score,
-			Origin:   "seed",
+			Origin:   OriginSeed,
 			Sources:  s.Sources,
 		})
 	}
@@ -268,7 +367,7 @@ func mergeCandidates(seeds []stage2.ScoredCitation, neighbors []stage3.ScoredNei
 		out = append(out, candidate{
 			Citation: n.Edge.Target,
 			Score:    n.Score,
-			Origin:   "neighbor",
+			Origin:   OriginNeighbor,
 			Sources:  n.Sources,
 		})
 	}
