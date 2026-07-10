@@ -7,6 +7,9 @@
 >
 > 검증 시점: 2026-07-10, cks HEAD `a786143` 기준. 트리가 활발히 변경 중(검증 직후에도
 > filter push-down/ChunkKind 추가 확인)이므로, 착수 전 각 항목의 근거를 재확인할 것.
+>
+> **재검증(2026-07-10, `3e7c22d` 이후)**: M1은 local replace 커밋으로 해소되며 **M1′로
+> 전환**, M5는 knowledge quota로 부분 완화, M7은 2/39 진행. E1~E3·M2~M4·M6은 그대로 유효.
 
 ---
 
@@ -52,13 +55,18 @@
 
 ## M — 미완료
 
-### M1. ckv deps stale — 기능 영향 있음 🔴 (즉시)
-- pin `73e0763` ← ckv HEAD(`27226a8`)에 미반영 변경:
-  - `494007e` **get_flow selector misses self-correcting** — coding-agent가 보고한
-    "`get_flow(SetCurrentBlock)` → no flow found" 문제의 해결 커밋.
-  - `fe40e76` qwen3-embedding 옵션(embed registry, `pkg/mcp/server.go`) — M4의 enabler.
-- **조치**: go.mod bump → build/test → E3 재기동과 한 묶음.
-- (ckg delta `f4b5be8..HEAD`는 빌드타깃/문서뿐 — 기능 영향 없음.)
+### M1. ckv deps stale — ✅ 해소됨 (local replace) → **M1′로 전환**
+- ~~pin `73e0763`이 `494007e`(get_flow self-correcting)·`fe40e76`(qwen3 옵션) 미반영~~ →
+  `3e7c22d`가 `replace github.com/0xmhha/code-knowledge-vector => ../code-knowledge-vector`를
+  커밋해 **로컬 ckv HEAD로 빌드** — 두 변경 모두 반영됨. build/test 클린 확인.
+- (ckg pin은 HEAD와 docs-only 차이 — 조치 불요.)
+
+### M1′. 커밋된 local replace의 이동성 문제 🔴 (신규, M1에서 전환)
+- `go.mod`의 local `replace`가 커밋됐고, 그 대상인 로컬 ckv는 **미푸시 브랜치**
+  (`docs/retire-ckg-node-id [ahead 1]`) → 다른 머신/CI에서 이 cks 브랜치는 **빌드 불가**,
+  재현성 깨짐.
+- **조치**: ① 즉시 — ckv 브랜치 푸시(재현성 복구) ② retire 작업(M6) 안정화 시 —
+  replace 제거 + 정식 pin 복귀. **main 머지 전 필수.**
 
 ### M2. cks 팔 벤치 미실행 (HANDOFF §5.1(d) / handoff T-3) 🔴
 - 5팔(normal/skills/harness/vector-db/graph-db)은 완료·분석됨. **cks(결합) 팔만 미실행**.
@@ -72,26 +80,31 @@
 - ckv에 qwen3 옵션 추가(`fe40e76`)로 enabler 진전. **reindex-B(Qwen3) 인덱스 대기**.
 - 도착 시: 1024-truncate vs full-dim 실측 → `embed_model` config + `embedder.knownDims` 갱신.
 
-### M5. D-3 확장 2종 노출 — CKV gated
+### M5. D-3 확장 2종 노출 — CKV gated (부분 완화됨)
 - `find_invariants`/`get_conventions`: **ckv `pkg/ckv.Engine`에 메서드 미출시**(0건) →
   cks 표면 노출 불가. CKV 출시 시 flow 4종과 동일 패턴(FlowClient + MCP 도구)으로 추가.
+- **완화(2026-07-10)**: `3e7c22d` composer **knowledge quota**가 invariant/convention
+  청크(ChunkKind 라우팅)를 EvidencePack에 직접 배분 — 지식 자체는 이미 팩으로 흐름.
+  잔여는 "전용 직접-호출 도구" 노출뿐.
 
 ### M6. ckg_node_id 은퇴 (cks측) — 계획대로 대기
 - `contract.Hit.CKGNodeID` 잔존(정상 — retire-ckg-node-id.md 체크리스트상 **ckv 컬럼
   제거가 선행**). ckv측 제거 후: Hit 필드 삭제 + real.go 매핑 삭제 + 주석/테스트 정리 +
   JSON 계약 변경 명시 + symbol-identity-design.md 반영.
 
-### M7. Phase 3 anchor 마이그레이션 (경미)
+### M7. Phase 3 anchor 마이그레이션 (경미, 진행 중)
 - two-kind 스키마는 구현됨(`internal/inventory` `AnchorKindDef`, 빈값=def back-compat).
-- **39 entries의 `code_anchors`에 `kind:` 필드 미부여** — back-compat로 동작 중이므로
-  기능 문제는 없음. 명시 마이그레이션만 잔여.
+- 39 entries 중 **2개에 `kind:` 부여 시작**(2026-07-10) — 나머지 37개 잔여. back-compat로
+  동작 중이므로 기능 문제는 없음.
 
 ---
 
-## 권장 조치 순서
+## 권장 조치 순서 (2026-07-10 재검증 반영)
 
-1. **[한 묶음] M1 → E1/E2 → E3**: ckv bump → config 재생성(source_root=analysis-test-3,
-   현존 데이터셋 레이아웃) → `make build-bins` → 인스턴스 기동 → health 검증.
-2. **M2**: cks 팔 벤치 실행 (5팔과 동일 조건: sonnet-5, 동일 태스크).
-3. 벤치 후: **M3(T7)** 착수, **E4/E5** 문서 정정.
-4. 외부 대기: **M4**(reindex-B), **M5**(ckv Engine 출시), **M6**(ckv 컬럼 제거).
+1. **M1′ 즉시 조치**: ckv 브랜치 푸시(재현성 복구).
+2. **E1/E2 → E3**: config 재생성(source_root=analysis-test-3, 현존 데이터셋 레이아웃) →
+   `make build-bins` → 인스턴스 기동 → health 검증.
+3. **M2**: cks 팔 벤치 실행 (5팔과 동일 조건: sonnet-5, 동일 태스크).
+4. retire(M6) 완료 시: **M1′ 마감**(replace 제거 + pin 복귀, main 머지 전 필수).
+5. 벤치 후: **M3(T7)** 착수, **E4/E5** 문서 정정.
+6. 외부 대기: **M4**(reindex-B), **M5** 전용 도구(ckv Engine 출시), **M6**(ckv 컬럼 제거).
