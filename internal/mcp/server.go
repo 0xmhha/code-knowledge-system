@@ -84,6 +84,12 @@ type Deps struct {
 	// (no binaries) disables it — the tool then tells the agent to run the
 	// indexers manually. Not used by the query path.
 	Index IndexConfig
+
+	// Alignment is the startup ckg↔ckv coordinate assert (reindex-migration
+	// design Q4). Nil skips the gate (tests, partial wiring); a report with
+	// OK=false makes the instance non-serviceable (fail-loud) while still
+	// serving health for diagnosis.
+	Alignment *AlignmentReport
 }
 
 // Register attaches both tools to s. Returns an error when required Deps
