@@ -70,6 +70,18 @@
   `LoadManifestSnapshot()` 이미 사용 중). CKS가 상대측에 요구하는 것:
   **CKG manifest `graph_sha256` 공표(P1) + CKV manifest `sources` 블록(P1)**.
 
+## 상태 동기화 (2026-07-10, CKV P1 랜딩 확인)
+
+- **CKS 출하**: 기동 alignment assert(2단계 심각도) + 데이터셋 symlink 1회 resolve —
+  라이브 검증(E1을 warning으로 포착 → source_root 정정 → `alignment.ok=true`).
+- **CKV 출하 확인**: sources 원장(`8816915`) + CKV측 alignment 감지(`e49c19b`,
+  권위 키=src_commit+graph_digest, 경로 비교는 CKS warning 몫 — 상호보완 분담 합의).
+- **전파 주의(합의)**: 현행 pr-77-2/ckv는 sources 랜딩 이전 빌드 → ledger-absent
+  warning은 **새 ckv로 재빌드된 인덱스부터 자동 소거**(blue-green promote 때 자연 해소).
+- **graph_digest**: CKV ReadCoords·CKS assert 모두 선반영 — CKG 공표 즉시 commit-only
+  → +digest로 자동 강화(CKG Q1 대기).
+- cks는 local replace로 신규 ckv와 build/test 클린 확인.
+
 ## CKS 측 액션 (설계 수용에 따른)
 
 1. **P1 동참**: 데이터셋 버전 디렉터리 이관(=E2 해소), config/serve가 버전 경로 소비 +
