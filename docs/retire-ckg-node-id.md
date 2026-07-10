@@ -1,9 +1,12 @@
 # `ckg_node_id` 은퇴 · `canonical_id` 단일화 (ADR-0001 마감)
 
-- 상태: Proposed
-- 작성일: 2026-07-08
+- 상태: In progress — ckg 작업분 ✅ 마감 / ckv·cks 🔶 진행 중(전용 세션, ckv 먼저 → cks)
+- 작성일: 2026-07-08 · 상태 갱신: 2026-07-10
 - 범위: code-knowledge-graph (ckg) · code-knowledge-vector (ckv) · code-knowledge-system (cks)
 - 관련: ckg `docs/adr/0001-canonical-symbol-id.md` · ckv `docs/adr/007-canonical-id-join-key.md` · cks `docs/symbol-identity-design.md`
+- **Cross-repo 상태(2026-07-10)**: 전수조사 확인 — `ckg_node_id`/`CKGNodeID`는 ckg 코드 0건(외부
+  이름), ckv 24건·cks 18건(비-테스트)이 통합 대상. ckg는 변경 없음으로 마감, 실제 코드 단일화는
+  ckv(생산자)·cks(소비자) 세션이 아래 체크리스트대로 수행 중. 각 repo 체크박스는 해당 세션이 체크.
 
 ---
 
