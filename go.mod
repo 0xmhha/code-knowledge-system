@@ -37,3 +37,5 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.53.0 // indirect
 )
+
+replace github.com/0xmhha/code-knowledge-vector => ../code-knowledge-vector

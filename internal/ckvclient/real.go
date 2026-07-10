@@ -92,9 +92,8 @@ func NewReal(ctx context.Context, opts RealOpts) (*Real, error) {
 // normalized distance (Score.Normalized, in [0,1]).
 //
 // Filter push-down (Language/PathGlob/SymbolKinds) is not yet mapped onto
-// ckv.SearchOptions — the composer's Stage 1 uses K-bounded semantic recall
-// and applies its own narrowing downstream. Follow-up: thread the filter
-// through once ckv exposes the corresponding query.Options fields.
+// ckv.SearchOptions — filter fields (language/path/symbol-kind/commit/
+// chunk-kind) thread straight through to ckv's pre-filter.
 func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts) ([]contract.Hit, error) {
 	if query == "" {
 		return nil, fmt.Errorf("ckvclient: empty query")
@@ -103,7 +102,18 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 	if k <= 0 {
 		k = DefaultK
 	}
-	resp, err := r.eng.SemanticSearch(ctx, query, ckv.SearchOptions{K: k})
+	filter := ckvtypes.Filter{
+		Language:   opts.Filter.Language,
+		PathGlob:   opts.Filter.PathGlob,
+		CommitHash: opts.Filter.CommitHash,
+	}
+	for _, sk := range opts.Filter.SymbolKinds {
+		filter.SymbolKinds = append(filter.SymbolKinds, ckvtypes.SymbolKind(sk))
+	}
+	for _, ck := range opts.Filter.ChunkKinds {
+		filter.ChunkKinds = append(filter.ChunkKinds, ckvtypes.ChunkKind(ck))
+	}
+	resp, err := r.eng.SemanticSearch(ctx, query, ckv.SearchOptions{K: k, Filter: filter})
 	if err != nil {
 		// A query failure means the engine could not embed the query —
 		// almost always the model endpoint is unreachable. Trip the flag so
@@ -138,6 +148,7 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 			Source:      contract.HitSourceCKV,
 			Symbol:      h.Symbol,
 			CKGNodeID:   h.CKGNodeID,
+			ChunkKind:   string(h.ChunkKind),
 			CanonicalID: h.CanonicalID,
 		})
 	}

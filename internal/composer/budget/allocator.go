@@ -50,6 +50,13 @@ const (
 	// OriginSeed / OriginNeighbor label a candidate's provenance.
 	OriginSeed     = "seed"
 	OriginNeighbor = "neighbor"
+
+	// DefaultKnowledgeReserve is how many selections are guaranteed to
+	// knowledge-kind candidates (invariant/convention chunks) when any
+	// are present: they carry the decision facts code cannot (measured:
+	// "empty block = same state root" existed only as an invariant
+	// chunk), yet never outscore code seeds. 0 disables the reserve.
+	DefaultKnowledgeReserve = 2
 )
 
 // Config tunes the allocator's budget and reserve.
@@ -73,16 +80,21 @@ type Config struct {
 	// SnippetLines is the degraded-body head length. See
 	// DefaultSnippetLines. 0 disables degradation (fit-or-drop).
 	SnippetLines int
+
+	// KnowledgeReserve guarantees this many selections to knowledge-kind
+	// candidates. See DefaultKnowledgeReserve.
+	KnowledgeReserve int
 }
 
 // DefaultConfig returns the Phase-0 tuning baseline.
 func DefaultConfig() Config {
 	return Config{
-		MaxTokens:       DefaultMaxTokens,
-		OverheadReserve: DefaultOverheadReserve,
-		MaxCitations:    DefaultMaxCitations,
-		NeighborReserve: DefaultNeighborReserve,
-		SnippetLines:    DefaultSnippetLines,
+		MaxTokens:        DefaultMaxTokens,
+		OverheadReserve:  DefaultOverheadReserve,
+		MaxCitations:     DefaultMaxCitations,
+		NeighborReserve:  DefaultNeighborReserve,
+		SnippetLines:     DefaultSnippetLines,
+		KnowledgeReserve: DefaultKnowledgeReserve,
 	}
 }
 
@@ -106,6 +118,10 @@ type SelectedItem struct {
 
 	// Origin is OriginSeed (from Stage 2) or OriginNeighbor (from Stage 3).
 	Origin string
+
+	// ChunkKind is ckv's chunk label (invariant/convention/…); empty for
+	// code chunks and neighbors. Drives the knowledge reserve.
+	ChunkKind string
 	// Sources is copied from the originating ScoredCitation/ScoredNeighbor
 	// for full evidence-trail preservation.
 	Sources []string
@@ -220,16 +236,35 @@ func (a *Allocator) Allocate(ctx context.Context, seeds []stage2.ScoredCitation,
 		}
 	}
 	seedSelected := 0
+	knowledgeSelected := 0
 
 	used := 0
 	processed := 0
 	for _, c := range candidates {
 		processed++
+		isKnowledge := c.ChunkKind == "invariant" || c.ChunkKind == "convention"
 		if c.Origin == OriginSeed && seedCap > 0 && seedSelected >= seedCap {
 			// Seed slots exhausted; leave room for neighbor-origin
 			// candidates. Not a Skip: the candidate lost to the quota,
-			// not to budget or fetch.
-			continue
+			// not to budget or fetch. Knowledge-kind candidates are
+			// exempt while their reserve is unfilled — domain rules must
+			// not lose their slot to yet another code body.
+			if !(isKnowledge && knowledgeSelected < a.config.KnowledgeReserve) {
+				continue
+			}
+		}
+		// Knowledge holdback: while the knowledge reserve is unfilled,
+		// that many of the remaining cap slots are held for knowledge-kind
+		// candidates. Without this the total-cap break below fires before
+		// the list reaches them — knowledge hits come from a separate
+		// kind-scoped retrieval and rank below the code seeds, so a plain
+		// greedy pass never selects one (the same starvation shape as the
+		// neighbor reserve, one level up).
+		if !isKnowledge && a.config.MaxCitations > 0 && a.config.KnowledgeReserve > 0 {
+			reserveLeft := a.config.KnowledgeReserve - knowledgeSelected
+			if reserveLeft > 0 && len(out.Selected) >= a.config.MaxCitations-reserveLeft {
+				continue
+			}
 		}
 		body, err := a.fetcher.Fetch(ctx, c.Citation)
 		if err != nil {
@@ -266,11 +301,15 @@ func (a *Allocator) Allocate(ctx context.Context, seeds []stage2.ScoredCitation,
 			Score:         c.Score,
 			Degraded:      degraded,
 			Origin:        c.Origin,
+			ChunkKind:     c.ChunkKind,
 			Sources:       c.Sources,
 		})
 		used += tokens
 		if c.Origin == OriginSeed {
 			seedSelected++
+		}
+		if isKnowledge {
+			knowledgeSelected++
 		}
 
 		// Citation cap: stop once we've selected MaxCitations bodies, even
@@ -345,7 +384,10 @@ type candidate struct {
 	Citation contract.Citation
 	Score    float64
 	Origin   string
-	Sources  []string
+	// ChunkKind is ckv's chunk label (invariant/convention/…); empty for
+	// code chunks and neighbors. Drives the knowledge reserve.
+	ChunkKind string
+	Sources   []string
 }
 
 // mergeCandidates combines seeds and neighbors into one score-sorted
@@ -357,10 +399,11 @@ func mergeCandidates(seeds []stage2.ScoredCitation, neighbors []stage3.ScoredNei
 	out := make([]candidate, 0, len(seeds)+len(neighbors))
 	for _, s := range seeds {
 		out = append(out, candidate{
-			Citation: s.Citation,
-			Score:    s.Score,
-			Origin:   OriginSeed,
-			Sources:  s.Sources,
+			Citation:  s.Citation,
+			Score:     s.Score,
+			Origin:    OriginSeed,
+			ChunkKind: s.ChunkKind,
+			Sources:   s.Sources,
 		})
 	}
 	for _, n := range neighbors {

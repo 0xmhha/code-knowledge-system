@@ -33,6 +33,10 @@ type ScoredCitation struct {
 	Citation contract.Citation
 	Score    float64
 	Sources  []string
+	// ChunkKind is ckv's chunk-strategy label, carried from the hit that
+	// first introduced this citation (empty for ckg-only citations).
+	// The budget allocator's knowledge quota routes on it.
+	ChunkKind string
 }
 
 // DefaultRRFK is the RRF tuning constant from Cormack et al. (2009).
@@ -77,6 +81,9 @@ func (a *aggregator) addCkvList(hits []contract.Hit) {
 		rank := i + 1
 		contribution := a.ckvWeight / float64(a.rrfK+rank)
 		sc := a.entry(h.Citation)
+		if sc.ChunkKind == "" {
+			sc.ChunkKind = h.ChunkKind
+		}
 		sc.Score += contribution
 		sc.Sources = append(sc.Sources,
 			fmt.Sprintf("ckv:semantic@rank=%d(+%.5f)", rank, contribution))

@@ -43,6 +43,11 @@ type Hit struct {
 	Symbol      string    `json:"symbol,omitempty"`
 	CKGNodeID   string    `json:"ckg_node_id,omitempty"`
 	CanonicalID string    `json:"canonical_id,omitempty"`
+	// ChunkKind is ckv's chunking-strategy label (symbol, doc, invariant,
+	// convention, …). Lets downstream stages route knowledge chunks (the
+	// budget allocator's knowledge quota) without a second query. Empty
+	// for ckg-sourced hits.
+	ChunkKind string `json:"chunk_kind,omitempty"`
 }
 
 // IsValid reports whether h carries a valid Citation and a sane Rank.
