@@ -93,15 +93,17 @@ promote·롤백·sentinel 거부·status는 scratchpad KD에서 검증.
 - 즉 **다음 이벤트 = CKV 재빌드**(타 세션 진행 예상). 완료 시 우리 서버 재시작 →
   digest 양측 비교가 처음으로 활성화(assert commit+digest 강화) + ledger 경고 소거 확인.
 
-## 4. 남은 작업 (우선순위)
+## 4. 남은 작업 (우선순위 — §3.5 라이브 변동 반영, 2026-07-10 저녁)
 
-| # | 작업 | 상태/선행 |
+> ⚠️ 서빙이 **degraded**(pr-77-2 벡터 인덱스 부재)인 상태가 우선순위를 지배한다.
+
+| 순위 | 작업 | 상태/선행 |
 |---|---|---|
-| 1 | **첫 조율 재인덱싱 실행** (`reindex-dataset.sh run`) → 버전 레이아웃 생성(E2 종결) + sources 원장 전파(ledger 경고 소거) + 양측 경고 소거 확인(CKV와의 다음 체크포인트) | CKG Q1(digest 공표) 후가 이상적(`<ver>` 정식 형식). ckv full build 수 시간 소요 — 시점 선택 필요 |
-| 2 | **M2: cks 팔 벤치** (5팔 완료, cks 팔만 잔여 — sonnet-5 동일 조건) | 서빙 상태 정상, 즉시 가능 |
-| 3 | **M1′**: ckv 브랜치 push(재현성) + retire 안정화 시 replace 제거·pin 복귀(main 머지 전 필수) | ckv 세션 |
-| 4 | E4/E5 문서 정정(symbol-identity §7 상태 표기, coordination T1 표기) | 경미 |
-| 5 | M3(T7 인과 오케스트레이션) / M4(reindex-B, qwen3 옵션 준비됨) / M5(전용 도구, CKV Engine 대기) / M6(retire — 현 브랜치 진행 중) / M7(anchors 37/39) | 각 선행 참조 |
+| **P0** | **pr-77-2 재빌드로 서빙 복구** — `reindex-dataset.sh run`(FAMILY=pr-77-2, SRC=vector-db-5). 한 번에: 서빙 복구 + E2 종결(버전 레이아웃 `@<commit8>-4be26516`) + sources 원장 전파(ledger 경고 소거) + **digest 양측 비교 첫 활성화**(CKV 체크포인트) + 오케스트레이터 첫 실전 | ⚠️ **누가 돌릴지 조율 필요** — CKG 세션이 그래프를 방금 재구성했으므로 CKV 재빌드가 타 세션에서 진행 중일 수 있음. ckv full build 수 시간 |
+| **P1** | 필러(P0 빌드 중 병행, 독립): E4/E5 문서 정정(symbol-identity §7 상태·coordination T1 표기) + M7 anchors `kind:` 37건 | 즉시 가능 |
+| **P2** | P0 직후: 서버 재시작 → digest 비교·ledger 소거·alignment.ok 검증 → CKV 통지 → **M2 cks 팔 벤치**(마지막 팔) | **M2는 P0 선행 필수** — degraded 상태에서 측정 불가(이전 "즉시 가능" 판정은 §3.5 변동으로 무효) |
+| **P3** | M1′(ckv push + retire 안정화 시 replace 제거·pin 복귀, main 머지 전 필수) / M6 retire(현 브랜치 목적, ckv 컬럼 제거 선행) | 세션 조율 |
+| **P4** | M3(T7, M2 동결 충돌 회피) / M4(reindex-B — qwen3 옵션 준비됨, CKV 주관) / M5(전용 도구 — CKV Engine 대기) | 후속 |
 
 ## 5. 재개 빠른 확인 명령
 
