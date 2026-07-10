@@ -10,6 +10,18 @@
 >
 > **재검증(2026-07-10, `3e7c22d` 이후)**: M1은 local replace 커밋으로 해소되며 **M1′로
 > 전환**, M5는 knowledge quota로 부분 완화, M7은 2/39 진행. E1~E3·M2~M4·M6은 그대로 유효.
+>
+> **진행 갱신(2026-07-10 저녁, reindex P1 출하 후)** — 상세는
+> [`session-handoff-2026-07-10.md`](./session-handoff-2026-07-10.md):
+> - **E1 ✅ 종결**: alignment assert(신규)가 라이브로 포착 → source_root를 ckv 인덱스의
+>   실원본(`cks-seminar/test/vector-db-5`, @0bf2f4d1b)으로 정정 → `alignment.ok=true`.
+> - **E3 ✅ 종결**: 신 바이너리 인스턴스 재기동(다른 세션의 구버전 8080 점유 프로세스 교체).
+> - **E2 → 해소 경로 확정**: 첫 `reindex-dataset.sh run`이 합의 레이아웃
+>   (`<family>@<commit8>-<digest8>` + `@current`)을 생성하며 generator 기본값과 정합됨.
+> - **신규 출하**: reindex P1 전체(P1-1 resolve, P1-2 alignment assert, P1-3 오케스트레이터
+>   CLI, P1-4 blue-green 문서) — `593c656`, `d3f24ec`.
+> - 잔여: E4/E5(문서 정정), M1′(ckv push+replace 정리), M2(cks 벤치), M3(T7), M4(reindex-B),
+>   M5(전용 도구), M6(retire), M7(anchors 37/39).
 
 ---
 
