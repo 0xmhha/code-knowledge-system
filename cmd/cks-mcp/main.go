@@ -527,7 +527,7 @@ func computeStartupAlignment(ctx context.Context, cfg *config.Config, be *backen
 	if h, err := be.ckg.Health(ctx); err == nil {
 		in.CKGSrcCommit = h.IndexedHead
 		in.CKGSchema = h.SchemaVersion
-		// CKGDigest joins here once ckg publishes its logical graph_digest.
+		in.CKGDigest = h.GraphDigest // empty on pre-digest graphs; assert stays commit-only
 	}
 	if cfg.Backends.CKV.Path != "" {
 		if raw, err := os.ReadFile(filepath.Join(cfg.Backends.CKV.Path, "manifest.json")); err == nil {

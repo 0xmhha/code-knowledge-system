@@ -160,4 +160,7 @@ type Health struct {
 	// IndexedHead is the git commit hash of the snapshot the backend was
 	// built against. Empty when the backend did not report it.
 	IndexedHead string
+	// GraphDigest is ckg's logical code-graph digest (Q1) — the alignment
+	// assert's coordinate-pin anchor. Empty on pre-digest graphs.
+	GraphDigest string
 }

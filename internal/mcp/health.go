@@ -47,6 +47,7 @@ type backendStat struct {
 	Reachable      bool       `json:"reachable"`
 	ModelReachable bool       `json:"model_reachable,omitempty"` // ckv only
 	SchemaVersion  string     `json:"schema_version,omitempty"`  // ckg only
+	GraphDigest    string     `json:"graph_digest,omitempty"`    // ckg only (Q1 logical digest)
 	IndexedHead    string     `json:"indexed_head,omitempty"`    // indexed source commit
 	StatsHash      string     `json:"stats_hash,omitempty"`      // ckv only
 	LastIndexAt    *time.Time `json:"last_index_at,omitempty"`   // ckv only
@@ -74,6 +75,7 @@ func handleHealth(ctx context.Context, d Deps, _ mcpgo.CallToolRequest) (*mcpgo.
 	} else {
 		ckg.SchemaVersion = ckgH.SchemaVersion
 		ckg.IndexedHead = ckgH.IndexedHead
+		ckg.GraphDigest = ckgH.GraphDigest
 	}
 
 	ckv := backendStat{Reachable: ckvErr == nil && ckvH.Reachable}
