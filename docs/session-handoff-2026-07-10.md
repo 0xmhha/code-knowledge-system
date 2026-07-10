@@ -77,6 +77,22 @@ promote·롤백·sentinel 거부·status는 scratchpad KD에서 검증.
 - coding-agent: 0.1.50까지 진행(오염 게이트, PR-77 워크드예시 leakage 제거 등) — 상세는
   coding-agent WORKLIST/HANDOFF-phase2 참조.
 
+## 3.5 저녁 추가 갱신 (digest 배선 + 라이브 상태 변동)
+
+- **CKG Q1 랜딩 확인**(`1d8eb5b`/`3bcefd2`/`d53c97d`): `graph_digest`가 manifest.json과
+  in-db manifest 테이블 양쪽에 공표됨. **CKS 배선 완료**(`d0038cf`): ckgclient
+  ManifestSnapshot→Health→startup assert→`ops.health`(backends.ckg.graph_digest +
+  alignment.graph_digest_actual). go.mod ckg를 digest HEAD로 bump. 오케스트레이터의
+  `<ver>` 명명·게이트 digest 비교는 필드명 일치로 자동 동작.
+- **⚠️ 라이브 상태 변동(17:03~17:09, CKG 세션의 재구성)**: `pr-77-2/`가
+  **fresh digest-보유 그래프(635MB, digest `4be26516…`, @0bf2f4d1b, schema 1.23)로
+  교체**되고 **구 벡터 인덱스(ckv/)와 env 파일은 제거됨**. → 서빙 인스턴스는
+  ckv.Open 실패로 **degraded(fail-loud, 정확한 동작)** — alignment도 "ckv manifest
+  missing" 경고. **CKV 재빌드가 들어와야 서빙 복구**. 이는 in-place 변경 위험의 실증
+  사례이기도 함(blue-green이 막으려는 것) — 다음 재인덱싱부터는 버전 디렉터리로.
+- 즉 **다음 이벤트 = CKV 재빌드**(타 세션 진행 예상). 완료 시 우리 서버 재시작 →
+  digest 양측 비교가 처음으로 활성화(assert commit+digest 강화) + ledger 경고 소거 확인.
+
 ## 4. 남은 작업 (우선순위)
 
 | # | 작업 | 상태/선행 |
