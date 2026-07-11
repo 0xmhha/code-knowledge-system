@@ -1,5 +1,9 @@
 # 남은 작업 — 문서↔코드 대조 결과 (2026-07-10)
 
+> **Superseded by [`remaining-work.md`](./remaining-work.md)** (consolidated, living).
+> This dated snapshot stands as historical record; use the consolidated file for
+> current status. (Conflict it had with session-handoff §3.5 on M2 is resolved there.)
+>
 > Tier 3 (dated snapshot). 문서들(coordination-response-cks, HANDOFF-cks-evaluation-remaining,
 > retire-ckg-node-id, symbol-identity-design, coding-agent HANDOFF-phase2/WORKLIST, CKV
 > coordination-prompts)이 주장하는 작업 상태를 **실제 코드/인프라와 대조**해, **오류(E)와

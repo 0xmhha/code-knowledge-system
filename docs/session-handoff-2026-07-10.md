@@ -95,6 +95,10 @@ promote·롤백·sentinel 거부·status는 scratchpad KD에서 검증.
 
 ## 4. 남은 작업 (우선순위 — §3.5 라이브 변동 반영, 2026-07-10 저녁)
 
+> **Superseded by [`remaining-work.md`](./remaining-work.md)** (consolidated, living).
+> The P0–P4 table below is preserved as the snapshot at ship time; consult the
+> consolidated file for current status.
+
 > ⚠️ 서빙이 **degraded**(pr-77-2 벡터 인덱스 부재)인 상태가 우선순위를 지배한다.
 
 | 순위 | 작업 | 상태/선행 |
