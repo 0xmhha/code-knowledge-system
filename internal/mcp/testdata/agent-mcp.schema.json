@@ -59,6 +59,14 @@
       "description": "Enumerate every site that enforces an invariant (H-guardrail enabler).",
       "input": { "properties": { "inv_id": { "type": "string" }, "max": { "type": "number" } }, "required": ["inv_id"] }
     },
+    "cks.context.find_invariants": {
+      "description": "List curated invariants matching file/category/tier filters (diagnose-path domain-rule check).",
+      "input": { "properties": { "file": { "type": "string" }, "category": { "type": "string" }, "tier_min": { "type": "number" } } }
+    },
+    "cks.context.get_conventions": {
+      "description": "Per-package AST-convention summaries (codebase idioms) under a package prefix.",
+      "input": { "properties": { "package_prefix": { "type": "string" } } }
+    },
     "cks.ops.health": {
       "description": "Backend reachability + version pins. Reports degraded when ckv (embedder) is unavailable.",
       "input": { "properties": {} }

@@ -128,6 +128,8 @@ func Register(s *mcpserver.MCPServer, d Deps) error {
 	registerExpandFlow(s, d)
 	registerFindBranches(s, d)
 	registerGetInvariantEnforcement(s, d)
+	registerFindInvariants(s, d)
+	registerGetConventions(s, d)
 	return nil
 }
 

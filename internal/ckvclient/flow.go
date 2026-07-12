@@ -59,6 +59,17 @@ type FlowClient interface {
 	// (the coding-agent H-guardrail enabler). max caps EnforcedAt cks-side
 	// (0 = no cap); the backend method itself takes no cap.
 	GetInvariantEnforcement(ctx context.Context, invID string, max int) (InvariantEnforcement, error)
+
+	// FindInvariants returns curated invariants matching the filter: file
+	// ("" = any) scopes to one source file; category ("" = any) filters by
+	// policy category; tierMin (1|2|3, 0 = default) drops lower-confidence
+	// tiers. The coding-agent diagnose path uses it to check a planned change
+	// against domain rules.
+	FindInvariants(ctx context.Context, file, category string, tierMin int) ([]InvariantHit, error)
+
+	// GetConventions returns per-package AST-convention summaries under the
+	// package prefix ("" = all packages) — the deterministic idiom digest.
+	GetConventions(ctx context.Context, packagePrefix string) ([]ConventionHit, error)
 }
 
 // FlowQuery selects a flow for GetFlow. Exactly one of FlowID / EntryPoint /
@@ -153,6 +164,37 @@ type EnforcementSite struct {
 	Flow string `json:"flow,omitempty"`
 	Step string `json:"step,omitempty"`
 	Loc  string `json:"loc,omitempty"`
+}
+
+// InvariantHit is one curated invariant returned by FindInvariants.
+type InvariantHit struct {
+	ChunkID     string               `json:"chunk_id"`
+	File        string               `json:"file"`
+	StartLine   int                  `json:"start_line"`
+	EndLine     int                  `json:"end_line"`
+	Marker      string               `json:"marker,omitempty"` // e.g. "CRITICAL", "panic"
+	Tier        int                  `json:"tier"`             // 1, 2, or 3 (flattened from ckv InvariantTier)
+	Text        string               `json:"text"`
+	Category    string               `json:"category,omitempty"`
+	Guidance    ModificationGuidance `json:"guidance,omitempty"` // flattened from ckv's *ModificationGuidance (zero value when absent)
+	SourceChunk string               `json:"source_chunk_id,omitempty"`
+}
+
+// ModificationGuidance is the flattened (value, not pointer) form of ckv's
+// per-invariant change guidance.
+type ModificationGuidance struct {
+	AlsoReview    []string `json:"also_review,omitempty"`
+	RequiredTests []string `json:"required_tests,omitempty"`
+	WatchOut      []string `json:"watch_out,omitempty"`
+}
+
+// ConventionHit is one per-package AST-convention summary from GetConventions.
+type ConventionHit struct {
+	ChunkID string         `json:"chunk_id"`
+	File    string         `json:"file"`
+	Package string         `json:"package,omitempty"`
+	Summary string         `json:"summary"`
+	Stats   map[string]any `json:"stats,omitempty"`
 }
 
 // --- translation: backend ckv types → cks types ----------------------------
@@ -257,6 +299,52 @@ func translateInvariant(v *ckv.InvariantEnforcement) InvariantEnforcement {
 	return inv
 }
 
+func translateInvariantHits(in []ckv.InvariantHit) []InvariantHit {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]InvariantHit, len(in))
+	for i, h := range in {
+		hit := InvariantHit{
+			ChunkID:     h.ChunkID,
+			File:        h.File,
+			StartLine:   h.StartLine,
+			EndLine:     h.EndLine,
+			Marker:      h.Marker,
+			Tier:        int(h.Tier),
+			Text:        h.Text,
+			Category:    h.Category,
+			SourceChunk: h.SourceChunk,
+		}
+		if h.Guidance != nil {
+			hit.Guidance = ModificationGuidance{
+				AlsoReview:    h.Guidance.AlsoReview,
+				RequiredTests: h.Guidance.RequiredTests,
+				WatchOut:      h.Guidance.WatchOut,
+			}
+		}
+		out[i] = hit
+	}
+	return out
+}
+
+func translateConventionHits(in []ckv.ConventionHit) []ConventionHit {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]ConventionHit, len(in))
+	for i, c := range in {
+		out[i] = ConventionHit{
+			ChunkID: c.ChunkID,
+			File:    c.File,
+			Package: c.Package,
+			Summary: c.Summary,
+			Stats:   c.Stats,
+		}
+	}
+	return out
+}
+
 // --- Real: in-process pkg/ckv.Engine flow methods (T4 wired) ---------------
 
 // Compile-time assertion that Real satisfies FlowClient.
@@ -310,6 +398,22 @@ func (r *Real) GetInvariantEnforcement(ctx context.Context, invID string, max in
 	return inv, nil
 }
 
+func (r *Real) FindInvariants(ctx context.Context, file, category string, tierMin int) ([]InvariantHit, error) {
+	hits, err := r.eng.FindInvariants(ctx, file, category, tierMin)
+	if err != nil {
+		return nil, err
+	}
+	return translateInvariantHits(hits), nil
+}
+
+func (r *Real) GetConventions(ctx context.Context, packagePrefix string) ([]ConventionHit, error) {
+	hits, err := r.eng.GetConventions(ctx, packagePrefix)
+	if err != nil {
+		return nil, err
+	}
+	return translateConventionHits(hits), nil
+}
+
 // --- Dummy: flow is a Real-backend feature; the Smart Dummy predates it -----
 
 // Compile-time assertion that Dummy satisfies FlowClient.
@@ -329,6 +433,19 @@ func (d *Dummy) FindBranches(ctx context.Context, symptom string, k int) ([]Bran
 
 func (d *Dummy) GetInvariantEnforcement(ctx context.Context, invID string, max int) (InvariantEnforcement, error) {
 	return InvariantEnforcement{}, ErrFlowUnsupported
+}
+
+// FindInvariants / GetConventions degrade to an empty result (not
+// ErrFlowUnsupported like the flow-navigation methods above): these are
+// knowledge lookups on the diagnose path, where "no ckv backend configured"
+// should read as "no invariants/conventions found" so the caller proceeds
+// without a hard error (task DoD: degraded → empty, no error).
+func (d *Dummy) FindInvariants(ctx context.Context, file, category string, tierMin int) ([]InvariantHit, error) {
+	return nil, nil
+}
+
+func (d *Dummy) GetConventions(ctx context.Context, packagePrefix string) ([]ConventionHit, error) {
+	return nil, nil
 }
 
 // --- Fake: canned flow responses for MCP-layer and composer tests ----------
@@ -382,4 +499,20 @@ func (f *Fake) GetInvariantEnforcement(ctx context.Context, invID string, max in
 		out.EnforcedAt = out.EnforcedAt[:max]
 	}
 	return out, nil
+}
+
+func (f *Fake) FindInvariants(ctx context.Context, file, category string, tierMin int) ([]InvariantHit, error) {
+	f.Calls.FindInvariants = append(f.Calls.FindInvariants, FindInvariantsCall{File: file, Category: category, TierMin: tierMin})
+	if f.FindInvariantsErr != nil {
+		return nil, f.FindInvariantsErr
+	}
+	return f.InvariantHits, nil
+}
+
+func (f *Fake) GetConventions(ctx context.Context, packagePrefix string) ([]ConventionHit, error) {
+	f.Calls.GetConventions = append(f.Calls.GetConventions, GetConventionsCall{PackagePrefix: packagePrefix})
+	if f.GetConventionsErr != nil {
+		return nil, f.GetConventionsErr
+	}
+	return f.Conventions, nil
 }
