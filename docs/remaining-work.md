@@ -46,8 +46,8 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 | **M1′** | Remove committed `replace ckv => ../` and restore a proper module pin. | [중요] | ✅ Done (PR #33, 2026-07-12) — ckv pinned to `7f6268307669` (origin/main). | — |
 | **M2** | Run the cks (combined) bench arm — last of the 5 arms. | [권장] | Not done. | **P0 first** (cannot measure a degraded instance). |
 | **E4** | `symbol-identity-design.md` §7 — mark Phase 1/2 complete; only remaining is M7. | [권장] | ✅ Done (2026-07-12). | — |
-| **E5** | `coordination-response-cks-2026-06-29.md` T1 — note the 2 methods await CKV release. | [권장] | Not done (stale). | Ready now. |
-| **M7** | Domain-knowledge anchor `kind:` migration. | [권장] | Not done — 2/43 entry files carry `kind:`, 41 remain (back-compat working). | Ready now (minor). |
+| **E5** | `coordination-response-cks-2026-06-29.md` T1 overstated the 2 knowledge tools as shipped with the flow-4. | [권장] | ✅ Done (2026-07-12) — added a dated correction: find_invariants/get_conventions shipped separately via M5 (cks #34 + ckv facade #35), so T1's 6 tools are now all exposed. | — |
+| **M7** | Domain-knowledge anchor `kind:` migration (def vs loc). | [권장] | **Deferred — needs the source-of-truth commit.** ~150/164 anchors are def (back-compat correct, no change); only a handful are loc. Accurate def/loc classification = "is `line` the declaration of `symbol`?", which must be checked against go-stablenet **at the commit the entries were authored against** (line numbers drift). The reason-text heuristic is unreliable — it cannot distinguish "def of X" from "loc using X" and produces false positives (e.g. `NativeCoinManagerAddress:219` reads as loc but is a def; `ExtractWBFTExtra:251` names the *called* symbol, not the enclosing one). Blind bulk editing would corrupt curated knowledge. | Pin the authoring go-stablenet commit, then do a source-verified pass. Back-compat working meanwhile — no functional issue. |
 | **M3** | T7 — composer causal orchestration (multi-hop `expand_flow`). | [권장] | Not started. | Avoid clashing with M2 measurement freeze. |
 | **M4** | Embedding-dimension measurement. | [권장] | Waiting. | External: reindex-B (qwen3) index, CKV-owned. |
 | **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | 🔶 Wired (cks PR #34 + ckv facade PR #35, repin #35, 2026-07-12): FlowClient + MCP tools `cks.context.find_invariants`/`get_conventions`, build+test green. **Remaining:** coding-agent diagnose e2e (1 call over a live cks-mcp) — pending P0 serving recovery. | Code done; e2e blocked on P0. |
@@ -56,7 +56,7 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 E3 (instance restarted), M1 (deps resolved via local replace), **M6 + M1′ + E4
 (2026-07-12)**, **M5 code/wiring (2026-07-12, PR #34/#35; only the e2e remains)**.
 
-**Recommended order:** `P0 (incl. M6-data acceptance) → (E5·M7 in parallel while P0 builds) → M2 → M3 → M5 e2e → (M4 external wait)`.
+**Recommended order:** `P0 (incl. M6-data acceptance) → M2 → M3 → M5 e2e → (M4 external wait; M7 pending the authoring go-stablenet commit)`.
 P0 is the critical path (it gates M2, the headline goal, and closes M6-data); start it first
 and fill the build wait with E5·M7.
 
