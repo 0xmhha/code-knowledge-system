@@ -24,11 +24,11 @@ The retirement landed in code via **PR #33 (squash-merged to main, 2026-07-12)**
 2. **M1′ ✅ — go.mod pinned, no replace.** ckv pinned to the column-removed `origin/main`
    (`v0.0.0-20260712000512-7f6268307669`). Reproducible on CI / other machines.
 
-**Still open — the data side (see `M6-data` in the table).** PR #33 closed the *code*
-side of ADR-0001. The *served* pr-77-2 vector index was built by the **old** ckv, so it
-**still physically carries the `ckg_node_id` column**. It only disappears when the index
-is rebuilt with the new ckv — the same pass as P0. This is the ADR's last mile, tracked
-explicitly below so "serving recovered" is not mistaken for "column dropped".
+**Data side — ✅ closed (2026-07-12).** PR #33 closed the *code* side of ADR-0001; the
+*served* index is now `pr-77-gstable/vector-db`, built by the column-removed ckv, so the
+`ckg_node_id` column is physically gone (verified: served binary `cks-mcp/0.1.0-90dc885d`,
+`serviceable:true`). The stale-binary failure mode fired on the first cutover and was caught
+fail-loud — see `M6-data` in the table.
 
 Also separate: cks-seminar deck/asset `ckg_node_id`→`canonical_id` sync (that repo).
 
@@ -40,25 +40,34 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 
 | ID | Task | Severity | Status (verified) | Gate / prerequisite |
 |---|---|---|---|---|
-| **P0** | Reindex `pr-77-2` to recover serving (`reindex-dataset.sh run`, FAMILY=pr-77-2, SRC=vector-db-5). One pass also closes E2, lays down the versioned layout, activates dual-side digest compare, **and drops the served `ckg_node_id` column (M6-data)**. **Acceptance:** (1) health `serviceable=true` + `alignment.ok`; (2) index built by ckv `7f62683`+ (check `builder_version`) so the served schema no longer carries `ckg_node_id`. | [중요] | Not done — serving degraded (vector index removed, per session-handoff §3.5). ckv full build = hours. | Coordinate who runs it (CKV rebuild may be in another session). |
-| **M6-data** | ADR-0001 data-side close: the served pr-77-2 index must be rebuilt by the column-removed ckv so `ckg_node_id` is physically gone. **Failure mode:** if the P0 reindex runs with a stale ckv binary (or resumes a pre-retire checkpoint), serving comes back green while the dead column persists — so verify the built ckv version, not just that serving is up. | [권장] | Not done — served index still carries the column (built by old ckv). Harmless (dead column) but ADR not closed end-to-end. | **Achieved by P0 iff P0 uses new ckv** — verify, don't assume. |
+| **P0** | Serve the current dataset with a fresh, aligned index. | [중요] | ✅ Done (2026-07-12) via **cutover, not a fresh reindex** — the docs' premise was stale (see note below). Cut serving over to `pr-77-gstable` (already built by another session: column-removed ckv + sources ledger, ckg schema 1.23, commit `0bf2f4d1b`). Verified: `serviceable:true`, `alignment.ok:true` (digest actual==expected, source_root_ok), `builder_version cks-mcp/0.1.0-90dc885d`. | — |
+| **M6-data** | ADR-0001 data-side close: the served index must be built by the column-removed ckv so `ckg_node_id` is physically gone. | [권장] | ✅ Done (2026-07-12) — served index (`pr-77-gstable/vector-db`) has no `ckg_node_id` column, and the serving binary was rebuilt from column-removed main. The predicted failure mode fired and was caught: the first cutover with a **stale `bin/cks-mcp`** hit `ckv.Open: no such column: ckg_node_id → degraded` (fail-loud); rebuilding `bin/cks-mcp` from current main resolved it. | — |
 | **M6** | Retire `ckg_node_id` (cks code side): drop `Hit.CKGNodeID`, `real.go` mapping, comment sites, JSON-contract note, reflect in `symbol-identity-design.md`. | [권장] | ✅ Done (PR #33, 2026-07-12) — build + tests clean. Data side tracked as `M6-data`. | — |
 | **M1′** | Remove committed `replace ckv => ../` and restore a proper module pin. | [중요] | ✅ Done (PR #33, 2026-07-12) — ckv pinned to `7f6268307669` (origin/main). | — |
-| **M2** | Run the cks (combined) bench arm — last of the 5 arms. | [권장] | Not done. | **P0 first** (cannot measure a degraded instance). |
+| **M2** | Run the cks (combined) bench arm — last of the 5 arms. | [권장] | Not done. | **Unblocked** — serving is now healthy on `pr-77-gstable` (P0 done). |
 | **E4** | `symbol-identity-design.md` §7 — mark Phase 1/2 complete; only remaining is M7. | [권장] | ✅ Done (2026-07-12). | — |
 | **E5** | `coordination-response-cks-2026-06-29.md` T1 overstated the 2 knowledge tools as shipped with the flow-4. | [권장] | ✅ Done (2026-07-12) — added a dated correction: find_invariants/get_conventions shipped separately via M5 (cks #34 + ckv facade #35), so T1's 6 tools are now all exposed. | — |
 | **M7** | Domain-knowledge anchor `kind:` migration (def vs loc). | [권장] | **Deferred — needs the source-of-truth commit.** ~150/164 anchors are def (back-compat correct, no change); only a handful are loc. Accurate def/loc classification = "is `line` the declaration of `symbol`?", which must be checked against go-stablenet **at the commit the entries were authored against** (line numbers drift). The reason-text heuristic is unreliable — it cannot distinguish "def of X" from "loc using X" and produces false positives (e.g. `NativeCoinManagerAddress:219` reads as loc but is a def; `ExtractWBFTExtra:251` names the *called* symbol, not the enclosing one). Blind bulk editing would corrupt curated knowledge. | Pin the authoring go-stablenet commit, then do a source-verified pass. Back-compat working meanwhile — no functional issue. |
 | **M3** | T7 — composer causal orchestration (multi-hop `expand_flow`). | [권장] | Not started. | Avoid clashing with M2 measurement freeze. |
 | **M4** | Embedding-dimension measurement. | [권장] | Waiting. | External: reindex-B (qwen3) index, CKV-owned. |
-| **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | 🔶 Wired (cks PR #34 + ckv facade PR #35, repin #35, 2026-07-12): FlowClient + MCP tools `cks.context.find_invariants`/`get_conventions`, build+test green. **Remaining:** coding-agent diagnose e2e (1 call over a live cks-mcp) — pending P0 serving recovery. | Code done; e2e blocked on P0. |
+| **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | 🔶 Wired (cks PR #34 + ckv facade PR #35, repin #35, 2026-07-12): FlowClient + MCP tools `cks.context.find_invariants`/`get_conventions`, build+test green. **Remaining:** coding-agent diagnose e2e (1 call over a live cks-mcp) — **now unblocked** (serving healthy on `pr-77-gstable`). | Code done; e2e unblocked. |
 
-**Resolved (no rework):** E1 (source_root corrected), E2 (resolution path fixed),
-E3 (instance restarted), M1 (deps resolved via local replace), **M6 + M1′ + E4
-(2026-07-12)**, **M5 code/wiring (2026-07-12, PR #34/#35; only the e2e remains)**.
+**Resolved (no rework):** E1, E2, E3, M1, **M6 + M1′ + E4** (2026-07-12), **M5 code/wiring**
+(PR #34/#35), **P0 + M6-data** (2026-07-12, cutover to `pr-77-gstable`).
 
-**Recommended order:** `P0 (incl. M6-data acceptance) → M2 → M3 → M5 e2e → (M4 external wait; M7 pending the authoring go-stablenet commit)`.
-P0 is the critical path (it gates M2, the headline goal, and closes M6-data); start it first
-and fill the build wait with E5·M7.
+**Live serving (2026-07-12):** `cks-stablenet` @ `192.168.0.116:8080`, dataset `pr-77-gstable`
+(ckg schema 1.23 + column-removed ckv, commit `0bf2f4d1b`), `builder_version cks-mcp/0.1.0-90dc885d`,
+`serviceable:true`, `alignment.ok:true`. Config `cks-stablenet.yaml` is gitignored;
+regenerate with `CKS_DATASET_DIR=<KD>/pr-77-gstable GO_STABLENET_ROOT=<…>/go-stablenet/pr/pr-77-problem scripts/gen-cks-config.sh`.
+
+**Ground-truth note (docs drift):** the old P0 plan (reindex `pr-77-2`, `SRC=vector-db-5`, "serving
+degraded") was stale. Actual: serving was healthy on `pr-77` (pre-retire, still had the column); the
+new `pr-77-gstable` had already been built by another session with the column-removed + sources-ledger
+ckv. P0 became a **cutover + binary rebuild**, not a reindex.
+
+**Recommended order (next):** `M2 (cks bench arm) + M5 e2e (diagnose calls find_invariants) → M3
+→ (M4 external wait; M7 pending the authoring go-stablenet commit)`. Both M2 and M5 e2e run against
+the live `pr-77-gstable` instance; freeze the dataset during M2 to keep the measurement clean.
 
 ---
 
