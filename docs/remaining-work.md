@@ -9,27 +9,28 @@
 > serving"); this file resolves the conflict against the code. Keep this file current;
 > let the dated files stand as historical record.
 >
-> **Verified**: 2026-07-12 on branch `docs/retire-ckg-node-id`.
+> **Verified**: 2026-07-12 on `main` (after PR #33 squash-merge).
 > Re-confirm each item's evidence before starting — the tree changes fast.
 
 ---
 
-## Branch-merge gate — read before merging `docs/retire-ckg-node-id` to main
+## ckg_node_id retirement — code done, data-side still open
 
-Both former merge-blockers are now resolved on this branch (2026-07-12):
+The retirement landed in code via **PR #33 (squash-merged to main, 2026-07-12)**:
 
-1. **M6 ✅ — retirement is in the code.** ckv `origin/main` (`7f62683`) already dropped
-   the `CKGNodeID` field; cks dropped `Hit.CKGNodeID` + the `real.go` mapping + comment
-   sites + the b7-test observation. `grep ckg_node_id|CKGNodeID` → only a prose comment
-   documenting the retirement. Build + tests clean.
-2. **M1′ ✅ — go.mod pinned, no replace.** Local `replace ckv => ../` removed; ckv pinned
-   to the column-removed `origin/main` (`v0.0.0-20260712000512-7f6268307669`). Reproducible
-   on CI / other machines.
+1. **M6 ✅ — code retirement merged.** ckv `origin/main` (`7f62683`) dropped the
+   `CKGNodeID` field; cks dropped `Hit.CKGNodeID` + the `real.go` mapping + comment
+   sites + the b7-test observation. `grep ckg_node_id|CKGNodeID` → only a prose comment.
+2. **M1′ ✅ — go.mod pinned, no replace.** ckv pinned to the column-removed `origin/main`
+   (`v0.0.0-20260712000512-7f6268307669`). Reproducible on CI / other machines.
 
-Remaining before/after merge: **rebase on main** (1 docs-only commit `#32`), and the
-**dataset must be rebuilt with a `schema_version` bump** so the served index no longer
-carries the dropped column (retire checklist "완료 게이트"). cks-seminar deck/asset sync
-lives in that separate repo.
+**Still open — the data side (see `M6-data` in the table).** PR #33 closed the *code*
+side of ADR-0001. The *served* pr-77-2 vector index was built by the **old** ckv, so it
+**still physically carries the `ckg_node_id` column**. It only disappears when the index
+is rebuilt with the new ckv — the same pass as P0. This is the ADR's last mile, tracked
+explicitly below so "serving recovered" is not mistaken for "column dropped".
+
+Also separate: cks-seminar deck/asset `ckg_node_id`→`canonical_id` sync (that repo).
 
 ---
 
@@ -39,22 +40,25 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 
 | ID | Task | Severity | Status (verified) | Gate / prerequisite |
 |---|---|---|---|---|
-| **P0** | Reindex `pr-77-2` to recover serving (`reindex-dataset.sh run`, FAMILY=pr-77-2, SRC=vector-db-5). One pass also closes E2, lays down the versioned layout, and activates dual-side digest compare. | [중요] | Not done — serving degraded (vector index removed, per session-handoff §3.5). ckv full build = hours. | Coordinate who runs it (CKV rebuild may be in another session). |
-| **M6** | Retire `ckg_node_id` (cks side): drop `Hit.CKGNodeID`, `real.go` mapping, comment sites, JSON-contract note, reflect in `symbol-identity-design.md`. | [권장] | ✅ Done (2026-07-12) — build + tests clean. Dataset schema-bump reindex still needed to drop the served column. | — |
-| **M1′** | Remove committed `replace ckv => ../` and restore a proper module pin. | [중요] | ✅ Done (2026-07-12) — ckv pinned to `7f6268307669` (origin/main). | — |
+| **P0** | Reindex `pr-77-2` to recover serving (`reindex-dataset.sh run`, FAMILY=pr-77-2, SRC=vector-db-5). One pass also closes E2, lays down the versioned layout, activates dual-side digest compare, **and drops the served `ckg_node_id` column (M6-data)**. **Acceptance:** (1) health `serviceable=true` + `alignment.ok`; (2) index built by ckv `7f62683`+ (check `builder_version`) so the served schema no longer carries `ckg_node_id`. | [중요] | Not done — serving degraded (vector index removed, per session-handoff §3.5). ckv full build = hours. | Coordinate who runs it (CKV rebuild may be in another session). |
+| **M6-data** | ADR-0001 data-side close: the served pr-77-2 index must be rebuilt by the column-removed ckv so `ckg_node_id` is physically gone. **Failure mode:** if the P0 reindex runs with a stale ckv binary (or resumes a pre-retire checkpoint), serving comes back green while the dead column persists — so verify the built ckv version, not just that serving is up. | [권장] | Not done — served index still carries the column (built by old ckv). Harmless (dead column) but ADR not closed end-to-end. | **Achieved by P0 iff P0 uses new ckv** — verify, don't assume. |
+| **M6** | Retire `ckg_node_id` (cks code side): drop `Hit.CKGNodeID`, `real.go` mapping, comment sites, JSON-contract note, reflect in `symbol-identity-design.md`. | [권장] | ✅ Done (PR #33, 2026-07-12) — build + tests clean. Data side tracked as `M6-data`. | — |
+| **M1′** | Remove committed `replace ckv => ../` and restore a proper module pin. | [중요] | ✅ Done (PR #33, 2026-07-12) — ckv pinned to `7f6268307669` (origin/main). | — |
 | **M2** | Run the cks (combined) bench arm — last of the 5 arms. | [권장] | Not done. | **P0 first** (cannot measure a degraded instance). |
 | **E4** | `symbol-identity-design.md` §7 — mark Phase 1/2 complete; only remaining is M7. | [권장] | ✅ Done (2026-07-12). | — |
 | **E5** | `coordination-response-cks-2026-06-29.md` T1 — note the 2 methods await CKV release. | [권장] | Not done (stale). | Ready now. |
 | **M7** | Domain-knowledge anchor `kind:` migration. | [권장] | Not done — 2/43 entry files carry `kind:`, 41 remain (back-compat working). | Ready now (minor). |
 | **M3** | T7 — composer causal orchestration (multi-hop `expand_flow`). | [권장] | Not started. | Avoid clashing with M2 measurement freeze. |
 | **M4** | Embedding-dimension measurement. | [권장] | Waiting. | External: reindex-B (qwen3) index, CKV-owned. |
-| **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | Partly mitigated (knowledge quota already routes the chunks into the pack). | External: awaiting ckv Engine release. |
+| **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | 🔶 Wired (cks PR #34 + ckv facade PR #35, repin #35, 2026-07-12): FlowClient + MCP tools `cks.context.find_invariants`/`get_conventions`, build+test green. **Remaining:** coding-agent diagnose e2e (1 call over a live cks-mcp) — pending P0 serving recovery. | Code done; e2e blocked on P0. |
 
 **Resolved (no rework):** E1 (source_root corrected), E2 (resolution path fixed),
 E3 (instance restarted), M1 (deps resolved via local replace), **M6 + M1′ + E4
-(2026-07-12, this branch)**.
+(2026-07-12)**, **M5 code/wiring (2026-07-12, PR #34/#35; only the e2e remains)**.
 
-**Recommended order:** land this branch (rebase + PR) → `P0 → (E5·M7 in parallel) → M2 → M3 → (M4·M5 external wait)`.
+**Recommended order:** `P0 (incl. M6-data acceptance) → (E5·M7 in parallel while P0 builds) → M2 → M3 → M5 e2e → (M4 external wait)`.
+P0 is the critical path (it gates M2, the headline goal, and closes M6-data); start it first
+and fill the build wait with E5·M7.
 
 ---
 
