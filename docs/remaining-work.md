@@ -50,10 +50,11 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 | **M7** | Domain-knowledge anchor `kind:` migration (def vs loc). | [권장] | **Deferred — needs the source-of-truth commit.** ~150/164 anchors are def (back-compat correct, no change); only a handful are loc. Accurate def/loc classification = "is `line` the declaration of `symbol`?", which must be checked against go-stablenet **at the commit the entries were authored against** (line numbers drift). The reason-text heuristic is unreliable — it cannot distinguish "def of X" from "loc using X" and produces false positives (e.g. `NativeCoinManagerAddress:219` reads as loc but is a def; `ExtractWBFTExtra:251` names the *called* symbol, not the enclosing one). Blind bulk editing would corrupt curated knowledge. | Pin the authoring go-stablenet commit, then do a source-verified pass. Back-compat working meanwhile — no functional issue. |
 | **M3** | T7 — composer causal orchestration (multi-hop `expand_flow`). | [권장] | Not started. | Avoid clashing with M2 measurement freeze. |
 | **M4** | Embedding-dimension measurement. | [권장] | Waiting. | External: reindex-B (qwen3) index, CKV-owned. |
-| **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | 🔶 Wired (cks PR #34 + ckv facade PR #35, repin #35, 2026-07-12): FlowClient + MCP tools `cks.context.find_invariants`/`get_conventions`, build+test green. **Remaining:** coding-agent diagnose e2e (1 call over a live cks-mcp) — **now unblocked** (serving healthy on `pr-77-gstable`). | Code done; e2e unblocked. |
+| **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | ✅ Done (2026-07-12). cks: FlowClient + MCP tools (cks #34 + ckv facade #35, repin #35). Live e2e against `pr-77-gstable`: `find_invariants` → 151 real invariants (file/tier filtered), `get_conventions` → per-package idioms. coding-agent: analyzer granted both tools + prompt pointer (coding-agent #60, 0.1.53) — the consumer gap that blocked the diagnose path. Only an autonomous-diagnose *observation* is left as an optional demo (plumbing proven end-to-end; needs a plugin reload + a full diagnose run). | — |
 
-**Resolved (no rework):** E1, E2, E3, M1, **M6 + M1′ + E4** (2026-07-12), **M5 code/wiring**
-(PR #34/#35), **P0 + M6-data** (2026-07-12, cutover to `pr-77-gstable`).
+**Resolved (no rework):** E1, E2, E3, M1, **M6 + M1′ + E4** (2026-07-12), **M5**
+(cks #34/#35 + coding-agent #60; live e2e proven, autonomous-diagnose demo optional),
+**P0 + M6-data** (2026-07-12, cutover to `pr-77-gstable`).
 
 **Live serving (2026-07-12):** `cks-stablenet` @ `192.168.0.116:8080`, dataset `pr-77-gstable`
 (ckg schema 1.23 + column-removed ckv, commit `0bf2f4d1b`), `builder_version cks-mcp/0.1.0-90dc885d`,
@@ -65,9 +66,10 @@ degraded") was stale. Actual: serving was healthy on `pr-77` (pre-retire, still 
 new `pr-77-gstable` had already been built by another session with the column-removed + sources-ledger
 ckv. P0 became a **cutover + binary rebuild**, not a reindex.
 
-**Recommended order (next):** `M2 (cks bench arm) + M5 e2e (diagnose calls find_invariants) → M3
-→ (M4 external wait; M7 pending the authoring go-stablenet commit)`. Both M2 and M5 e2e run against
-the live `pr-77-gstable` instance; freeze the dataset during M2 to keep the measurement clean.
+**Recommended order (next):** `M2 (cks bench arm) → M3 → (M4 external wait; M7 pending the
+authoring go-stablenet commit)`. M2 runs against the live `pr-77-gstable` instance; freeze the
+dataset during M2 to keep the measurement clean. (M5's optional autonomous-diagnose demo can piggyback
+on any diagnose run — it needs only a plugin reload, not dedicated work.)
 
 ---
 
