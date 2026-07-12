@@ -46,6 +46,10 @@ type Fake struct {
 	FindBranchesErr            error
 	EnforcementVal             InvariantEnforcement
 	GetInvariantEnforcementErr error
+	InvariantHits              []InvariantHit
+	FindInvariantsErr          error
+	Conventions                []ConventionHit
+	GetConventionsErr          error
 
 	// Calls records every method invocation for test assertions.
 	Calls FakeCalls
@@ -65,6 +69,20 @@ type FakeCalls struct {
 	ExpandFlow              []ExpandFlowQuery
 	FindBranches            []FindBranchesCall
 	GetInvariantEnforcement []GetInvariantEnforcementCall
+	FindInvariants          []FindInvariantsCall
+	GetConventions          []GetConventionsCall
+}
+
+// FindInvariantsCall captures the arguments of one FindInvariants invocation.
+type FindInvariantsCall struct {
+	File     string
+	Category string
+	TierMin  int
+}
+
+// GetConventionsCall captures the arguments of one GetConventions invocation.
+type GetConventionsCall struct {
+	PackagePrefix string
 }
 
 // SemanticSearchCall captures the arguments of one SemanticSearch invocation.

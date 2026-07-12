@@ -28,6 +28,8 @@ const (
 	ToolNameExpandFlow              = "cks.context.expand_flow"
 	ToolNameFindBranches            = "cks.context.find_branches"
 	ToolNameGetInvariantEnforcement = "cks.context.get_invariant_enforcement"
+	ToolNameFindInvariants          = "cks.context.find_invariants"
+	ToolNameGetConventions          = "cks.context.get_conventions"
 )
 
 // flowClient extracts the optional flow surface from Deps.CKV, or returns a
@@ -200,4 +202,61 @@ func handleGetInvariantEnforcement(ctx context.Context, d Deps, req mcpgo.CallTo
 		return flowErrResult(ToolNameGetInvariantEnforcement, err), nil
 	}
 	return mcpgo.NewToolResultStructured(enf, "get_invariant_enforcement result"), nil
+}
+
+// registerFindInvariants wires cks.context.find_invariants.
+func registerFindInvariants(s *mcpserver.MCPServer, d Deps) {
+	tool := mcpgo.NewTool(ToolNameFindInvariants,
+		mcpgo.WithDescription(
+			"List curated invariants (domain rules) matching a filter. Scope by "+
+				"file, policy category, or minimum confidence tier. Use on the "+
+				"diagnose path to check a planned change against the rules that "+
+				"govern the touched code before implementing.",
+		),
+		mcpgo.WithString("file", mcpgo.Description("Restrict to one source file (\"\" = any).")),
+		mcpgo.WithString("category", mcpgo.Description("Filter by policy category (\"\" = any).")),
+		mcpgo.WithNumber("tier_min", mcpgo.Description("Minimum confidence tier 1|2|3 (0 = backend default).")),
+	)
+	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+		return handleFindInvariants(ctx, d, req)
+	})
+}
+
+func handleFindInvariants(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+	fc, errRes := flowClient(d, ToolNameFindInvariants)
+	if errRes != nil {
+		return errRes, nil
+	}
+	hits, err := fc.FindInvariants(ctx, req.GetString("file", ""), req.GetString("category", ""), intArg(req, "tier_min", 0))
+	if err != nil {
+		return flowErrResult(ToolNameFindInvariants, err), nil
+	}
+	return mcpgo.NewToolResultStructured(hits, "find_invariants result"), nil
+}
+
+// registerGetConventions wires cks.context.get_conventions.
+func registerGetConventions(s *mcpserver.MCPServer, d Deps) {
+	tool := mcpgo.NewTool(ToolNameGetConventions,
+		mcpgo.WithDescription(
+			"Return per-package AST-convention summaries (the codebase's idioms: "+
+				"error handling, locking, naming) under a package prefix. Use to "+
+				"match new code to how the surrounding package already does things.",
+		),
+		mcpgo.WithString("package_prefix", mcpgo.Description("Package path prefix (\"\" = all packages).")),
+	)
+	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+		return handleGetConventions(ctx, d, req)
+	})
+}
+
+func handleGetConventions(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+	fc, errRes := flowClient(d, ToolNameGetConventions)
+	if errRes != nil {
+		return errRes, nil
+	}
+	hits, err := fc.GetConventions(ctx, req.GetString("package_prefix", ""))
+	if err != nil {
+		return flowErrResult(ToolNameGetConventions, err), nil
+	}
+	return mcpgo.NewToolResultStructured(hits, "get_conventions result"), nil
 }
