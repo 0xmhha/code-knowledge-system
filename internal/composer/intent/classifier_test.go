@@ -149,8 +149,8 @@ func TestDefaultUnknownThreshold_Value(t *testing.T) {
 	// Locked-in policy value (cks "when in doubt, IntentUnknown"). Any
 	// future change to this number should go through review because it
 	// affects classifier behavior across every Intent.
-	if DefaultUnknownThreshold != 0.6 {
-		t.Errorf("DefaultUnknownThreshold = %v, want 0.6", DefaultUnknownThreshold)
+	if DefaultUnknownThreshold != 0.55 {
+		t.Errorf("DefaultUnknownThreshold = %v, want 0.55 (2026-07-09 bge-m3 calibration)", DefaultUnknownThreshold)
 	}
 }
 

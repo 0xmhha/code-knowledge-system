@@ -36,9 +36,10 @@ type changeHistoryResponse struct {
 func registerImpactAnalysis(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameImpactAnalysis,
 		mcpgo.WithDescription(
-			"Compute the reverse-dependency closure of a symbol. Groups hits by coupling category "+
-				"(callers, interface, type_users, distributed, concurrent, other). Use during PLANNING "+
-				"to answer \"what breaks if I change this?\".",
+			"Reverse-dependency closure of a symbol, grouped by coupling category "+
+				"(callers, interface, type_users, distributed, concurrent). Use during "+
+				"PLANNING to answer 'what breaks if I change this?' and to find co-consumers "+
+				"of a shared dependency before editing it.",
 		),
 		mcpgo.WithString("symbol", mcpgo.Required(),
 			mcpgo.Description("Fully-qualified symbol name to seed the impact analysis.")),
@@ -85,10 +86,10 @@ func handleImpactAnalysis(ctx context.Context, d Deps, req mcpgo.CallToolRequest
 func registerChangeHistory(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameChangeHistory,
 		mcpgo.WithDescription(
-			"Surface the modification history relevant to a symbol or intent. Returns PR refs "+
-				"(provenance) and/or BM25-ranked hunk evidence (diff bodies). Pass intent to rank "+
-				"hunks against a natural-language query; pass symbol to enumerate the PRs that "+
-				"touched a specific definition.",
+			"Modification history for a symbol or intent: PR refs (provenance) and "+
+				"BM25-ranked diff hunks. Use AFTER traversal or reproduction has implicated a "+
+				"site -- anchoring history on an unverified hypothesis amplifies confirmation "+
+				"bias (history 'evidence' for the wrong suspect reads convincing).",
 		),
 		mcpgo.WithString("intent",
 			mcpgo.Description("Natural-language query the hunks should match against (optional if symbol is set).")),

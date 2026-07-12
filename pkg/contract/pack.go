@@ -68,6 +68,11 @@ type Body struct {
 	// TokenEstimate is the composer's approximate token cost of Text;
 	// used by the budget manager. Zero when not yet computed.
 	TokenEstimate int `json:"token_estimate,omitempty"`
+	// Degraded marks a body the budget allocator truncated to a head
+	// snippet (signature + leading lines) because the full text did not
+	// fit the remaining token budget. The information survives at lower
+	// fidelity instead of being dropped; fetch the file for the full text.
+	Degraded bool `json:"degraded,omitempty"`
 }
 
 // Relation names a graph edge between two Citations. The composer's

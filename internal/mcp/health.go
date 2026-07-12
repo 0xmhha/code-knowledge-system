@@ -29,6 +29,11 @@ type healthResponse struct {
 	BuilderVersion string                 `json:"builder_version,omitempty"`
 	SourceRoot     string                 `json:"source_root,omitempty"`
 	Backends       map[string]backendStat `json:"backends"`
+	// Alignment is the startup ckg↔ckv coordinate assert. When it failed
+	// (OK=false) the instance reports serviceable=false even though both
+	// backends are individually reachable — a coordinate mismatch means the
+	// canonical_id join is silently wrong, which is worse than downtime.
+	Alignment *AlignmentReport `json:"alignment,omitempty"`
 }
 
 // backendStat has a superset of ckg+ckv health fields; per-field omitempty
@@ -42,6 +47,7 @@ type backendStat struct {
 	Reachable      bool       `json:"reachable"`
 	ModelReachable bool       `json:"model_reachable,omitempty"` // ckv only
 	SchemaVersion  string     `json:"schema_version,omitempty"`  // ckg only
+	GraphDigest    string     `json:"graph_digest,omitempty"`    // ckg only (Q1 logical digest)
 	IndexedHead    string     `json:"indexed_head,omitempty"`    // indexed source commit
 	StatsHash      string     `json:"stats_hash,omitempty"`      // ckv only
 	LastIndexAt    *time.Time `json:"last_index_at,omitempty"`   // ckv only
@@ -69,6 +75,7 @@ func handleHealth(ctx context.Context, d Deps, _ mcpgo.CallToolRequest) (*mcpgo.
 	} else {
 		ckg.SchemaVersion = ckgH.SchemaVersion
 		ckg.IndexedHead = ckgH.IndexedHead
+		ckg.GraphDigest = ckgH.GraphDigest
 	}
 
 	ckv := backendStat{Reachable: ckvErr == nil && ckvH.Reachable}
@@ -97,13 +104,18 @@ func handleHealth(ctx context.Context, d Deps, _ mcpgo.CallToolRequest) (*mcpgo.
 	ckvUsable := ckvErr == nil && ckvH.Reachable && ckvH.ModelReachable
 	status := aggregateHealthStatus(ckg.Reachable, ckvUsable)
 
+	// Alignment gates serviceability on top of backend liveness: two healthy
+	// backends built from different coordinates are confidently-wrong, not ok.
+	alignOK := d.Alignment == nil || d.Alignment.OK
+
 	out := healthResponse{
 		Name:           d.InstanceName,
 		Description:    d.InstanceDescription,
 		Status:         status,
-		Serviceable:    status == "ok",
+		Serviceable:    status == "ok" && alignOK,
 		BuilderVersion: d.BuilderVersion,
 		SourceRoot:     d.Index.SourceRoot,
+		Alignment:      d.Alignment,
 		Backends: map[string]backendStat{
 			"ckg": ckg,
 			"ckv": ckv,
@@ -118,6 +130,9 @@ func handleHealth(ctx context.Context, d Deps, _ mcpgo.CallToolRequest) (*mcpgo.
 // correctly, so a ckv-down ("degraded") state is non-serviceable — not a
 // usable middle ground. Returns false plus an actionable reason otherwise.
 func serviceable(ctx context.Context, d Deps) (bool, string) {
+	if d.Alignment != nil && !d.Alignment.OK {
+		return false, "ckg/ckv alignment mismatch: " + d.Alignment.Reason
+	}
 	ckgH, ckgErr := d.CKG.Health(ctx)
 	ckvH, ckvErr := d.CKV.Health(ctx)
 	ckgUp := ckgErr == nil && ckgH.Reachable

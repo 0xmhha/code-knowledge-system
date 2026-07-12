@@ -48,8 +48,9 @@ type subgraphResponse struct {
 func registerFindSymbol(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameFindSymbol,
 		mcpgo.WithDescription(
-			"Resolve a symbol name to its definition citations via ckg's qualified-name index. "+
-				"Suffix match by default; pass the fully-qualified name for an exact hit.",
+			"Resolve a symbol name to its definition citation(s) via ckg's qualified-name "+
+				"index. Suffix match by default; pass the fully-qualified name for an exact "+
+				"hit. Use to turn a name you already know into a traversal anchor.",
 		),
 		mcpgo.WithString("name", mcpgo.Required(),
 			mcpgo.Description("Symbol name (e.g., \"ProcessRequest\" or \"pkg.Type.Method\").")),
@@ -99,8 +100,10 @@ func handleFindSymbol(ctx context.Context, d Deps, req mcpgo.CallToolRequest) (*
 func registerFindCallers(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameFindCallers,
 		mcpgo.WithDescription(
-			"List code that calls the given symbol (reverse call graph). Walks ckg's "+
-				"calls/invokes edges up to the requested depth.",
+			"Reverse call-graph traversal: who calls the given symbol (calls/invokes "+
+				"edges, interface-dispatch bridged). The core cause-finding move for a stale "+
+				"or wrong value: from the consumer, traverse UP toward whoever "+
+				"produces/updates the value. depth=2 covers most producer chains.",
 		),
 		mcpgo.WithString("symbol", mcpgo.Required(),
 			mcpgo.Description("Symbol to resolve: a ckg qualified_name (e.g. \"wbft.Finalize\"), a bare name (\"Finalize\", used only when unambiguous), or a ckg canonical_id (e.g. \"github.com/org/repo/consensus/wbft.(*Backend).Finalize\").")),
@@ -119,8 +122,10 @@ func registerFindCallers(s *mcpserver.MCPServer, d Deps) {
 func registerFindCallees(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameFindCallees,
 		mcpgo.WithDescription(
-			"List code called by the given symbol (forward call graph). Walks ckg's "+
-				"calls/invokes edges up to the requested depth.",
+			"Forward call-graph traversal: what the given symbol calls. Use to unpack "+
+				"what a suspicious function actually reaches downstream (which "+
+				"store/update/IO). Pair with find_callers to cover the "+
+				"produce->store->consume lifecycle in both directions.",
 		),
 		mcpgo.WithString("symbol", mcpgo.Required(),
 			mcpgo.Description("Symbol to resolve: a ckg qualified_name (e.g. \"wbft.Finalize\"), a bare name (\"Finalize\", used only when unambiguous), or a ckg canonical_id (e.g. \"github.com/org/repo/consensus/wbft.(*Backend).Finalize\").")),
@@ -191,9 +196,10 @@ func handleFindRelatives(
 func registerGetSubgraph(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameGetSubgraph,
 		mcpgo.WithDescription(
-			"Return every node and edge within depth hops of the seed symbol, traversing all "+
-				"edge types (calls, implements, imports, tested_by, …). Use this when find_callers/"+
-				"find_callees are too narrow.",
+			"Neighborhood traversal across ALL edge types (calls, implements, imports, "+
+				"tested_by, ...) within depth hops of the seed symbol. Use when caller/callee "+
+				"alone is too narrow -- e.g., mapping a type's interface/implementation web. "+
+				"Cost grows fast with depth; prefer depth 1-2.",
 		),
 		mcpgo.WithString("symbol", mcpgo.Required(),
 			mcpgo.Description("Fully-qualified symbol name to seed the traversal.")),

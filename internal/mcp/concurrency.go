@@ -23,11 +23,10 @@ type concurrencyImpactResponse struct {
 func registerConcurrencyImpact(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameConcurrencyImpact,
 		mcpgo.WithDescription(
-			"Compute the concurrency blast radius of a symbol: the goroutines, channels, and locks "+
-				"it spawns, sends to, or acquires, plus the modules reached over concurrency edges "+
-				"(spawns, sends_to, recvs_from, acquires_lock, accessed_under_lock) in either "+
-				"direction. Use during PLANNING to answer \"what concurrency state does changing this "+
-				"touch, and what races could it introduce?\".",
+			"Concurrency blast radius of a symbol: goroutines it spawns, channels it "+
+				"sends to/receives from, locks it acquires, plus modules reached over "+
+				"concurrency edges. Use when a change touches shared state or ordering -- "+
+				"before assuming a data race is or is not possible.",
 		),
 		mcpgo.WithString("symbol", mcpgo.Required(),
 			mcpgo.Description("Fully-qualified symbol name to seed the concurrency analysis.")),

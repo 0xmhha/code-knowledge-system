@@ -92,9 +92,8 @@ func NewReal(ctx context.Context, opts RealOpts) (*Real, error) {
 // normalized distance (Score.Normalized, in [0,1]).
 //
 // Filter push-down (Language/PathGlob/SymbolKinds) is not yet mapped onto
-// ckv.SearchOptions — the composer's Stage 1 uses K-bounded semantic recall
-// and applies its own narrowing downstream. Follow-up: thread the filter
-// through once ckv exposes the corresponding query.Options fields.
+// ckv.SearchOptions — filter fields (language/path/symbol-kind/commit/
+// chunk-kind) thread straight through to ckv's pre-filter.
 func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts) ([]contract.Hit, error) {
 	if query == "" {
 		return nil, fmt.Errorf("ckvclient: empty query")
@@ -103,7 +102,18 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 	if k <= 0 {
 		k = DefaultK
 	}
-	resp, err := r.eng.SemanticSearch(ctx, query, ckv.SearchOptions{K: k})
+	filter := ckvtypes.Filter{
+		Language:   opts.Filter.Language,
+		PathGlob:   opts.Filter.PathGlob,
+		CommitHash: opts.Filter.CommitHash,
+	}
+	for _, sk := range opts.Filter.SymbolKinds {
+		filter.SymbolKinds = append(filter.SymbolKinds, ckvtypes.SymbolKind(sk))
+	}
+	for _, ck := range opts.Filter.ChunkKinds {
+		filter.ChunkKinds = append(filter.ChunkKinds, ckvtypes.ChunkKind(ck))
+	}
+	resp, err := r.eng.SemanticSearch(ctx, query, ckv.SearchOptions{K: k, Filter: filter})
 	if err != nil {
 		// A query failure means the engine could not embed the query —
 		// almost always the model endpoint is unreachable. Trip the flag so
@@ -117,15 +127,14 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 	}
 	out := make([]contract.Hit, 0, len(resp.Hits))
 	for i, h := range resp.Hits {
-		// Symbol / CKGNodeID / CanonicalID are the composer's bridge to ckg:
-		// Stage 1 extracts hit.Symbol as a candidate keyword (instead of the
-		// file basename — the basename fallback survives in extractKeywords
-		// for hits with empty Symbol); CanonicalID is the build-stable B7
-		// join key (ADR-0001) the chunk inherited from the aligned ckg node,
-		// resolvable via ckg's canonical-first FindSymbol; CKGNodeID is the
-		// positional node id valid only within the aligned graph build.
-		// Empty values are fine (omitempty on the wire); they only mean the
-		// ckv chunk lacked the metadata (e.g. doc/header chunks).
+		// Symbol / CanonicalID are the composer's bridge to ckg: Stage 1
+		// extracts hit.Symbol as a candidate keyword (instead of the file
+		// basename — the basename fallback survives in extractKeywords for
+		// hits with empty Symbol); CanonicalID is the build-stable B7 join
+		// key (ADR-0001) the chunk inherited from the aligned ckg node,
+		// resolvable via ckg's canonical-first FindSymbol. Empty values are
+		// fine (omitempty on the wire); they only mean the ckv chunk lacked
+		// the metadata (e.g. doc/header chunks).
 		out = append(out, contract.Hit{
 			Citation: contract.Citation{
 				File:       h.Citation.File,
@@ -137,7 +146,7 @@ func (r *Real) SemanticSearch(ctx context.Context, query string, opts SearchOpts
 			Score:       h.Score.Normalized,
 			Source:      contract.HitSourceCKV,
 			Symbol:      h.Symbol,
-			CKGNodeID:   h.CKGNodeID,
+			ChunkKind:   string(h.ChunkKind),
 			CanonicalID: h.CanonicalID,
 		})
 	}

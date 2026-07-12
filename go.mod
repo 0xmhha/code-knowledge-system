@@ -5,8 +5,8 @@ go 1.25.5
 toolchain go1.25.9
 
 require (
-	github.com/0xmhha/code-knowledge-graph v0.0.0-20260703080604-f4b5be89f7df
-	github.com/0xmhha/code-knowledge-vector v0.0.0-20260703080606-73e0763c0237
+	github.com/0xmhha/code-knowledge-graph v0.0.0-20260710081212-d53c97df949c
+	github.com/0xmhha/code-knowledge-vector v0.0.0-20260712000512-7f6268307669
 	github.com/mark3labs/mcp-go v0.55.1
 	go.uber.org/zap v1.28.0
 	gopkg.in/yaml.v3 v3.0.1

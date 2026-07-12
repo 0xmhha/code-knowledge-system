@@ -35,8 +35,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	ckvtypes "github.com/0xmhha/code-knowledge-vector/pkg/types"
@@ -94,6 +96,12 @@ func run(ctx context.Context, configPath, nameOverride, httpAddrOverride string)
 		cfg.Listen.HTTPAddr = httpAddrOverride
 	}
 
+	// P1 (reindex-migration design): resolve dataset symlinks ONCE at startup
+	// so the instance pins a concrete immutable version for its whole lifetime
+	// (the `current` pointer may move underneath; we never re-resolve). The
+	// resolved paths are what health reports — identity stays provable.
+	datasetVersion := resolveDatasetPaths(cfg)
+
 	ruleset, err := loadRuleset(cfg.Sanitize.RulesPath)
 	if err != nil {
 		return fmt.Errorf("load sanitize ruleset: %w", err)
@@ -104,6 +112,17 @@ func run(ctx context.Context, configPath, nameOverride, httpAddrOverride string)
 		return err
 	}
 	defer be.close()
+
+	// Startup alignment assert (Q4): ckg↔ckv coordinates must match or the
+	// instance serves health-only (serviceable=false, fail-loud).
+	alignment := computeStartupAlignment(ctx, cfg, be, datasetVersion)
+	if alignment != nil && !alignment.OK {
+		log.Printf("cks-mcp: ALIGNMENT FAILED — serving non-serviceable for diagnosis: %s", alignment.Reason)
+	} else if alignment != nil {
+		for _, w := range alignment.Warnings {
+			log.Printf("cks-mcp: alignment warning: %s", w)
+		}
+	}
 
 	fp, fpCloser, err := buildFootprint(cfg.Logging)
 	if err != nil {
@@ -142,6 +161,7 @@ func run(ctx context.Context, configPath, nameOverride, httpAddrOverride string)
 		CKV:            be.ckv,
 		Vocab:               vocabResolver,
 		BuilderVersion:      builderVersion,
+		Alignment:           alignment,
 		InstanceName:        cfg.Name,
 		InstanceDescription: cfg.Description,
 		Embed:               be.cap,
@@ -464,4 +484,62 @@ func buildFootprint(cfg config.LoggingConfig) (*footprint.Logger, func() error, 
 		return err
 	}
 	return fp, closer, nil
+}
+
+// resolveDatasetPaths resolves symlinks in the two dataset paths ONCE and
+// rewrites cfg in place, so the instance pins a concrete immutable version
+// even when the config points at a moving `current` pointer (blue-green,
+// reindex-migration design P1). Returns the "@<ver>" dataset-version label
+// when the resolved path uses the versioned layout ("" for legacy layouts).
+func resolveDatasetPaths(cfg *config.Config) string {
+	version := ""
+	resolve := func(p string) string {
+		if p == "" {
+			return p
+		}
+		r, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			return p // missing paths surface later via backend open errors
+		}
+		return r
+	}
+	cfg.Backends.CKG.Path = resolve(cfg.Backends.CKG.Path)
+	cfg.Backends.CKV.Path = resolve(cfg.Backends.CKV.Path)
+	for _, p := range []string{cfg.Backends.CKG.Path, cfg.Backends.CKV.Path} {
+		for _, seg := range strings.Split(p, string(filepath.Separator)) {
+			if i := strings.Index(seg, "@"); i > 0 {
+				version = seg[i+1:]
+			}
+		}
+	}
+	return version
+}
+
+// computeStartupAlignment gathers the ckg/ckv coordinates and evaluates the
+// two-tier alignment assert (Q4). Best-effort on inputs: a missing manifest
+// or unavailable git degrade to warnings inside ComputeAlignment, never a
+// startup failure — fail-loud happens through serviceable=false, not a crash.
+func computeStartupAlignment(ctx context.Context, cfg *config.Config, be *backends, datasetVersion string) *cksmcp.AlignmentReport {
+	in := cksmcp.AlignmentInputs{
+		ConfigSourceRoot: cfg.Backends.CKG.SourceRoot,
+		DatasetVersion:   datasetVersion,
+	}
+	if h, err := be.ckg.Health(ctx); err == nil {
+		in.CKGSrcCommit = h.IndexedHead
+		in.CKGSchema = h.SchemaVersion
+		in.CKGDigest = h.GraphDigest // empty on pre-digest graphs; assert stays commit-only
+	}
+	if cfg.Backends.CKV.Path != "" {
+		if raw, err := os.ReadFile(filepath.Join(cfg.Backends.CKV.Path, "manifest.json")); err == nil {
+			in.CKVManifest = raw
+		}
+	}
+	if cfg.Backends.CKG.SourceRoot != "" {
+		out, err := exec.CommandContext(ctx, "git", "-C", cfg.Backends.CKG.SourceRoot,
+			"rev-parse", "HEAD").Output()
+		if err == nil {
+			in.SourceHead = strings.TrimSpace(string(out))
+		}
+	}
+	return cksmcp.ComputeAlignment(in)
 }

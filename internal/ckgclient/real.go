@@ -53,6 +53,11 @@ type ManifestSnapshot struct {
 	BuildTimestamp string
 	SrcRoot        string
 	SrcCommit      string
+	// GraphDigest is ckg's deterministic logical digest of the CODE graph
+	// (nodes+edges, temporal excluded — Q1, 2026-07-10). The coordinate-pin
+	// anchor the alignment assert compares against ckv's sources.ckg record.
+	// Empty on graphs built before ckg published it.
+	GraphDigest string
 }
 
 // storeReader is the cks-internal seam between the Real adapter and the
@@ -101,6 +106,7 @@ func (a *realStoreReader) LoadManifestSnapshot() (ManifestSnapshot, error) {
 		BuildTimestamp: m.BuildTimestamp,
 		SrcRoot:        m.SrcRoot,
 		SrcCommit:      m.SrcCommit,
+		GraphDigest:    m.GraphDigest,
 	}, nil
 }
 func (a *realStoreReader) SearchFTS(q string, limit int) ([]store.SearchHit, error) {
@@ -838,6 +844,7 @@ func (r *Real) Health(ctx context.Context) (Health, error) {
 		Reachable:     true,
 		SchemaVersion: snap.SchemaVersion,
 		IndexedHead:   snap.SrcCommit,
+		GraphDigest:   snap.GraphDigest,
 	}, nil
 }
 

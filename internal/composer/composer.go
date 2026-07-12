@@ -300,6 +300,12 @@ func buildComposerTrace(prompt string, intentVal contract.Intent, s1 stage1.Stag
 	}
 }
 
+// maxEdgeOnlyTargets caps how many neighbor Targets may join Citations
+// without a Body. Keeps the edge-only expansion bounded: 16 targets at
+// ~20 tokens of citation metadata each is under 1%% of the default budget,
+// while restoring the relation wiring the pack existed to carry.
+const maxEdgeOnlyTargets = 16
+
 // stageTimings holds the wall-clock duration of each composer stage. Emitted
 // per-stage in the footprint so the §9 validation spike can see where time
 // goes (intent vs. ckg search vs. body fetch vs. sanitize).
@@ -325,31 +331,71 @@ func assemblePack(
 	citations := make([]contract.Citation, 0, len(s5Out.Items))
 	bodies := make([]contract.Body, 0, len(s5Out.Items))
 
+	// Degraded flags live on Stage 4's SelectedItems; sanitize items do
+	// not carry them, so recover by citation key.
+	degradedKeys := make(map[string]struct{})
+	for _, sel := range s4Out.Selected {
+		if sel.Degraded {
+			degradedKeys[sel.Citation.Key()] = struct{}{}
+		}
+	}
+
 	for _, item := range s5Out.Items {
 		if item.Dropped {
 			continue
 		}
 		citationKeys[item.Citation.Key()] = struct{}{}
 		citations = append(citations, item.Citation)
+		_, degraded := degradedKeys[item.Citation.Key()]
 		// Re-estimate tokens against the sanitized body (mask may have
 		// changed length; pre-sanitize estimate from Stage 4 is stale).
 		bodies = append(bodies, contract.Body{
 			Citation:      item.Citation,
 			Text:          item.Body,
 			TokenEstimate: budget.EstimateTokens(item.Body),
+			Degraded:      degraded,
 		})
 	}
 
-	// Filter graph neighbors to those whose Source and Target both
-	// appear in the final citation set. contract.EvidencePack.IsValid
-	// requires this; any orphan neighbor would invalidate the pack.
+	// Graph-neighbor inclusion. Contract rule: every edge's Source and
+	// Target must appear in Citations (EvidencePack.IsValid). Bodies are
+	// budget-capped (MaxCitations), so most neighbor targets never win a
+	// body slot — under the old both-endpoints filter that starved the
+	// pack of every edge (seeds outrank distance-discounted neighbors by
+	// construction; see stage3 scoring). Fix: admit edges whose Source is
+	// a body-backed citation and append the Target as an EDGE-ONLY
+	// citation (no Body). Edge metadata is a few dozen tokens, so it
+	// rides outside the body budget; the relation wiring (a→b calls,
+	// main→a called_by) is exactly what the LLM otherwise re-derives with
+	// per-edge traversal calls.
+	// Eligibility guard: a target that Stage 4 evaluated and rejected
+	// (empty body, fetch error, over budget — all recorded in Skipped)
+	// stays out; its absence is a signal (vanished file, stale index),
+	// not a budget artifact. Cap-truncated candidates were never
+	// evaluated, so they are NOT in Skipped — exactly the population the
+	// starvation bug dropped.
+	skippedKeys := make(map[string]struct{}, len(s4Out.Skipped))
+	for _, c := range s4Out.Skipped {
+		skippedKeys[c.Key()] = struct{}{}
+	}
 	validNeighbors := make([]contract.Neighbor, 0, len(s3Out.Neighbors))
+	edgeOnlyAdded := 0
 	for _, sn := range s3Out.Neighbors {
 		if _, ok := citationKeys[sn.Edge.Source.Key()]; !ok {
+			// Source seed lost its body slot — skip; an edge with no
+			// body-backed anchor gives the LLM nothing to attach it to.
 			continue
 		}
 		if _, ok := citationKeys[sn.Edge.Target.Key()]; !ok {
-			continue
+			if _, rejected := skippedKeys[sn.Edge.Target.Key()]; rejected {
+				continue
+			}
+			if edgeOnlyAdded >= maxEdgeOnlyTargets {
+				continue
+			}
+			citationKeys[sn.Edge.Target.Key()] = struct{}{}
+			citations = append(citations, sn.Edge.Target)
+			edgeOnlyAdded++
 		}
 		validNeighbors = append(validNeighbors, sn.Edge)
 	}

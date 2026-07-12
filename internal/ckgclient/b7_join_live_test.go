@@ -9,7 +9,7 @@ package ckgclient_test
 //     the first version whose canonical_id VALUES are populated (a 1.16–1.18
 //     graph has the column but NULLs — joining on it fails silently);
 //  2. chunk inheritance: real ckv semantic hits must carry a ckg canonical id
-//     (CKGNodeID, inherited per CKV PR #9);
+//     (CanonicalID, inherited per CKV PR #9);
 //  3. join resolution: those ids must resolve through cks's public FindSymbol
 //     surface at >= 90% — the match-rate target agreed for the B7 measurement.
 //
@@ -101,7 +101,7 @@ func TestLive_B7_CanonicalJoin(t *testing.T) {
 		"transaction pool admission checks",
 	}
 	ids := map[string]struct{}{}
-	withNodeID, total := 0, 0
+	total := 0
 	for _, q := range queries {
 		hits, err := ckv.SemanticSearch(ctx, q, ckvclient.SearchOpts{K: 10})
 		if err != nil {
@@ -109,9 +109,6 @@ func TestLive_B7_CanonicalJoin(t *testing.T) {
 		}
 		for _, hit := range hits {
 			total++
-			if hit.CKGNodeID != "" {
-				withNodeID++
-			}
 			if hit.CanonicalID != "" {
 				ids[hit.CanonicalID] = struct{}{}
 			}
@@ -120,7 +117,7 @@ func TestLive_B7_CanonicalJoin(t *testing.T) {
 	if len(ids) == 0 {
 		t.Fatalf("no ckv hit carried a CanonicalID — chunk inheritance (CKV PR #9) not in effect on this index, or the cks translation dropped it")
 	}
-	t.Logf("collected %d unique canonical ids from %d hits (%d also carry positional CKGNodeID)", len(ids), total, withNodeID)
+	t.Logf("collected %d unique canonical ids from %d hits", len(ids), total)
 
 	// --- 3. join resolution through the public FindSymbol surface -----------
 	resolved, lineQualified := 0, 0

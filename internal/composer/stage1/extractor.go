@@ -49,6 +49,13 @@ const (
 
 // Config tunes the extractor's retrieval behavior.
 type Config struct {
+	// KnowledgeK is the top-K for the knowledge pass — one extra ckv
+	// search scoped to knowledge chunk kinds (invariant, convention).
+	// Domain rules never outrank 14k code chunks in a generic query
+	// (measured: the PR-77 pack carried zero invariants), so they get a
+	// kind-scoped retrieval of their own. 0 disables the pass.
+	KnowledgeK int
+
 	// InitialK is how many candidates ckv returns per recall round.
 	InitialK int
 	// RerankPerKW is how many ckg BM25 hits to fetch per candidate keyword.
@@ -69,6 +76,7 @@ type Config struct {
 // DefaultConfig returns the Phase-0 tuning baseline.
 func DefaultConfig() Config {
 	return Config{
+		KnowledgeK:    6,
 		InitialK:      DefaultInitialK,
 		RerankPerKW:   DefaultRerankPerKW,
 		MaxRounds:     DefaultMaxRounds,
@@ -89,6 +97,10 @@ type Stage1Output struct {
 	// Hits are the union of ckv search results across all rounds. The
 	// composer's evidence assembler uses these as citation candidates.
 	Hits []contract.Hit
+
+	// KnowledgeHits counts how many hits the kind-scoped knowledge pass
+	// (invariant/convention) contributed to Hits. Observability only.
+	KnowledgeHits int
 
 	// Confidence is the BM25 concentration of the final round
 	// (top1_score / total_score). 1.0 = single dominant keyword,
@@ -227,6 +239,19 @@ func (e *Extractor) Extract(ctx context.Context, prompt string, intent contract.
 		currentQuery = augmentQuery(expansion.Expanded, reranked, e.config.AugmentTopN)
 	}
 
+	// Knowledge pass: fetch domain rules by chunk kind. Failure is
+	// non-fatal — the pass enriches evidence, it does not gate it.
+	if e.config.KnowledgeK > 0 {
+		khits, kerr := e.ckv.SemanticSearch(ctx, expansion.Expanded, ckvclient.SearchOpts{
+			K:      e.config.KnowledgeK,
+			Filter: ckvclient.SearchFilter{ChunkKinds: []string{"invariant", "convention"}},
+		})
+		if kerr == nil {
+			out.Hits = mergeHits(out.Hits, khits)
+			out.KnowledgeHits = len(khits)
+		}
+	}
+
 	// Cap the final keyword count.
 	if len(out.Keywords) > e.config.MaxKeywords {
 		out.Keywords = out.Keywords[:e.config.MaxKeywords]
@@ -244,6 +269,7 @@ func (e *Extractor) emitFootprint(ctx context.Context, intent contract.Intent, o
 		zap.String("intent", string(intent)),
 		zap.Int("rounds", out.Rounds),
 		zap.Int("hit_count", len(out.Hits)),
+		zap.Int("knowledge_hits", out.KnowledgeHits),
 		zap.Int("keyword_count", len(out.Keywords)),
 		zap.Float64("confidence", out.Confidence),
 		zap.Strings("keywords", out.Keywords),

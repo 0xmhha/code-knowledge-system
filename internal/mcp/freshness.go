@@ -26,9 +26,11 @@ type freshnessResponse struct {
 func registerFreshness(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameFreshness,
 		mcpgo.WithDescription(
-			"Report whether the ckv index is up-to-date with the source repository. Returns "+
-				"the indexed git commit, the current git HEAD, and the list of files changed "+
-				"between them. Use this before relying on retrieval results to detect a stale index.",
+			"Compare the index snapshot against the source repository: indexed commit vs "+
+				"HEAD and the changed-file list. Call at session start and after "+
+				"pulls/commits -- stale files mean citations may mislead. If stale, run "+
+				"cks.ops.index (files you created this session are never in the index; read "+
+				"them directly).",
 		),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {

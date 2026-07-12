@@ -84,6 +84,12 @@ type Deps struct {
 	// (no binaries) disables it — the tool then tells the agent to run the
 	// indexers manually. Not used by the query path.
 	Index IndexConfig
+
+	// Alignment is the startup ckg↔ckv coordinate assert (reindex-migration
+	// design Q4). Nil skips the gate (tests, partial wiring); a report with
+	// OK=false makes the instance non-serviceable (fail-loud) while still
+	// serving health for diagnosis.
+	Alignment *AlignmentReport
 }
 
 // Register attaches both tools to s. Returns an error when required Deps
@@ -267,13 +273,16 @@ func aclMiddleware(next http.Handler, allow func(net.IP) bool) http.Handler {
 func registerGetForTask(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameGetForTask,
 		mcpgo.WithDescription(
-			"Compose a sanitized EvidencePack from a vibe prompt. Runs intent classification, "+
-				"keyword extraction (ckv+BM25), citation search (ckg), graph expansion, token "+
-				"budgeting, and policy sanitize. Returns a SHA-256 integrity-stamped pack ready "+
-				"for an upper-layer LLM consumer.",
+			"START HERE for any analysis/design/bugfix task. One call composes an "+
+				"EvidencePack: intent-ranked citations, code bodies, and graph_neighbors "+
+				"relation wiring (source->target: calls/called_by/implements/...), "+
+				"token-budgeted, sanitized, SHA-256 integrity-stamped. Read "+
+				"graph_neighbors before issuing per-edge traversal calls -- it already "+
+				"answers 'who calls / what does it call' for the top hits. Use the "+
+				"narrower tools only to go deeper on a specific point.",
 		),
 		mcpgo.WithString("prompt", mcpgo.Required(),
-			mcpgo.Description("Natural-language task description. Example: \"find where ProcessRequest validates input\".")),
+			mcpgo.Description("Natural-language task description or symptom, as a full sentence. Example: \"restore proposal tx stays stuck in pending after GasTip revert\".")),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		return handleGetForTask(ctx, d, req)
@@ -284,8 +293,10 @@ func registerGetForTask(s *mcpserver.MCPServer, d Deps) {
 func registerHealth(s *mcpserver.MCPServer, d Deps) {
 	tool := mcpgo.NewTool(ToolNameHealth,
 		mcpgo.WithDescription(
-			"Aggregate cks backend health. Reports ok | degraded | down based on ckg/ckv "+
-				"reachability per HLD §10. ckg is required; ckv unavailable yields degraded.",
+			"Aggregate cks backend health: ok | degraded | down from ckg/ckv "+
+				"reachability. Call once at session start. degraded means ckv (semantic "+
+				"entry) is unavailable -- keyword/graph tools still work but natural-language "+
+				"recall is reduced.",
 		),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {

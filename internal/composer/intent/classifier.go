@@ -14,12 +14,12 @@ import (
 )
 
 // DefaultUnknownThreshold is the cosine-similarity cutoff below which
-// Classify returns IntentUnknown. 0.6 fits cks's "when in doubt, prefer
-// IntentUnknown (composer falls back to broad fan-out)" policy — modern
-// multilingual embedders typically map paraphrased same-meaning texts at
-// 0.7+ cosine, so 0.6 rejects loosely-related prompts while accepting
-// natural variation. Phase E tuning will revisit with real-prompt data.
-const DefaultUnknownThreshold = 0.6
+// Classify returns IntentUnknown (composer falls back to broad fan-out).
+// Calibrated 2026-07-09 against bge-m3 with the ticket-style anchor set:
+// real bugfix/feature prompts score 0.57-0.82, off-topic chatter tops out
+// near 0.53. 0.55 separates them with a small margin; 0.6 (the previous
+// value) sent virtually every real prompt to Unknown.
+const DefaultUnknownThreshold = 0.55
 
 // Classification is the result of one Classify call.
 type Classification struct {

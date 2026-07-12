@@ -1,7 +1,7 @@
-github.com/0xmhha/code-knowledge-graph v0.0.0-20260703080604-f4b5be89f7df h1:CfYyz+Zcno4SkcWncgavPgNremTUNq2AbKIGeMjqqwY=
-github.com/0xmhha/code-knowledge-graph v0.0.0-20260703080604-f4b5be89f7df/go.mod h1:r4614+B+7WTqg8eS0nfxYndUbFX2fOWWlML3ucn1NLM=
-github.com/0xmhha/code-knowledge-vector v0.0.0-20260703080606-73e0763c0237 h1:Zr6wi1h3eqLj4P6YN5RWYnkT/JaK4JAWIxAhISwF10Q=
-github.com/0xmhha/code-knowledge-vector v0.0.0-20260703080606-73e0763c0237/go.mod h1:VtWa/s70jlim+WVejV7Ao7SUTXvlA15T4lNkp75g7s8=
+github.com/0xmhha/code-knowledge-graph v0.0.0-20260710081212-d53c97df949c h1:7GxG9MVRt0NG2blU0pHU1c6fxlgTfumyxrO05y11Xxc=
+github.com/0xmhha/code-knowledge-graph v0.0.0-20260710081212-d53c97df949c/go.mod h1:r4614+B+7WTqg8eS0nfxYndUbFX2fOWWlML3ucn1NLM=
+github.com/0xmhha/code-knowledge-vector v0.0.0-20260712000512-7f6268307669 h1:rTvkR0oCsf8DJldoOwi8Lby+2cuT+t4qmZt12bNdlm4=
+github.com/0xmhha/code-knowledge-vector v0.0.0-20260712000512-7f6268307669/go.mod h1:VtWa/s70jlim+WVejV7Ao7SUTXvlA15T4lNkp75g7s8=
 github.com/asg017/sqlite-vec-go-bindings v0.1.6 h1:Nx0jAzyS38XpkKznJ9xQjFXz2X9tI7KqjwVxV8RNoww=
 github.com/asg017/sqlite-vec-go-bindings v0.1.6/go.mod h1:A8+cTt/nKFsYCQF6OgzSNpKZrzNo5gQsXBTfsXHXY0Q=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
