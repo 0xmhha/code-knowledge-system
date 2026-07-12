@@ -9,25 +9,27 @@
 > serving"); this file resolves the conflict against the code. Keep this file current;
 > let the dated files stand as historical record.
 >
-> **Verified**: 2026-07-12 on branch `docs/retire-ckg-node-id`, cks HEAD `0ee9ceb`.
+> **Verified**: 2026-07-12 on branch `docs/retire-ckg-node-id`.
 > Re-confirm each item's evidence before starting — the tree changes fast.
 
 ---
 
 ## Branch-merge gate — read before merging `docs/retire-ckg-node-id` to main
 
-Two items MUST be resolved (or consciously deferred) before this branch merges:
+Both former merge-blockers are now resolved on this branch (2026-07-12):
 
-1. **M1′ — committed local `replace` (`go.mod:41`)**: builds bind to a local ckv path.
-   The ckv branch is now pushed (reproducibility restored), but the `replace` +
-   local pin must be removed and a proper module pin restored, or CI / other machines
-   build against the wrong ckv. **Merge-blocker.**
-2. **M6 — the branch's namesake retirement is not in the code.** cks still carries
-   11 `ckg_node_id`/`CKGNodeID` references (8 non-test). What actually landed on this
-   branch is reindex / alignment / docs — not the retirement. The retirement is gated
-   on ckv removing its column first (see [`retire-ckg-node-id.md`](./retire-ckg-node-id.md)).
-   Decide explicitly: finish M6 on this branch, or rename the branch's intent and
-   land M6 separately.
+1. **M6 ✅ — retirement is in the code.** ckv `origin/main` (`7f62683`) already dropped
+   the `CKGNodeID` field; cks dropped `Hit.CKGNodeID` + the `real.go` mapping + comment
+   sites + the b7-test observation. `grep ckg_node_id|CKGNodeID` → only a prose comment
+   documenting the retirement. Build + tests clean.
+2. **M1′ ✅ — go.mod pinned, no replace.** Local `replace ckv => ../` removed; ckv pinned
+   to the column-removed `origin/main` (`v0.0.0-20260712000512-7f6268307669`). Reproducible
+   on CI / other machines.
+
+Remaining before/after merge: **rebase on main** (1 docs-only commit `#32`), and the
+**dataset must be rebuilt with a `schema_version` bump** so the served index no longer
+carries the dropped column (retire checklist "완료 게이트"). cks-seminar deck/asset sync
+lives in that separate repo.
 
 ---
 
@@ -38,10 +40,10 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 | ID | Task | Severity | Status (verified) | Gate / prerequisite |
 |---|---|---|---|---|
 | **P0** | Reindex `pr-77-2` to recover serving (`reindex-dataset.sh run`, FAMILY=pr-77-2, SRC=vector-db-5). One pass also closes E2, lays down the versioned layout, and activates dual-side digest compare. | [중요] | Not done — serving degraded (vector index removed, per session-handoff §3.5). ckv full build = hours. | Coordinate who runs it (CKV rebuild may be in another session). |
-| **M6** | Retire `ckg_node_id` (cks side): drop `Hit.CKGNodeID`, `real.go` mapping, 3 comment sites, JSON-contract note, reflect in `symbol-identity-design.md`. | [권장] | Not done — 11 refs remain. | **ckv column removal first** (retire checklist). |
-| **M1′** | Remove committed `replace ckv => ../` and restore a proper module pin. | [중요] | Partial — ckv branch pushed (reproducibility restored); `replace` still at `go.mod:41`. | **Required before main merge**, after M6 stabilizes. |
+| **M6** | Retire `ckg_node_id` (cks side): drop `Hit.CKGNodeID`, `real.go` mapping, comment sites, JSON-contract note, reflect in `symbol-identity-design.md`. | [권장] | ✅ Done (2026-07-12) — build + tests clean. Dataset schema-bump reindex still needed to drop the served column. | — |
+| **M1′** | Remove committed `replace ckv => ../` and restore a proper module pin. | [중요] | ✅ Done (2026-07-12) — ckv pinned to `7f6268307669` (origin/main). | — |
 | **M2** | Run the cks (combined) bench arm — last of the 5 arms. | [권장] | Not done. | **P0 first** (cannot measure a degraded instance). |
-| **E4** | `symbol-identity-design.md` §7 — mark Phase 1/2 complete; only remaining is M7. | [권장] | Not done (stale). | Ready now. |
+| **E4** | `symbol-identity-design.md` §7 — mark Phase 1/2 complete; only remaining is M7. | [권장] | ✅ Done (2026-07-12). | — |
 | **E5** | `coordination-response-cks-2026-06-29.md` T1 — note the 2 methods await CKV release. | [권장] | Not done (stale). | Ready now. |
 | **M7** | Domain-knowledge anchor `kind:` migration. | [권장] | Not done — 2/43 entry files carry `kind:`, 41 remain (back-compat working). | Ready now (minor). |
 | **M3** | T7 — composer causal orchestration (multi-hop `expand_flow`). | [권장] | Not started. | Avoid clashing with M2 measurement freeze. |
@@ -49,9 +51,10 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 | **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | Partly mitigated (knowledge quota already routes the chunks into the pack). | External: awaiting ckv Engine release. |
 
 **Resolved (no rework):** E1 (source_root corrected), E2 (resolution path fixed),
-E3 (instance restarted), M1 (deps resolved via local replace).
+E3 (instance restarted), M1 (deps resolved via local replace), **M6 + M1′ + E4
+(2026-07-12, this branch)**.
 
-**Recommended order:** `P0 → (E4·E5·M7 in parallel) → M2 → M6 + M1′ (before merge) → M3 → (M4·M5 external wait)`.
+**Recommended order:** land this branch (rebase + PR) → `P0 → (E5·M7 in parallel) → M2 → M3 → (M4·M5 external wait)`.
 
 ---
 

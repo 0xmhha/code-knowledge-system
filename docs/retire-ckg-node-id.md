@@ -1,7 +1,8 @@
 # `ckg_node_id` 은퇴 · `canonical_id` 단일화 (ADR-0001 마감)
 
-- 상태: In progress — ckg 작업분 ✅ 마감 / ckv·cks 🔶 진행 중(전용 세션, ckv 먼저 → cks)
-- 작성일: 2026-07-08 · 상태 갱신: 2026-07-10
+- 상태: ✅ 코드 마감 — ckg(변경 없음) / ckv(origin/main 컬럼 제거) / cks(`Hit.CKGNodeID`+매핑 제거,
+  build·test 클린). 잔여는 cks-seminar 자료 동기화(별 repo)와 데이터셋 리빌드(schema 범프)뿐.
+- 작성일: 2026-07-08 · 상태 갱신: 2026-07-12
 - 범위: code-knowledge-graph (ckg) · code-knowledge-vector (ckv) · code-knowledge-system (cks)
 - 관련: ckg `docs/adr/0001-canonical-symbol-id.md` · ckv `docs/adr/007-canonical-id-join-key.md` · cks `docs/symbol-identity-design.md`
 - **Cross-repo 상태(2026-07-10)**: 전수조사 확인 — `ckg_node_id`/`CKGNodeID`는 ckg 코드 0건(외부
@@ -85,13 +86,14 @@ ckv 청크와 cks Hit이 지금 **두 개**의 심볼 식별자를 실어 나른
 - [ ] 테스트: ckv 테스트 참조 **0건** — 수정 불필요
 - [ ] `docs/adr/007-canonical-id-join-key.md`에 "ckg_node_id 은퇴" 후속 기록
 
-### repo 3 — code-knowledge-system (소비자 — ckv 다음)
-- [ ] `pkg/contract/hit.go:44` — `Hit.CKGNodeID` 삭제 + 주석(27-35) 정리("Prefer CanonicalID" → "canonical_id 단일 조인 키")
-- [ ] `internal/ckvclient/real.go:140` — `CKGNodeID: h.CKGNodeID` 매핑 삭제 + 주석(120-125) 정리(ckv 응답 필드 소멸과 커플링)
-- [ ] `pkg/contract/retrievaltrace.go:67` — 주석의 CKGNodeID 언급 제거
-- [ ] `internal/ckgclient/b7_join_live_test.go:12,112,123` — CKGNodeID 관찰/로깅 라인 삭제(테스트 의미는 canonical id 수집이라 그대로 유효)
-- [ ] **JSON 계약 변경 명시** — EvidencePack/hit JSON에서 `ckg_node_id`(omitempty) 필드 소멸. 부재 허용 소비자는 무영향
-- [ ] `docs/symbol-identity-design.md`에 ADR-0001 마감 반영
+### repo 3 — code-knowledge-system (소비자 — ckv 다음) ✅ (2026-07-12)
+- [x] `pkg/contract/hit.go` — `Hit.CKGNodeID` 삭제 + 주석 정리("canonical_id 단일 조인 키")
+- [x] `internal/ckvclient/real.go` — `CKGNodeID: h.CKGNodeID` 매핑 삭제 + 주석 정리
+- [x] `pkg/contract/retrievaltrace.go:67` — 주석의 CKGNodeID 언급 제거(→ CanonicalID)
+- [x] `internal/ckgclient/b7_join_live_test.go` — CKGNodeID 관찰/로깅 라인 삭제(canonical id 수집 의미 유지)
+- [x] **JSON 계약 변경 명시** — EvidencePack/hit JSON에서 `ckg_node_id`(omitempty) 필드 소멸. 부재 허용 소비자는 무영향
+- [x] `docs/symbol-identity-design.md`에 ADR-0001 마감 반영
+- [x] go.mod: local `replace` 제거 + ckv pin을 컬럼-제거 origin/main(`7f62683`)으로 범프 (M1′ 동시 해소)
 
 ### 공통 — 순서 & 완료 게이트
 1. **ckv → cks 순서** (생산자 먼저; cks의 `h.CKGNodeID` 참조가 컴파일 에러로 드러나 누락 방지)

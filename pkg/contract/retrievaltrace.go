@@ -64,7 +64,7 @@ type RetrievalStep struct {
 	Source HitSource `json:"source,omitempty"`
 
 	// TopHits are the (truncated) results this step surfaced. Reusing Hit
-	// keeps Symbol/CKGNodeID — the ckv→ckg bridge fields — on each result.
+	// keeps Symbol/CanonicalID — the ckv→ckg bridge fields — on each result.
 	TopHits []Hit `json:"top_hits,omitempty"`
 
 	// Keywords are the terms this step produced or consumed (e.g. the

@@ -1,13 +1,15 @@
 # Symbol Identity — single design principle for ckg / ckv / cks
 
-Status: design (Phase 0). This document is the authoritative contract the three
-backends (ckg graph, ckv vector, cks composer) and the domain-knowledge anchors
-must conform to. Implementation is phased (§7).
+Status: Phase 1–2 shipped; Phase 3 mostly shipped (canonical-first resolution in
+place; only the domain-anchor `kind:` migration remains — §7). This document is the
+authoritative contract the three backends (ckg graph, ckv vector, cks composer) and
+the domain-knowledge anchors must conform to.
 
-> **Follow-up (2026-07-08)**: the `ckg_node_id` shared field is retired in favor of
-> `canonical_id` as the sole cross-repo join key (finishes this ADR's migration).
-> See [`retire-ckg-node-id.md`](./retire-ckg-node-id.md) for the cross-repo plan,
-> the dead-code verdict, and the per-repo checklist.
+> **Follow-up (2026-07-08, closed 2026-07-12)**: the `ckg_node_id` shared field is
+> retired in favor of `canonical_id` as the sole cross-repo join key — this finishes
+> the ADR-0001 migration. ckv dropped the column (origin/main), and cks dropped
+> `Hit.CKGNodeID` and its mapping. See [`retire-ckg-node-id.md`](./retire-ckg-node-id.md)
+> for the cross-repo plan, the dead-code verdict, and the per-repo checklist.
 
 ## 1. Problem
 
@@ -136,21 +138,23 @@ Replace the overloaded `symbol` with an explicit kind:
 
 ## 7. Phases (each: implement → impact-check → test → PR)
 
-- **Phase 0** — this design doc (the shared contract).
-- **Phase 1 — ckg canonical id.** Add `canonical_id` (import-path + receiver/sig
+- **Phase 0 ✅** — this design doc (the shared contract).
+- **Phase 1 ✅ (schema 1.23) — ckg canonical id.** Add `canonical_id` (import-path + receiver/sig
   aware) at emit + resolution in lockstep; exact resolution; promote const/var +
   interface methods; full reindex; keep leaf qname for display/FTS. Acceptance:
   `find_callees`/`find_callers` collisions gone (e.g. `core.Backend.Size` resolves
   to exactly one), edge counts stable or higher, existing resolver tests pass +
   new collision tests.
-- **Phase 2 — ckv canonical field.** Additive `canonical_id` on Chunk + Hit via
+- **Phase 2 ✅ (CKV PR#9) — ckv canonical field.** Additive `canonical_id` on Chunk + Hit via
   positional alignment; no re-embed. Acceptance: every aligned chunk carries the
   ckg canonical id; manifest/migration in place; vectors byte-identical.
-- **Phase 3 — cks resolution + anchors.** Exact resolution + multi-match error; MCP
-  doc fix; two-kind anchor schema; `cks-anchor-refresh`/inventory/domainexport
-  updates; migrate the 39 entries. Acceptance: `cks-inventory-check` enforces unique
-  `def` resolution; anchor refresh has zero false REVIEW for `def`, deterministic
-  `loc` handling; composer outputs unchanged.
+  (Later: `ckg_node_id` column dropped — ADR-0001 close, see banner above.)
+- **Phase 3 🔶 (mostly shipped) — cks resolution + anchors.** Exact resolution + multi-match
+  error, MCP doc fix, and the two-kind anchor schema (`AnchorKindDef`/`loc`, empty=def
+  back-compat) are **shipped**; canonical-first `FindSymbol` resolves the join. **Remaining:
+  migrate the domain entries to explicit `kind:` (2/43 done, back-compat working).**
+  Acceptance: `cks-inventory-check` enforces unique `def` resolution; anchor refresh has
+  zero false REVIEW for `def`, deterministic `loc` handling; composer outputs unchanged.
 
 ## 8. Non-goals / what stays the same
 - `pkg/contract.Citation` (file:line) and the entire composer pipeline.

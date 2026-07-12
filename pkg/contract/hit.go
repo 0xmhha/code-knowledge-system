@@ -24,24 +24,22 @@ const (
 // Hits do not carry the matched code body; that lives in EvidencePack.Bodies
 // keyed by Citation, so a single body can serve many hits.
 //
-// Symbol, CKGNodeID, and CanonicalID are populated only for HitSourceCKV hits
-// when the underlying ckv chunk carries them. They are the bridge to ckg:
-// composer Stage 1 extracts Symbol (not just the file basename) as a candidate
-// keyword for Stage 2's ckg fan-out; CKGNodeID is ckg's positional node id
-// (sha of qname|lang|startByte — build-specific); CanonicalID is ckg's
-// import-path-qualified symbol id (ADR-0001) inherited by the chunk — the
-// build-stable B7 join key that resolves via ckg FindByCanonicalID / the
-// canonical-first FindSymbol path. Prefer CanonicalID for joins; CKGNodeID
-// only pins a node within one specific graph build.
-// All three are omitempty for backward compatibility with hits that
-// pre-date the alignment work.
+// Symbol and CanonicalID are populated only for HitSourceCKV hits when the
+// underlying ckv chunk carries them. They are the bridge to ckg: composer
+// Stage 1 extracts Symbol (not just the file basename) as a candidate keyword
+// for Stage 2's ckg fan-out; CanonicalID is ckg's import-path-qualified symbol
+// id (ADR-0001) inherited by the chunk — the build-stable, single join key that
+// resolves via ckg FindByCanonicalID / the canonical-first FindSymbol path.
+// (The former positional ckg_node_id was retired once canonical_id became the
+// sole join key — ADR-0001; ckv no longer carries it.)
+// Both are omitempty for backward compatibility with hits that pre-date the
+// alignment work.
 type Hit struct {
 	Citation    Citation  `json:"citation"`
 	Rank        int       `json:"rank"`
 	Score       float64   `json:"score"`
 	Source      HitSource `json:"source,omitempty"`
 	Symbol      string    `json:"symbol,omitempty"`
-	CKGNodeID   string    `json:"ckg_node_id,omitempty"`
 	CanonicalID string    `json:"canonical_id,omitempty"`
 	// ChunkKind is ckv's chunking-strategy label (symbol, doc, invariant,
 	// convention, …). Lets downstream stages route knowledge chunks (the
