@@ -287,6 +287,11 @@ config에서 모델을 읽어 **in-process**로 ollama 임베더를 구성한다
   미지원 백엔드 폴백). 전체 test/vet 클린.
 - ✅ **T4 Real 배선** — `Real.{GetFlow,ExpandFlow,FindBranches,GetInvariantEnforcement}`가
   `r.eng.*` 호출 + ckv타입→cks타입 변환 + cks-side 캡. (백엔드 누출 방지, SemanticSearch와 동일 패턴.)
+- ⚠️ **정정**: 위 T1 목록의 `(+FindInvariants/GetConventions)` 2종은 T2의 flow-4종과 **동시 출시가
+  아니었다** — 당시 ckv `pkg/ckv`에 미노출(gated)이라 flow-4종만 랜딩(골든 13→17). 두 지식조회
+  도구는 **2026-07-12에 별도 출시**(M5): ckv facade PR #35(`pkg/ckv`에 `FindInvariants`/
+  `GetConventions` 노출) + cks PR #34(`FlowClient` 배선 + `cks.context.find_invariants`/
+  `get_conventions` 등록, 골든 17→19). 이제 T1의 6종이 모두 cks 표면에 노출됨.
 
 **완료 (2026-07-01, 라이브 검증):**
 - ✅ T5 데이터셋 정렬 — `cks-stablenet.yaml`(gitignored)의 ckg/ckv 경로를 `knowledge-data/pr-77-2`
