@@ -44,7 +44,7 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 | **M6-data** | ADR-0001 data-side close: the served index must be built by the column-removed ckv so `ckg_node_id` is physically gone. | [권장] | ✅ Done (2026-07-12) — served index (`pr-77-gstable/vector-db`) has no `ckg_node_id` column, and the serving binary was rebuilt from column-removed main. The predicted failure mode fired and was caught: the first cutover with a **stale `bin/cks-mcp`** hit `ckv.Open: no such column: ckg_node_id → degraded` (fail-loud); rebuilding `bin/cks-mcp` from current main resolved it. | — |
 | **M6** | Retire `ckg_node_id` (cks code side): drop `Hit.CKGNodeID`, `real.go` mapping, comment sites, JSON-contract note, reflect in `symbol-identity-design.md`. | [권장] | ✅ Done (PR #33, 2026-07-12) — build + tests clean. Data side tracked as `M6-data`. | — |
 | **M1′** | Remove committed `replace ckv => ../` and restore a proper module pin. | [중요] | ✅ Done (PR #33, 2026-07-12) — ckv pinned to `7f6268307669` (origin/main). | — |
-| **M2** | Run the cks (combined) bench arm — last of the 5 arms. | [권장] | Not done. | **Unblocked** — serving is now healthy on `pr-77-gstable` (P0 done). |
+| **M2** | Run the cks bench arm (cks-bench live, `pr-77-gstable`, 30 golden Qs). | [권장] | ✅ Done (2026-07-12). **Result: cks retrieval ~doubles correctness vs the fair (grep-only) baseline.** vs `M1_fair` (grep-only, 33.3% correct, 12,883 tok, 0 halluc): cks auto-pack `M4_get_for_task` = 70.0% correct / 4,899 tok (−62%); `M3_incremental` = 73.3% / 1,780 tok; `M2_graph_full` = 56.7% / 35,891 tok. Oracle ceiling `M1_raw` (golden files injected) = 93.3%. **Caveat:** cks methods hallucinate more (M3=19, M4=16) than grep-only (0) — needs root-cause. Report: `coding-agent/bench/cks-bench/runs/ckg-bench-live-{gstable,m1fair}/report/`. N=30, single run; single-turn Q&A ≠ the coding-agent bug-cycle-cost thesis. | — |
 | **E4** | `symbol-identity-design.md` §7 — mark Phase 1/2 complete; only remaining is M7. | [권장] | ✅ Done (2026-07-12). | — |
 | **E5** | `coordination-response-cks-2026-06-29.md` T1 overstated the 2 knowledge tools as shipped with the flow-4. | [권장] | ✅ Done (2026-07-12) — added a dated correction: find_invariants/get_conventions shipped separately via M5 (cks #34 + ckv facade #35), so T1's 6 tools are now all exposed. | — |
 | **M7** | Domain-knowledge anchor `kind:` migration (def vs loc). | [권장] | **Deferred — needs the source-of-truth commit.** ~150/164 anchors are def (back-compat correct, no change); only a handful are loc. Accurate def/loc classification = "is `line` the declaration of `symbol`?", which must be checked against go-stablenet **at the commit the entries were authored against** (line numbers drift). The reason-text heuristic is unreliable — it cannot distinguish "def of X" from "loc using X" and produces false positives (e.g. `NativeCoinManagerAddress:219` reads as loc but is a def; `ExtractWBFTExtra:251` names the *called* symbol, not the enclosing one). Blind bulk editing would corrupt curated knowledge. | Pin the authoring go-stablenet commit, then do a source-verified pass. Back-compat working meanwhile — no functional issue. |
@@ -54,7 +54,8 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 
 **Resolved (no rework):** E1, E2, E3, M1, **M6 + M1′ + E4** (2026-07-12), **M5**
 (cks #34/#35 + coding-agent #60; live e2e proven, autonomous-diagnose demo optional),
-**P0 + M6-data** (2026-07-12, cutover to `pr-77-gstable`).
+**P0 + M6-data** (2026-07-12, cutover to `pr-77-gstable`), **M2** (2026-07-12, cks-bench
+live: cks ~2× correctness over grep-only; hallucination follow-up noted).
 
 **Live serving (2026-07-12):** `cks-stablenet` @ `192.168.0.116:8080`, dataset `pr-77-gstable`
 (ckg schema 1.23 + column-removed ckv, commit `0bf2f4d1b`), `builder_version cks-mcp/0.1.0-90dc885d`,
@@ -66,10 +67,11 @@ degraded") was stale. Actual: serving was healthy on `pr-77` (pre-retire, still 
 new `pr-77-gstable` had already been built by another session with the column-removed + sources-ledger
 ckv. P0 became a **cutover + binary rebuild**, not a reindex.
 
-**Recommended order (next):** `M2 (cks bench arm) → M3 → (M4 external wait; M7 pending the
-authoring go-stablenet commit)`. M2 runs against the live `pr-77-gstable` instance; freeze the
-dataset during M2 to keep the measurement clean. (M5's optional autonomous-diagnose demo can piggyback
-on any diagnose run — it needs only a plugin reload, not dedicated work.)
+**Recommended order (next):** `M2-hallucination follow-up (why do cks methods hallucinate more
+than grep-only?) → M3 → (M4 external wait; M7 pending the authoring go-stablenet commit)`. The core
+items (P0, M2, M5, M6) are done; what remains is the hallucination root-cause from M2, M3 (T7), and
+the two external/deferred items. (M5's optional autonomous-diagnose demo can piggyback on any diagnose
+run — it needs only a plugin reload, not dedicated work.)
 
 ---
 
