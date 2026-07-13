@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/0xmhha/code-knowledge-system/internal/composer/stage2"
+	"github.com/0xmhha/code-knowledge-system/pkg/contract"
 )
 
 // knowledgeSeed is a seed whose hit came from the kind-scoped knowledge
@@ -127,5 +128,80 @@ func TestDefaultConfig_KnowledgeReserve(t *testing.T) {
 	t.Parallel()
 	if DefaultConfig().KnowledgeReserve != DefaultKnowledgeReserve || DefaultKnowledgeReserve != 2 {
 		t.Errorf("DefaultConfig.KnowledgeReserve = %d, want %d", DefaultConfig().KnowledgeReserve, DefaultKnowledgeReserve)
+	}
+}
+
+// A domain-knowledge corpus chunk is indexed by ckv as chunk_kind "doc" with an
+// empty commit hash (out-of-tree markdown), not "invariant"/"convention". The
+// reserve must still rescue it, otherwise real domain rules never reach the pack
+// under the citation cap — the production symptom this fix addresses (live
+// get_for_task shipped 0 invariants for a generic prompt).
+func TestAllocate_KnowledgeReserveRescuesDocKindCorpusChunk(t *testing.T) {
+	t.Parallel()
+	docCit := contract.Citation{File: "A6.rules.md", StartLine: 1, EndLine: 10, CommitHash: ""}
+	docSeed := stage2.ScoredCitation{Citation: docCit, Score: 0.5, ChunkKind: "doc"}
+	seeds := []stage2.ScoredCitation{
+		seed("a.go", 9.0),
+		seed("b.go", 8.0),
+		seed("c.go", 7.0),
+		seed("d.go", 6.0),
+		docSeed,
+	}
+	fetcher := &FakeFetcher{Bodies: map[string]string{
+		cit("a.go", 1, 10).Key(): bodyN(10),
+		cit("b.go", 1, 10).Key(): bodyN(10),
+		cit("c.go", 1, 10).Key(): bodyN(10),
+		cit("d.go", 1, 10).Key(): bodyN(10),
+		docCit.Key():             bodyN(10),
+	}}
+	a, _ := New(fetcher, WithConfig(Config{
+		MaxTokens: 100000, OverheadReserve: 0.10,
+		MaxCitations: 3, KnowledgeReserve: 1,
+	}))
+	out, err := a.Allocate(context.Background(), seeds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]bool{}
+	for _, s := range out.Selected {
+		files[s.Citation.File] = true
+	}
+	if !files["A6.rules.md"] {
+		t.Fatalf("out-of-tree doc corpus chunk not rescued by knowledge reserve; selected %v", files)
+	}
+}
+
+// Guard against over-inclusion: in-tree markdown (a README) is also chunk_kind
+// "doc" but carries a real commit hash, so it must NOT be treated as knowledge —
+// otherwise generic docs would steal the reserve. With no true knowledge
+// candidate present the held slot goes unused and the README is not selected.
+func TestAllocate_InTreeDocIsNotKnowledge(t *testing.T) {
+	t.Parallel()
+	readmeCit := contract.Citation{File: "README.md", StartLine: 1, EndLine: 10, CommitHash: "abc"}
+	readmeSeed := stage2.ScoredCitation{Citation: readmeCit, Score: 0.5, ChunkKind: "doc"}
+	seeds := []stage2.ScoredCitation{
+		seed("a.go", 9.0),
+		seed("b.go", 8.0),
+		seed("c.go", 7.0),
+		readmeSeed,
+	}
+	fetcher := &FakeFetcher{Bodies: map[string]string{
+		cit("a.go", 1, 10).Key(): bodyN(10),
+		cit("b.go", 1, 10).Key(): bodyN(10),
+		cit("c.go", 1, 10).Key(): bodyN(10),
+		readmeCit.Key():          bodyN(10),
+	}}
+	a, _ := New(fetcher, WithConfig(Config{
+		MaxTokens: 100000, OverheadReserve: 0.10,
+		MaxCitations: 3, KnowledgeReserve: 1,
+	}))
+	out, err := a.Allocate(context.Background(), seeds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range out.Selected {
+		if s.Citation.File == "README.md" {
+			t.Fatalf("in-tree doc (real commit) wrongly rescued as knowledge; selected %v", out.Selected)
+		}
 	}
 }
