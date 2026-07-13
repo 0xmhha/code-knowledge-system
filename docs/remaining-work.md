@@ -11,6 +11,14 @@
 >
 > **Verified**: 2026-07-12 on `main` (after PR #33 squash-merge).
 > Re-confirm each item's evidence before starting — the tree changes fast.
+>
+> **Re-verified 2026-07-13 (office machine, `136eed3`)**: code claims hold — go.mod has
+> NO replace (ckv `f595d83`, ckg `bf59fdb`), `CKGNodeID` grep = prose comment only,
+> build+tests clean, tool fixture = 19. **New finding: the "Live serving" note below is
+> machine-scoped** — it was verified on the 192.168.0.x machine. THIS machine
+> (172.20.82.90) still runs the stale 7/10 instance (`cks-mcp/0.1.0-1de321e5-dirty`,
+> dataset `pr-77-2`, `serviceable:false` — fail-loud, so consumers are safe) and has
+> NO `pr-77-gstable` dataset locally. See the new **P0-officeM** row.
 
 ---
 
@@ -48,8 +56,9 @@ Severity: `[중요]` high / `[권장]` recommended. Status verified against code
 | **E4** | `symbol-identity-design.md` §7 — mark Phase 1/2 complete; only remaining is M7. | [권장] | ✅ Done (2026-07-12). | — |
 | **E5** | `coordination-response-cks-2026-06-29.md` T1 overstated the 2 knowledge tools as shipped with the flow-4. | [권장] | ✅ Done (2026-07-12) — added a dated correction: find_invariants/get_conventions shipped separately via M5 (cks #34 + ckv facade #35), so T1's 6 tools are now all exposed. | — |
 | **M7** | Domain-knowledge anchor `kind:` migration (def vs loc). | [권장] | **Deferred — needs the source-of-truth commit.** ~150/164 anchors are def (back-compat correct, no change); only a handful are loc. Accurate def/loc classification = "is `line` the declaration of `symbol`?", which must be checked against go-stablenet **at the commit the entries were authored against** (line numbers drift). The reason-text heuristic is unreliable — it cannot distinguish "def of X" from "loc using X" and produces false positives (e.g. `NativeCoinManagerAddress:219` reads as loc but is a def; `ExtractWBFTExtra:251` names the *called* symbol, not the enclosing one). Blind bulk editing would corrupt curated knowledge. | Pin the authoring go-stablenet commit, then do a source-verified pass. Back-compat working meanwhile — no functional issue. |
-| **M3** | T7 — composer causal orchestration (multi-hop `expand_flow`). | [권장] | Not started. | Avoid clashing with M2 measurement freeze. |
+| **M3** | T7 — composer causal orchestration (multi-hop `expand_flow`). | [권장] | **Design spec done** (#42, `docs/2026-07-12-t7-causal-chain-orchestration-design.md`); implementation not started. | Avoid clashing with M2 measurement freeze. |
 | **M4** | Embedding-dimension measurement. | [권장] | Waiting. | External: reindex-B (qwen3) index, CKV-owned. |
+| **P0-officeM** | Office machine (172.20.82.90) serving is stale: 7/10 dirty binary + `pr-77-2` (degraded since the 7/10 restructure), and `pr-77-gstable` is absent locally. Decide topology: (a) stop the local instance and point office `CKS_MCP_URL` at the 192.168.0.x host, or (b) sync/build `pr-77-gstable` here + `make build-bins` + restart. Fail-loud keeps consumers safe meanwhile. | [권장] | **Open (found 2026-07-13).** | Topology decision (single serving host vs per-machine). |
 | **M5** | Expose `find_invariants` / `get_conventions` as dedicated tools. | [권장] | ✅ Done (2026-07-12). cks: FlowClient + MCP tools (cks #34 + ckv facade #35, repin #35). Live e2e against `pr-77-gstable`: `find_invariants` → 151 real invariants (file/tier filtered), `get_conventions` → per-package idioms. coding-agent: analyzer granted both tools + prompt pointer (coding-agent #60, 0.1.53) — the consumer gap that blocked the diagnose path. Only an autonomous-diagnose *observation* is left as an optional demo (plumbing proven end-to-end; needs a plugin reload + a full diagnose run). | — |
 
 **Resolved (no rework):** E1, E2, E3, M1, **M6 + M1′ + E4** (2026-07-12), **M5**
@@ -76,10 +85,9 @@ run — it needs only a plugin reload, not dedicated work.)
 
 ## Evidence pointers (re-verify before acting)
 
-- M6 refs: `internal/ckvclient/real.go:130,135,150`, `pkg/contract/hit.go:27,30,34,44`,
-  `pkg/contract/retrievaltrace.go:67` — full retirement checklist in
-  [`retire-ckg-node-id.md`](./retire-ckg-node-id.md).
-- M1′: `go.mod:41` `replace github.com/0xmhha/code-knowledge-vector => ../code-knowledge-vector`.
+- M6 (done): `grep -rn CKGNodeID --include='*.go'` → prose comment only (hit.go:33);
+  checklist in [`retire-ckg-node-id.md`](./retire-ckg-node-id.md).
+- M1′ (done): go.mod has no replace; ckv pinned `f595d83`, ckg `bf59fdb` (2026-07-13).
 - M7: `docs/domain-knowledge/projects/go-stablenet/entries/*.yaml` (43 files, 2 with `kind:`).
 - P0 / serving state: [`session-handoff-2026-07-10.md`](./session-handoff-2026-07-10.md) §3.5,
   [`ops-blue-green-reindex.md`](./ops-blue-green-reindex.md).
@@ -87,7 +95,7 @@ run — it needs only a plugin reload, not dedicated work.)
   ```bash
   scripts/serve-cks-http.sh status                                 # instance up?
   # then cks.ops.health → serviceable / alignment.ok / builder_version
-  FAMILY=pr-77-2 scripts/reindex-dataset.sh status                 # version / lock
+  FAMILY=pr-77-gstable scripts/reindex-dataset.sh status                 # version / lock
   git -C ../code-knowledge-vector status -sb                       # M1′ (ahead?)
   grep -rn "ckg_node_id\|CKGNodeID" --include='*.go' .             # M6 (→ 0 when done)
   ```
