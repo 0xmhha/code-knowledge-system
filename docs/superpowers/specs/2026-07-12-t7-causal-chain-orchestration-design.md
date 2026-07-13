@@ -1,6 +1,9 @@
 # T7 — Causal-Chain Orchestration (produce→store→consume)
 
-Status: design (approved 2026-07-12). Implementation pending its own plan.
+Status: **draft — under review** (self-declared "approved 2026-07-12" retracted;
+sufficiency review 2026-07-13 found gaps G1–G6 — see
+[`2026-07-13-t7-spec-review.md`](./2026-07-13-t7-spec-review.md)). Revise before
+writing the implementation plan.
 Scope: `code-knowledge-system` only. Prereq: FlowClient (ExpandFlow/GetFlow/
 FindBranches) already live (M5). Consumer: coding-agent root-cause-lifecycle
 (diagnose).
