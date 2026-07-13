@@ -242,7 +242,15 @@ func (a *Allocator) Allocate(ctx context.Context, seeds []stage2.ScoredCitation,
 	processed := 0
 	for _, c := range candidates {
 		processed++
-		isKnowledge := c.ChunkKind == "invariant" || c.ChunkKind == "convention"
+		// Domain-knowledge corpus chunks (invariants/conventions/flows) are
+		// indexed by ckv from out-of-tree markdown, so they arrive as
+		// chunk_kind "doc" with an empty commit hash rather than the
+		// "invariant"/"convention" kinds. Recognise those too, otherwise the
+		// knowledge reserve never fires for the real corpus and domain rules
+		// lose their slot to code seeds under the citation cap. In-tree
+		// markdown (READMEs) carries a real commit hash and is unaffected.
+		isKnowledge := c.ChunkKind == "invariant" || c.ChunkKind == "convention" ||
+			(c.ChunkKind == "doc" && c.Citation.CommitHash == "")
 		if c.Origin == OriginSeed && seedCap > 0 && seedSelected >= seedCap {
 			// Seed slots exhausted; leave room for neighbor-origin
 			// candidates. Not a Skip: the candidate lost to the quota,
