@@ -48,11 +48,13 @@ const (
 	// raw score-sum aggregator.
 	DefaultSymbolWeight = 1.5
 	// DefaultCkvWeight is the RRF weight applied to the single ckv
-	// semantic-search ranked list. Set above DefaultBMWeight because, on
-	// natural-language prompts, the embedding recall measurably out-locates
-	// keyword BM25 (which mismatches NL words to unrelated identifiers),
-	// while staying at/below DefaultSymbolWeight so an exact symbol name
-	// still wins when both fire on the same citation.
+	// semantic-search ranked list. Set well above both ckg list weights
+	// because, on natural-language prompts, embedding recall measurably
+	// out-locates keyword BM25 (which mismatches NL words to unrelated
+	// identifiers). This does not suppress exact symbol matches: RRF
+	// contributions are additive per citation, so a hit that appears in
+	// the symbol/BM25 lists as well accumulates those on top of the ckv
+	// contribution — backend agreement still outranks any single-list hit.
 	DefaultCkvWeight = 5.0
 )
 
