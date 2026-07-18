@@ -6,16 +6,16 @@
 
 ## 1. Architecture in one paragraph
 
-The coding-agent never talks to CKV or CKG directly. It opens a single MCP stdio session against `cks-mcp`. `cks-mcp` exposes 13 tools (table below); under the hood, those tools route to `internal/ckvclient` and `internal/ckgclient`, which open the real ckv/ckg backends **in-process** (no subprocess) or fall back to a Smart Dummy that returns LLM-actionable instructions instead of fake data. From the coding-agent's point of view there is exactly one MCP server to install.
+The coding-agent never talks to CKV or CKG directly. It opens a single MCP stdio session against `cks-mcp`. `cks-mcp` exposes 19 tools (table below); under the hood, those tools route to `internal/ckvclient` and `internal/ckgclient`, which open the real ckv/ckg backends **in-process** (no subprocess) or fall back to a Smart Dummy that returns LLM-actionable instructions instead of fake data. From the coding-agent's point of view there is exactly one MCP server to install.
 
 ```
 coding-agent  ─stdio MCP─▶  cks-mcp  ─Go import─▶  ckvclient ─pkg/ckv (in-process)──▶  ckv
                                        ─Go import─▶  ckgclient ─pkg/store (in-process)─▶  ckg
 ```
 
-Beyond the original set, **`cks.context.concurrency_impact`** (goroutine/channel/lock blast radius) and **`cks.ops.index`** (agent-triggered ckv+ckg reindex) are now live. The authoritative list is `internal/mcp/*.go`, pinned against `internal/mcp/testdata/agent-mcp.schema.json` by `internal/mcp/schema_golden_test.go`.
+Beyond the original set, **`cks.context.concurrency_impact`** (goroutine/channel/lock blast radius), the six flow/knowledge tools (**`get_flow`**, **`expand_flow`**, **`find_branches`**, **`get_invariant_enforcement`**, **`find_invariants`**, **`get_conventions`**), and **`cks.ops.index`** (agent-triggered ckv+ckg reindex) are now live. The authoritative list is `internal/mcp/*.go`, pinned against `internal/mcp/testdata/agent-mcp.schema.json` by `internal/mcp/schema_golden_test.go`.
 
-## 2. Live tool catalog (13 tools)
+## 2. Live tool catalog (19 tools)
 
 Wire names are the strings the MCP client sends; constants live in `internal/mcp/*.go`.
 
@@ -29,9 +29,17 @@ Wire names are the strings the MCP client sends; constants live in `internal/mcp
 | `cks.context.find_callees` | `ToolNameFindCallees` | `symbol` (string) | `depth` (number), `max_total` (number) | Forward call graph. |
 | `cks.context.get_subgraph` | `ToolNameGetSubgraph` | `symbol` (string) | `depth` (number), `max_total` (number) | Bi-directional subgraph rooted at `symbol`. |
 | `cks.context.impact_analysis` | `ToolNameImpactAnalysis` | `symbol` (string) | `depth` (number), `max_total` (number) | Same shape as `find_callers` but surfaced as "what would break if I change this". |
+| `cks.context.concurrency_impact` | `ToolNameConcurrencyImpact` | `symbol` (string) | `depth` (number), `max_total` (number) | Concurrency blast radius: goroutines spawned, channels sent/received, locks acquired, modules reached over concurrency edges. Use before assuming a data race is/isn't possible. |
 | `cks.context.change_history` | `ToolNameChangeHistory` | — | `intent` (string), `symbol` (string), `k` (number), `max_count` (number) | PR-breadcrumb history. Either `intent` or `symbol` must be supplied (handler-level check). |
+| `cks.context.get_flow` | `ToolNameGetFlow` | one of `flow_id` / `entry_point` / `invariant_id` (string) | `max_steps` (number) | Return a curated flow as a cycle-safe topological step sequence (symbol, citation, calls/reads/writes/emits, branches, invariants per step). |
+| `cks.context.expand_flow` | `ToolNameExpandFlow` | `step_id` (string) | `direction` (`up`/`down`), `hops` (number), `limit` (number) | Steps adjacent to a flow step: `up` traverses producers, `down` consumers. Trace a value's produce→store→consume lifecycle one hop at a time. |
+| `cks.context.find_branches` | `ToolNameFindBranches` | `symptom_text` (string) | `k` (number) | Map a free-text symptom to ranked `when→then@at` failure-condition candidates. The natural-language entry point into flows. |
+| `cks.context.get_invariant_enforcement` | `ToolNameGetInvariantEnforcement` | `inv_id` (string) | `max` (number) | Enumerate every site that enforces a curated invariant. Check a planned change against domain rules before implementing. |
+| `cks.context.find_invariants` | `ToolNameFindInvariants` | — | `file` (string), `category` (string), `tier_min` (number) | List curated invariants (domain rules) matching a filter (file / policy category / min confidence tier). |
+| `cks.context.get_conventions` | `ToolNameGetConventions` | — | `package_prefix` (string) | Per-package AST-convention summaries (error handling, locking, naming). Match new code to the surrounding package's idioms. |
 | `cks.ops.health` | `ToolNameHealth` | — | — | Aggregate backend health: `ok` / `degraded` / `down`. |
 | `cks.ops.freshness` | `ToolNameFreshness` | — | — | CKV index freshness vs working tree. Use before relying on `semantic_search` after a long indexing pause. |
+| `cks.ops.index` | `ToolNameOpsIndex` | — | `mode` (`incremental`/`full`), `since_commit` (string) | Refresh the ckv + ckg indexes. Use ONLY after `cks.ops.freshness` reports stale. Disabled unless `backends.{ckv,ckg}.binary_path` are configured. |
 
 ## 3. Mapping from HLD virtual signatures
 
@@ -123,7 +131,7 @@ Mapping notes:
 - `depth` → `depth` (same).
 - `max_nodes` → `max_total` (rename).
 - `include_history`: orthogonal — fetch via `cks.context.change_history` and join on node ids client-side.
-- `include_concurrency`: **not currently exposed**. The HLD's concurrency analyzer is a CKG roadmap item; for now the field has no live equivalent and should be treated as "false" by callers.
+- `include_concurrency`: **now shipped as a dedicated tool** — `cks.context.concurrency_impact{symbol,depth,max_total}` (`internal/mcp/concurrency.go`) returns the goroutine/channel/lock blast radius. Call it separately instead of setting a flag on `ckg_query`.
 
 ### 3.4 phase4 (CKG): `ckg_impact`
 
@@ -154,6 +162,19 @@ For the per-PR history side of impact ("what changed near this code recently"), 
 ### 3.5 phase4 (CKG): `ckg_index`
 
 Now folded into `cks.ops.index` (see §3.2): a single tool refreshes both ckv and ckg. The ckg leg shells `ckg build --src --out` (plus `--policy-file` when `backends.ckg.policy_file` is set, rebuilding governed_by edges).
+
+### 3.6 Flow / knowledge family (no HLD antecedent)
+
+These six tools have no virtual signature in the phase3/phase4 HLDs — they were added after the HLDs were written, surfacing the curated flow corpus and domain-invariant/convention knowledge. Source: `internal/mcp/flow.go`. Use them on the diagnose/plan path.
+
+| Live tool | When the coding-agent reaches for it |
+|---|---|
+| `cks.context.find_branches` | Symptom in hand, no symbol yet — map free-text to ranked `when→then@at` failure conditions. The natural-language entry point into flows; call before `get_flow`. |
+| `cks.context.get_flow` | Have a `flow_id` / entry-point / `invariant_id` — pull the whole curated flow as a cycle-safe step sequence. |
+| `cks.context.expand_flow` | A flow is too large — trace one value's produce→store→consume lifecycle one hop at a time (`up` = producers, `down` = consumers). |
+| `cks.context.find_invariants` | Before changing code, list the domain rules in scope (by file / policy category / min confidence tier). |
+| `cks.context.get_invariant_enforcement` | Have an `inv_id` — enumerate every site that enforces it, to check a planned change against the rule. |
+| `cks.context.get_conventions` | Match new code to a package's existing idioms (error handling, locking, naming) under a package prefix. |
 
 ## 4. Composition example — Planner ANALYSIS step
 

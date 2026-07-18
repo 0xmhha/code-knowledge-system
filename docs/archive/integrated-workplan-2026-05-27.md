@@ -1,5 +1,7 @@
 # 통합 작업 계획 — 4개 프로젝트 교차 점검 (2026-05-27)
 
+> **ARCHIVED 2026-07-19.** Point-in-time snapshot; live status is [`remaining-work.md`](../remaining-work.md), durable architecture map is [`system-context-map.md`](../system-context-map.md). Kept for provenance.
+
 > **목적**: coding-agent(플러그인) + cks(오케스트레이터) + ckv(벡터) + ckg(그래프)
 > 4개 프로젝트의 설계 문서와 실제 코드를 교차 점검하여,
 > 각 모듈의 역할·동작·현재 상태를 확인하고 모듈별 작업 리스트를 도출한다.

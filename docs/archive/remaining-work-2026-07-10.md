@@ -1,5 +1,7 @@
 # 남은 작업 — 문서↔코드 대조 결과 (2026-07-10)
 
+> **ARCHIVED 2026-07-19.** Superseded by [`remaining-work.md`](../remaining-work.md) (the code-verified work SoT). Kept for provenance (dated ops lessons included).
+
 > **Superseded by [`remaining-work.md`](./remaining-work.md)** (consolidated, living).
 > This dated snapshot stands as historical record; use the consolidated file for
 > current status. (Conflict it had with session-handoff §3.5 on M2 is resolved there.)

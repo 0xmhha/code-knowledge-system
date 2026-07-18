@@ -1,5 +1,7 @@
 # Knowledge Data Best Practice & 권장 기술 스택
 
+> **ARCHIVED 2026-07-19.** Research report; its decisions shipped (`internal/vocab`, Stage-2 RRF, glossary tooling). Kept for provenance.
+
 > 작성: 2026-05-22
 > 대상: go-stablenet 코드 이해/수정 지원을 위한 cks/ckg/ckv 통합 평가
 > Status: research (구현 시작 전 의사결정 근거)

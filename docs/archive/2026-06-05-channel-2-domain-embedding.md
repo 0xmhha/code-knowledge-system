@@ -1,5 +1,7 @@
 # Channel ② Domain-Knowledge Embedding Implementation Plan
 
+> **ARCHIVED 2026-07-19.** Plan executed (`internal/domainexport`, `config.DomainConfig` + `cks.ops.index`, `budget.DocsRoots`, `cmd/cks-domain-export`). Design record: [`../../superpowers/specs/2026-06-05-channel-2-domain-embedding-design.md`](../../superpowers/specs/2026-06-05-channel-2-domain-embedding-design.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Embed cks domain-knowledge entries and the project's authoritative docs as first-class markdown documents in the same ckv vector index, so `semantic_search` returns the curated knowledge itself.

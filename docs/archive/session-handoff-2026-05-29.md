@@ -1,5 +1,7 @@
 # Session Handoff — cks MCP 확장 + D-1 인벤토리 + 도구 정비 (2026-05-23 → 05-29)
 
+> **ARCHIVED 2026-07-19.** Dated cross-machine handoff; historical. Live status: [`remaining-work.md`](../remaining-work.md).
+
 > **목적**: 2026-05-23 핸드오프 이후 cks repo 단독으로 진행된 작업 14 commit + uncommitted 1 의 *결정·산출물·미완·다음 액션* 을 한 곳에 묶어, 다른 머신에서 같은 세션을 cold start 로 이어 받을 수 있게 한다.
 >
 > **전제 문서**: `docs/research/session-handoff-2026-05-23.md` (3-repo 통합 점검). 본 문서는 그 다음 단계 — *cks 단독 진척* 위주이며, ckv/ckg/Atlassian/Ollama 외부 의존은 23 일자 상태와 동일.

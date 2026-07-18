@@ -7,7 +7,7 @@
 > **검증 환경 (이 메뉴얼이 실제로 실행·검증된 기준)**
 > - macOS (Apple Silicon, darwin/arm64), Go 1.26.4
 > - go-stablenet: Go 파일 1,256개 → **ckg 노드 220,507 / 엣지 1,928,983** (graph.db ≈ 725 MB)
-> - 도메인 엔트리 36개 → **ckv 카테고리 14 / ckg 정책 36 / governed_by 엣지 112**
+> - 도메인 엔트리 43개(40 verified) → **ckv 카테고리 14 / ckg 정책 40 / governed_by 엣지 112**
 > - 임베딩 모델: **bge-m3** (1024-dim, 다국어 한/영) via Ollama
 
 ---
@@ -40,7 +40,7 @@
 | **ckv** (code-knowledge-vector) | 의미 기반 벡터 검색 | `ckv-stablenet/vector.db` + `manifest.json` | 빌드: **bge-m3 임베딩** (Ollama) |
 | **cks** (code-knowledge-system) | ckv+ckg 합성 → EvidencePack, MCP 노출 | `cks-stablenet.yaml` (설정) | **내부 LLM 호출 없음** |
 
-**채널 ②(도메인 지식)**: `docs/domain-knowledge/projects/go-stablenet/entries/*.yaml` 36개를
+**채널 ②(도메인 지식)**: `docs/domain-knowledge/projects/go-stablenet/entries/*.yaml` 43개를
 → `cks-domain-export`로 마크다운 코퍼스로 변환 → ckv가 코드와 함께 임베딩,
 → `cks-domain-sync`로 ckv/ckg 정책(governance) 뷰 생성.
 
@@ -133,7 +133,7 @@ mkdir -p generated/domain-corpus
 ./bin/cks-domain-export \
   -project docs/domain-knowledge/projects/go-stablenet \
   -out     generated/domain-corpus/go-stablenet
-# 기대: "36 entries, 0 docs -> generated/domain-corpus/go-stablenet"
+# 기대: "43 entries, 0 docs -> generated/domain-corpus/go-stablenet"
 ```
 
 ### Step 2 — 정책 동기화 (ckv + ckg 뷰 생성)
@@ -143,7 +143,7 @@ mkdir -p generated/policies
   -entries docs/domain-knowledge/projects/go-stablenet \
   -ckv-out generated/policies/stablenet-ckv.yaml \
   -ckg-out generated/policies/stablenet-ckg-policy.yaml
-# 기대: "36 verified entries → 14 ckv categories, 36 ckg policies"
+# 기대: "40 verified entries → 14 ckv categories, 40 ckg policies"
 ```
 
 ### Step 3 — ckg 그래프 인덱스 빌드 (LLM 불필요)
@@ -154,7 +154,7 @@ rm -rf data/ckg-stablenet && mkdir -p data/ckg-stablenet
   --out data/ckg-stablenet \
   --lang go \
   --policy-file generated/policies/stablenet-ckg-policy.yaml
-# 기대: "built 220507 nodes / 1928983 edges", policy_nodes=36 governed_by_edges=112
+# 기대: "built 220507 nodes / 1928983 edges", policy_nodes=40 governed_by_edges=112
 ../code-knowledge-graph/bin/ckg validate --graph data/ckg-stablenet --format json | tail -5
 ```
 > 일부 `policy governs[] target not found` 경고는 정상(엔트리가 가리키는 일부 심볼이
@@ -236,7 +236,7 @@ claude                  # 같은 셸에서 Claude Code 실행 → .mcp.json 의 
 
 **3) 재시작 후 확인** — 새 셸에서 Claude Code 기동 → MCP 패널에 `cks` connected,
 또는 `./scripts/cks-health.sh` 가 `status: ok`. 계약 드리프트는
-`coding-agent/contract/lint-tool-names.sh` 로 점검(cks 13개 도구 등재).
+`coding-agent/contract/lint-tool-names.sh` 로 점검(cks 19개 도구 등재).
 
 검증 체크리스트:
 - [ ] `data/ckg-stablenet/graph.db` 존재, `ckg validate` OK
@@ -294,7 +294,7 @@ cks에는 운영 도구 `cks.ops.index`가 있어 에이전트가 직접 `ckg bu
 | cks 부팅이 degraded | Ollama 미가동 또는 `embed_model` 불일치. `ollama serve` 확인, manifest dim=1024 확인 |
 | `embedder dim=N, want 1024` | 인덱스를 bge-m3가 아닌 모델로 빌드함. ckv 재빌드 |
 | `policy governs[] target not found` 경고 | 정상(엔트리가 현재 코드에 없는 심볼 참조). 빌드는 성공 |
-| `code_root unset; skipping authoritative_docs copy` | 정상(코드 루트의 권위 문서 복사를 건너뜀). 엔트리 36개는 정상 export |
+| `code_root unset; skipping authoritative_docs copy` | 정상(코드 루트의 권위 문서 복사를 건너뜀). 엔트리 43개는 정상 export |
 | ckg binary not found | `data/`, `ckv-stablenet/`은 gitignore 권장. 절대경로로 `binary_path` 지정 |
 
 ---
@@ -311,12 +311,12 @@ code-knowledge-system/
 ├── docs/go-stablenet-dataset-build-manual.md  # 본 메뉴얼
 ├── docs/domain-knowledge/projects/go-stablenet/
 │   ├── project.yaml · subsystems.yaml · glossary.yaml
-│   └── entries/*.yaml                          # 36 도메인 엔트리 (소스)
+│   └── entries/*.yaml                          # 43 도메인 엔트리 (소스, 40 verified)
 ├── generated/                                  # (gitignored) 재생성물
 │   ├── domain-corpus/go-stablenet/entries/*.md # 채널② 코퍼스
 │   └── policies/
 │       ├── stablenet-ckv.yaml                  # ckv 정책 뷰 (14 카테고리)
-│       └── stablenet-ckg-policy.yaml           # ckg 거버넌스 정책 (36)
+│       └── stablenet-ckg-policy.yaml           # ckg 거버넌스 정책 (40)
 ├── data/ckg-stablenet/graph.db                 # ckg 그래프 데이터셋 (~725MB)
 └── ckv-stablenet/{vector.db,manifest.json}     # ckv 벡터 데이터셋
 ```

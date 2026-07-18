@@ -1,5 +1,7 @@
 # CKS 시스템 리뷰 — 유저 시나리오 기준 점검 (2026-05-27)
 
+> **ARCHIVED 2026-07-19.** Point-in-time snapshot; live status is [`remaining-work.md`](../remaining-work.md), durable architecture map is [`system-context-map.md`](../system-context-map.md). Kept for provenance.
+
 > **목적**: 유저 시나리오(Jira ticket → 코드 구현 → PR → Merge)를 만족시키기 위해
 > 필요한 기술·모듈·기능을 정리하고, 현재 코드 수준을 점검하며, 모듈별 필요 작업을 도출한다.
 

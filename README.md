@@ -8,7 +8,7 @@ token-budgeted, sanitized `EvidencePack` and exposes it through MCP for upper la
 ## Status
 
 R1′ — wired. cks composes ckv (vector/meaning) and ckg (graph/keyword) **in-process**
-and exposes a 13-tool agent-facing MCP surface (`cks.context.*` + `cks.ops.*`) over stdio.
+and exposes a 19-tool agent-facing MCP surface (`cks.context.*` + `cks.ops.*`) over stdio.
 With no datasets configured it boots in a non-crashing degraded mode (Smart Dummy +
 `cks.ops.health` reports `degraded`).
 
@@ -19,6 +19,13 @@ With no datasets configured it boots in a non-crashing degraded mode (Smart Dumm
 | `cmd/cks-mcp`  | MCP server (stdio JSON-RPC) — exposes `cks.context.*`, `cks.ops.*` | C.5 |
 | `cmd/cks-agent` | Coding agent CLI — vibe prompt → PR plan + diffs + tests | D |
 | `cmd/cks-eval` | Evaluation harness — headless Claude via `cli-wrapper`, metric collection | E |
+| `cmd/cks-glossary-gen` | Build the alias glossary that feeds the vocab resolver | domain |
+| `cmd/cks-domain-sync` | Derive ckv/ckg policy views from verified domain entries | domain |
+| `cmd/cks-domain-export` | Render verified entries → markdown corpus for `ckv build --docs` | domain |
+| `cmd/cks-entry-verify` | Validate domain entries against schema + anchors | domain |
+| `cmd/cks-inventory-check` | Cross-check domain-entry inventory vs coverage | domain |
+| `cmd/cks-anchor-refresh` | Re-stamp entry code anchors against current HEAD | domain |
+| `cmd/cks-promotion-worksheet` | Draft/needs_verification → verified promotion worksheet | domain |
 
 ## Architecture
 
@@ -89,9 +96,9 @@ the same `ckv`/`ckg` builds, forwarding `--policy-file` when `backends.ckg.polic
 
 ## Dependencies (wired)
 
-- `github.com/0xmhha/code-knowledge-graph` — graph + BM25 backend (`pkg/store`, in-process)
-- `github.com/0xmhha/code-knowledge-vector` — vector backend (`pkg/ckv`, in-process; sqlite-vec CGO)
-- `github.com/mark3labs/mcp-go` — MCP server (v0.52.0)
+- `github.com/0xmhha/code-knowledge-graph` — graph + BM25 backend (`pkg/store`, in-process); pinned at released **v0.1.0** (no `replace`)
+- `github.com/0xmhha/code-knowledge-vector` — vector backend (`pkg/ckv`, in-process; sqlite-vec CGO); pinned at released **v0.1.0** (no `replace`)
+- `github.com/mark3labs/mcp-go` — MCP server (v0.56.0)
 
 ## Layout (target)
 

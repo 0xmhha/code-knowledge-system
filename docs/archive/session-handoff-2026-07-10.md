@@ -1,5 +1,7 @@
 # 세션 핸드오프 — reindex P1 출하 + 발견 사실 (2026-07-10)
 
+> **ARCHIVED 2026-07-19.** Superseded by [`remaining-work.md`](../remaining-work.md) (the code-verified work SoT). Kept for provenance (dated ops lessons included).
+
 > 이 문서 하나로 다른 세션이 컨텍스트 손실 없이 이어갈 수 있도록: **완료된 것 / 남은 것 /
 > 이 세션에서 알게 된 사실(문서에 없던 것)** 을 기록한다. 작업 브랜치:
 > `docs/retire-ckg-node-id`. 관련: [`remaining-work-2026-07-10.md`](./remaining-work-2026-07-10.md)(감사),
