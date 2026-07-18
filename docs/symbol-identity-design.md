@@ -114,7 +114,8 @@ Replace the overloaded `symbol` with an explicit kind:
   ambiguity. Add an **additive** `canonical_id` to Chunk + Hit (omitempty),
   populated from the aligned ckg node. Do **not** change the embed-text prefix →
   **no re-embed**. Keep file:line as the primary ckv↔ckg join key, with
-  `ckg_node_id` as the machine cross-ref.
+  `canonical_id` as the machine cross-ref. (The earlier `ckg_node_id` field was
+  retired — see the retire banner above; `canonical_id` is now the sole join key.)
 - **cks (resolves + anchors).** Resolve by exact canonical id; treat a multi-match
   as an error for the traversal family (drop the `defs[0]` fallback in
   `resolveQname`/`resolveNodeID`/`resolveSeedFile`). Fix the MCP tool docs (they

@@ -1,5 +1,7 @@
 # Session Handoff — cks/ckv/ckg 통합 점검 세션 (2026-05-22~23)
 
+> **ARCHIVED 2026-07-19.** Dated cross-machine handoff; historical. Live status: [`remaining-work.md`](../remaining-work.md).
+
 > **목적**: 본 세션의 *발견 + 결정 + 산출물* 을 한 곳에 묶어 다른 세션이 cold
 > start 로 이어 받을 수 있게 한다. 본 문서만 읽으면 컨텍스트 100% 복원.
 >

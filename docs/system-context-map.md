@@ -53,8 +53,9 @@ the plugin's agents. The point of the datasets is to make that reasoning
 
 ### 2.1 ckg — code-knowledge-graph (structural / relational)
 - **Role:** parses Go/Solidity/Proto/TS into a persistent **SQLite graph** (35 node
-  types, 40 edge types; schema v1.10). go-stablenet graph ≈ **210K nodes / 708K
-  edges**. Node ID = `sha256(qname|lang|startByte)[:16]` (deterministic).
+  types, 40 edge types; schema v1.10). go-stablenet graph (full-source build) =
+  **220,507 nodes / 1,928,983 edges**. Node ID = `sha256(qname|lang|startByte)[:16]`
+  (deterministic).
 - **Queries (via cks):** find_symbol, find_callers (reverse BFS), find_callees
   (forward), get_subgraph, impact_analysis (6 reverse buckets, depth≤5,
   deterministic sorted output), change_history (commit/hunk, file-level).
@@ -90,9 +91,11 @@ the plugin's agents. The point of the datasets is to make that reasoning
   list, fused by **RRF**, CkvWeight 5.0 > Symbol 1.5 > BM25 1.0) → Stage 3 graph
   expansion (ckg Neighbors, intent-shaped) → Stage 4 budget (8000 tok, ≤12
   citations) → Stage 5 sanitize (`policies/sanitization_rules.yaml`).
-- **MCP surface (13):** `cks.context.*` — get_for_task, semantic_search, search_text,
+- **MCP surface (19):** `cks.context.*` — get_for_task, semantic_search, search_text,
   find_symbol, find_callers, find_callees, get_subgraph, impact_analysis,
-  change_history, concurrency_impact; `cks.ops.*` — health, freshness, index.
+  change_history, concurrency_impact, get_flow, expand_flow, find_branches,
+  get_invariant_enforcement, find_invariants, get_conventions; `cks.ops.*` —
+  health, freshness, index.
 - **Domain-knowledge subsystem:** `docs/domain-knowledge/` (schema
   `shared/entry.schema.yaml`, lifecycle `shared/STATUS_LIFECYCLE.md`). `cks-domain-sync`
   derives ckv/ckg policy views from **verified** entries; `internal/domainexport`
@@ -114,7 +117,8 @@ the plugin's agents. The point of the datasets is to make that reasoning
   equal-power quorum, instant finality / inert reorg, base-fee redistribution).
 - **Consumption:** planner uses `cks_ops_health/freshness/index` + `get_for_task` +
   relational tools; evaluator drives chainbench at Stage 4; jira-gateway scrubs inbound
-  Jira. Tool surface frozen in `contract/agent-mcp.schema.json`.
+  Jira. Tool surface frozen in `internal/mcp/testdata/agent-mcp.schema.json`
+  (enforced by `internal/mcp/schema_golden_test.go`).
 - **Status note:** HANDOFF lists "domain KB empty / 0 verified" as P0 — **this is
   stale**; the corpus is now 43 entries / 40 verified (§5). Real remaining items: a full
   end-to-end `/work`→`/merge` run has not been executed; retrieval silently degrades

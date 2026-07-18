@@ -1,5 +1,7 @@
 # CKS 회신 — 재인덱싱 오케스트레이션 + 무중단 서빙 (2026-07-10)
 
+> **ARCHIVED 2026-07-19.** Q1–Q4 decisions shipped (startup alignment assert + serviceable gate); captured in [`ops-blue-green-reindex.md`](../ops-blue-green-reindex.md). Kept for provenance.
+
 > Tier 3 (dated snapshot). CKV의 크로스-repo 설계
 > `code-knowledge-vector/docs/reindex-migration-design-2026-07-10.md`가 CKS에 요청한
 > 4개 결정에 대한 회신. 근거 = cks 코드 현실(`internal/mcp/ops_index.go`,

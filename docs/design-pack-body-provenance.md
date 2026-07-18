@@ -1,7 +1,7 @@
 # 설계: EvidencePack 본문 출처 보장 (snapshot-first BodyFetcher)
 
 작성: 2026-07-10 · 상태: 구현 대기 · 대상 리포: code-knowledge-system(주) + code-knowledge-vector(보조)
-전제 브랜치: 두 리포 모두 `docs/retire-ckg-node-id` (cks `3e7c22d8`, ckv `8c0426f` 이후)
+전제 브랜치(이력): `docs/retire-ckg-node-id` (cks `3e7c22d8`, ckv `8c0426f` 이후) — 이 마이그레이션은 이후 병합됨(cks PR #33, commit `54680a3`). 본 설계는 그 위에서 여전히 유효한 미구현 설계다.
 관련 사건 기록: `cks-seminar/REPORT-bench-a2-postfix.md` run#4 절
 
 ---
@@ -210,7 +210,7 @@ BodyProvenance string `json:"body_provenance"` // "index-snapshot(+verified-fs-f
 
 1. ckv `Store.BodyByRange` + 테스트 → `go test ./internal/store/sqlitevec/`
 2. ckv engine/pkg 위임 → `go build ./...` (ckv 리포)
-3. cks ckvclient `FetchBody` (interface/real/fake) — cks go.mod에 ckv 로컬 replace 이미 있음
+3. cks ckvclient `FetchBody` (interface/real/fake) — cks go.mod은 ckv를 태그 버전(`v0.1.0`)으로 핀하며 로컬 replace는 없음. FetchBody 위임(§3.2a real.go)은 그 API를 노출하는 ckv 버전으로 go.mod bump 후 배선
 4. cks `SnapshotFetcher` + 테스트 → `go test ./internal/composer/budget/`
 5. 기동 게이트(`sourceRootVerified`) — alignment.go/main.go
 6. health `body_provenance` + 도구 설명 한 줄

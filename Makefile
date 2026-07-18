@@ -6,9 +6,11 @@ LOG_DIR := logs
 
 # cks-mcp build stamp — injected into main.builderVersion and surfaced via
 # cks_ops_health.builder_version, so a running MCP can be matched to the source
-# commit it was built from ("-dirty" flags an uncommitted build).
-CKS_COMMIT  := $(shell git describe --always --dirty --abbrev=8 2>/dev/null || echo unknown)
-CKS_VERSION := cks-mcp/0.1.0-$(CKS_COMMIT)
+# it was built from. Derived from the git tag: on a tagged commit this is the
+# tag (e.g. v0.1.0); off-tag it appends -<n>-g<sha>; "-dirty" flags an
+# uncommitted build.
+CKS_COMMIT  := $(shell git describe --tags --always --dirty --abbrev=8 2>/dev/null || echo 0.1.0-dev)
+CKS_VERSION := cks-mcp/$(CKS_COMMIT)
 CKS_LDFLAGS := -X main.builderVersion=$(CKS_VERSION)
 
 # Dogfood eval (cks indexing cks itself) — used to produce the retrieval
