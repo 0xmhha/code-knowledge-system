@@ -100,26 +100,40 @@ the same `ckv`/`ckg` builds, forwarding `--policy-file` when `backends.ckg.polic
 - `github.com/0xmhha/code-knowledge-vector` — vector backend (`pkg/ckv`, in-process; sqlite-vec CGO); pinned at released **v0.1.0** (no `replace`)
 - `github.com/mark3labs/mcp-go` — MCP server (v0.56.0)
 
-## Layout (target)
+## Layout
 
 ```
 cmd/
-├── cks-mcp/        MCP entry
-├── cks-agent/      Agent CLI
-└── cks-eval/       Eval harness
-pkg/
-├── contract/       Public types (Citation, EvidencePack, Hit alias)
-└── client/         ckg/ckv client wrappers (interface + real + fake)
+├── cks-mcp/                  MCP server (stdio) — the main binary
+├── cks-agent/               coding-agent CLI (vibe prompt → plan/diffs/tests)
+├── cks-eval/                retrieval-quality eval harness
+├── cks-glossary-gen/        build the alias glossary for the vocab resolver
+├── cks-domain-sync/         derive ckv/ckg policy views from verified entries
+├── cks-domain-export/       render verified entries → markdown corpus (ckv --docs)
+├── cks-entry-verify/        validate domain entries vs schema + anchors
+├── cks-inventory-check/     cross-check domain inventory vs coverage
+├── cks-anchor-refresh/      re-stamp entry code anchors against current HEAD
+└── cks-promotion-worksheet/ draft/needs_verification → verified worksheet
+pkg/                         public contract (consumed by upper layers)
+├── contract/                public types: Citation, EvidencePack, Hit, Neighbor
+└── testpath/                test / test-only path classification
 internal/
-├── envelope/       trace_id / run_id propagation
-├── footprint/      structured JSONL logging
-├── auditlog/       append-only audit
-├── composer/       intent / planner / fuser / expand / budget / sanitize / pack
-├── adapter/        mcp / http / cli
-├── agent/          extractor / analyzer / splitter / codegen / tester / verify
-└── eval/           scenario / runner / metrics / report
-policies/           sanitization_rules.yaml, capability_policy.yaml
-eval/
-├── scenarios/      *.yaml (e.g. stablenet-pr70.yaml)
-└── baselines/      *.diff, *.files.txt
+├── ckgclient/               ckg (graph + BM25) client — interface + real + fake
+├── ckvclient/               ckv (vector + flow) client — interface + real + fake
+├── composer/                pipeline: intent → fan-out(ckv+ckg) → stage2 RRF
+│                            → stage3 graph expand → budget → sanitize → pack
+│    (subpkgs: intent, stage1, stage2, stage3, budget, sanitize)
+├── mcp/                     MCP server: cks.context.* / cks.ops.* tool registration
+├── vocab/                   vocabulary bridge (Korean/ambiguous → code keywords) + glossary
+├── domainexport/            render a domain-knowledge project → markdown corpus
+├── inventory/               load / validate / render the domain-knowledge inventory
+├── config/                  runtime config load + defaults
+├── embedder/                embedding-backend selection (bge-m3 / ollama)
+├── envelope/                request-scoped ids (trace_id / run_id) propagation
+├── footprint/               structured performance / decision JSONL events
+├── auditlog/                append-only security / decision records
+├── observe/                 glue: footprint + auditlog
+└── eval/                    retrieval-quality eval harness (internal)
+policies/                    cks.yaml.example, sanitization_rules.yaml
+eval/                        scenarios/ · scenarios-stablenet/ · scenarios-stablenet-ko/ · ckg-4way/
 ```
